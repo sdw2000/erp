@@ -1,0 +1,685 @@
+<template>
+  <div class="formula-container">
+    <el-card>
+      <div slot="header" class="clearfix">
+        <span>配方管理</span>        <div style="float: right">
+          <el-button v-if="$canImportExport()" type="success" icon="el-icon-download" size="small" @click="handleDownloadTemplate">下载模板</el-button>
+          <el-button v-if="$canImportExport()" type="warning" icon="el-icon-upload2" size="small" @click="handleImportClick">导入</el-button>
+          <el-button v-if="$canImportExport()" type="info" icon="el-icon-download" size="small" @click="handleExportAll">导出</el-button>
+          <el-button v-if="$canEdit()" type="primary" icon="el-icon-plus" size="small" @click="handleAdd">新增配方</el-button>
+          <input ref="importFile" type="file" accept=".xlsx,.xls" style="display:none" @change="handleImportChange">
+        </div>
+      </div>
+
+      <!-- 查询表单 -->
+      <el-form :inline="true" :model="searchForm" class="search-form">
+        <el-form-item label="产品料号">
+          <el-input v-model="searchForm.materialCode" placeholder="请输入料号" clearable style="width: 180px" />
+        </el-form-item>
+        <el-form-item label="产品名称">
+          <el-input v-model="searchForm.productName" placeholder="请输入名称" clearable style="width: 160px" />
+        </el-form-item>
+        <el-form-item label="胶水型号">
+          <el-input v-model="searchForm.glueModel" placeholder="请输入胶水型号" clearable style="width: 160px" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" icon="el-icon-search" @click="handleSearch">搜 索</el-button>
+          <el-button icon="el-icon-refresh-left" @click="handleReset">重 置</el-button>
+        </el-form-item>
+      </el-form>
+
+      <!-- 数据表格 -->
+      <el-table v-loading="loading" :data="list" style="width: 100%; margin-top: 15px" border stripe size="small">
+        <el-table-column type="index" label="序号" width="55" align="center" :index="indexMethod" />
+        <el-table-column prop="formulaNo" label="文件编号" width="90" align="center" />
+        <el-table-column prop="productName" label="产品名称" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="materialCode" label="产品料号" width="200" show-overflow-tooltip />
+        <el-table-column prop="glueModel" label="胶水型号" width="180" show-overflow-tooltip />
+        <el-table-column prop="colorCode" label="颜色" width="70" align="center">
+          <template slot-scope="scope">
+            <el-tag size="small">{{ scope.row.colorCode }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="coatingThickness" label="涂胶厚度/μm" width="100" align="center" />
+        <el-table-column prop="solidContent" label="固含量" width="80" align="center" />
+        <el-table-column prop="totalWeight" label="总重量/kg" width="100" align="right" />
+        <el-table-column prop="version" label="版次" width="70" align="center" />
+        <el-table-column prop="status" label="状态" width="70" align="center">
+          <template slot-scope="scope">
+            <el-tag :type="scope.row.status === 1 ? 'success' : 'info'" size="small">
+              {{ scope.row.status === 1 ? '启用' : '禁用' }}
+            </el-tag>
+          </template>
+        </el-table-column>        <el-table-column label="操作" width="200" fixed="right" align="center">
+          <template slot-scope="scope">
+            <el-button type="text" size="small" icon="el-icon-view" @click="handleView(scope.row)">查看</el-button>
+            <el-button v-if="$canEdit()" type="text" size="small" icon="el-icon-edit" @click="handleEdit(scope.row)">编辑</el-button>
+            <el-button v-if="$canImportExport()" type="text" size="small" icon="el-icon-download" @click="handleExport(scope.row)">导出</el-button>
+            <el-button v-if="$canEdit()" type="text" size="small" icon="el-icon-delete" style="color:#f56c6c" @click="handleDelete(scope.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-pagination
+        :current-page="pagination.page"
+        :page-sizes="[20, 50, 100]"
+        :page-size="pagination.size"
+        :total="pagination.total"
+        layout="total, sizes, prev, pager, next, jumper"
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange"
+      />
+    </el-card>
+
+    <!-- 新增/编辑弹窗 -->
+    <el-dialog :title="dialogTitle" :visible.sync="dialogVisible" width="1000px" :close-on-click-modal="false" top="5vh">
+      <el-form ref="form" :model="form" :rules="rules" label-width="110px" size="small">
+        <!-- 基本信息 -->
+        <el-divider content-position="left">基本信息</el-divider>
+        <el-row :gutter="20">
+          <el-col :span="8">
+            <el-form-item label="文件编号">
+              <el-input v-model="form.formulaNo" placeholder="如: 107" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="版次">
+              <el-input v-model="form.version" placeholder="如: A/0" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="制定日期">
+              <el-date-picker v-model="form.createDate" type="date" placeholder="选择日期" style="width:100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="产品料号" prop="materialCode">
+              <el-input v-model="form.materialCode" placeholder="如: 1011-R02-1204-G01-0300" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="产品名称" prop="productName">
+              <el-input v-model="form.productName" placeholder="如: 16μm翠绿PET终止胶带" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- 胶水信息 -->
+        <el-divider content-position="left">胶水信息</el-divider>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="胶水型号">
+              <el-input v-model="form.glueModel" placeholder="如: YKLJ0801G01040300" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="颜色代码">
+              <el-input v-model="form.colorCode" placeholder="如: G01" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="状态">
+              <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="禁用" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="6">
+            <el-form-item label="涂胶厚度(μm)">
+              <el-input-number v-model="form.coatingThickness" :min="0" :precision="2" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="胶水密度">
+              <el-input-number v-model="form.glueDensity" :min="0" :precision="3" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="固含量(%)">
+              <el-input v-model="form.solidContent" placeholder="如: 15±2" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="涂布数量(㎡)">
+              <el-input-number v-model="form.coatingArea" :min="0" :precision="0" style="width:100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row>
+          <el-col :span="24">
+            <el-form-item label="工艺备注">
+              <el-input v-model="form.processRemark" type="textarea" :rows="2" placeholder="温度、速度等工艺参数" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- 原料配比 -->
+        <el-divider content-position="left">原料配比</el-divider>
+        <el-table :data="form.items" border size="small" style="margin-bottom: 10px">
+          <el-table-column label="物料代码" width="150">
+            <template slot-scope="scope">
+              <el-input v-model="scope.row.materialCode" size="small" placeholder="物料代码" />
+            </template>
+          </el-table-column>
+          <el-table-column label="物料名称" width="120">
+            <template slot-scope="scope">
+              <el-input v-model="scope.row.materialName" size="small" placeholder="名称" />
+            </template>
+          </el-table-column>
+          <el-table-column label="重量(Kg/桶)" width="130">
+            <template slot-scope="scope">
+              <el-input-number v-model="scope.row.weight" :min="0" :precision="4" size="small" style="width:100%" />
+            </template>
+          </el-table-column>
+          <el-table-column label="比例(%)" width="120">
+            <template slot-scope="scope">
+              <el-input-number v-model="scope.row.ratio" :min="0" :precision="4" size="small" style="width:100%" />
+            </template>
+          </el-table-column>
+          <el-table-column label="备注" min-width="200">
+            <template slot-scope="scope">
+              <el-input v-model="scope.row.remark" size="small" placeholder="稀释说明等" />
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="70" align="center">
+            <template slot-scope="scope">
+              <el-button type="text" size="small" style="color:#f56c6c" @click="removeItem(scope.$index)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-button type="primary" size="small" icon="el-icon-plus" @click="addItem">添加原料</el-button>
+        <span style="margin-left: 20px; font-weight: bold;">
+          总重量: {{ calculateTotalWeight() }} kg
+        </span>
+
+        <!-- 审批信息 -->
+        <el-divider content-position="left">审批信息</el-divider>
+        <el-row :gutter="20">
+          <el-col :span="8">
+            <el-form-item label="编制">
+              <el-input v-model="form.preparedBy" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="审核">
+              <el-input v-model="form.reviewedBy" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="批准">
+              <el-input v-model="form.approvedBy" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+
+      <div slot="footer">
+        <el-button @click="dialogVisible = false">取 消</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">确 定</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 查看详情弹窗 -->
+    <el-dialog title="配胶标准单详情" :visible.sync="viewDialogVisible" width="900px" top="5vh">
+      <div v-if="viewData" class="formula-detail">
+        <!-- 头部信息 -->
+        <div class="header-info">
+          <table class="info-table">
+            <tr>
+              <td class="label">文件编号</td><td>{{ viewData.formulaNo }}</td>
+              <td class="label">版次</td><td>{{ viewData.version }}</td>
+              <td class="label">制定日期</td><td>{{ formatDate(viewData.createDate) }}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="company-title">东莞方恩电子材料科技有限公司</div>
+        <div class="form-title">配胶标准单</div>
+
+        <table class="detail-table">
+          <tr>
+            <td class="label">产品名称</td>
+            <td colspan="2">{{ viewData.productName }}</td>
+            <td class="label">产品型号</td>
+            <td colspan="2">{{ viewData.materialCode }}</td>
+          </tr>
+          <tr>
+            <td class="label">胶水型号</td>
+            <td colspan="2">{{ viewData.glueModel }}</td>
+            <td class="label">颜色</td>
+            <td colspan="2">{{ viewData.colorCode }}</td>
+          </tr>
+          <tr>
+            <td class="label">涂胶厚度(μm)</td>
+            <td>{{ viewData.coatingThickness }}</td>
+            <td class="label">胶水密度(g/cm³)</td>
+            <td>{{ viewData.glueDensity }}</td>
+            <td class="label">固含量(%)</td>
+            <td>{{ viewData.solidContent }}</td>
+          </tr>
+          <tr>
+            <td class="label">涂布数量(㎡)</td>
+            <td colspan="5">{{ viewData.coatingArea }}</td>
+          </tr>
+          <tr>
+            <td class="label">备注</td>
+            <td colspan="5" class="remark-cell">{{ viewData.processRemark }}</td>
+          </tr>
+        </table>
+
+        <!-- 原料明细 -->
+        <table class="item-table">
+          <thead>
+            <tr>
+              <th>物料代码</th>
+              <th>物料名称</th>
+              <th>Kg/桶</th>
+              <th>比例</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(item, idx) in viewData.items" :key="idx">
+              <td>{{ item.materialCode }}</td>
+              <td>{{ item.materialName }}</td>
+              <td class="number">{{ item.weight }}</td>
+              <td class="number">{{ item.ratio ? item.ratio + '%' : '/' }}</td>
+              <td>{{ item.remark }}</td>
+            </tr>
+            <tr class="total-row">
+              <td colspan="2"><strong>总重量(kg)</strong></td>
+              <td class="number"><strong>{{ viewData.totalWeight }}</strong></td>
+              <td colspan="2">/</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- 审批 -->
+        <table class="approve-table">
+          <tr>
+            <td class="label">编制</td>
+            <td>{{ viewData.preparedBy }}</td>
+            <td class="label">审核</td>
+            <td>{{ viewData.reviewedBy }}</td>
+            <td class="label">批准</td>
+            <td>{{ viewData.approvedBy }}</td>
+          </tr>
+        </table>
+      </div>      <div slot="footer">
+        <el-button v-if="$canImportExport()" type="primary" icon="el-icon-download" @click="handleExport(viewData)">导出Excel</el-button>
+        <el-button @click="viewDialogVisible = false">关 闭</el-button>
+      </div>
+    </el-dialog>
+  </div>
+</template>
+
+<script>
+import {
+  getFormulaList, getFormulaById, createFormula, updateFormula, deleteFormula, exportFormula,
+  downloadTemplate, importFormula, exportAllFormula
+} from '@/api/tapeFormula'
+
+export default {
+  name: 'TapeFormulaManagement',
+  data() {
+    return {
+      searchForm: {
+        materialCode: '',
+        productName: '',
+        glueModel: ''
+      },
+      list: [],
+      loading: false,
+      pagination: { page: 1, size: 20, total: 0 },
+
+      // 编辑弹窗
+      dialogVisible: false,
+      dialogTitle: '新增配方',
+      submitting: false,
+      form: this.getEmptyForm(),
+      rules: {
+        materialCode: [{ required: true, message: '请输入产品料号', trigger: 'blur' }],
+        productName: [{ required: true, message: '请输入产品名称', trigger: 'blur' }]
+      },
+
+      // 查看弹窗
+      viewDialogVisible: false,
+      viewData: null
+    }
+  },
+  created() {
+    this.fetchData()
+  },
+  methods: {
+    $canEdit() {
+      // 只有 admin 和 rd 角色可以进行增删改操作
+      return this.$hasRole('admin') || this.$hasRole('rd')
+    },
+    indexMethod(index) {
+      return (this.pagination.page - 1) * this.pagination.size + index + 1
+    },
+    getEmptyForm() {
+      return {
+        id: null,
+        materialCode: '',
+        productName: '',
+        formulaNo: '',
+        version: 'A/0',
+        createDate: new Date(),
+        glueModel: '',
+        colorCode: '',
+        coatingThickness: null,
+        glueDensity: null,
+        solidContent: '',
+        coatingArea: null,
+        processRemark: '',
+        totalWeight: null,
+        preparedBy: '',
+        reviewedBy: '',
+        approvedBy: '',
+        status: 1,
+        items: []
+      }
+    },
+    async fetchData() {
+      this.loading = true
+      try {
+        const params = {
+          page: this.pagination.page,
+          size: this.pagination.size,
+          ...this.searchForm
+        }
+        const res = await getFormulaList(params)
+        if (res.code === 20000) {
+          this.list = res.data.records
+          this.pagination.total = res.data.total
+        }
+      } catch (e) {
+        console.error('获取列表失败', e)
+      } finally {
+        this.loading = false
+      }
+    },
+    handleSearch() {
+      this.pagination.page = 1
+      this.fetchData()
+    },
+    handleReset() {
+      this.searchForm = { materialCode: '', productName: '', glueModel: '' }
+      this.handleSearch()
+    },
+    handleSizeChange(size) {
+      this.pagination.size = size
+      this.fetchData()
+    },
+    handleCurrentChange(page) {
+      this.pagination.page = page
+      this.fetchData()
+    },
+    handleAdd() {
+      this.dialogTitle = '新增配方'
+      this.form = this.getEmptyForm()
+      this.dialogVisible = true
+      this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
+    },
+    async handleEdit(row) {
+      this.dialogTitle = '编辑配方'
+      this.loading = true
+      try {
+        const res = await getFormulaById(row.id)
+        if (res.code === 20000) {
+          this.form = { ...res.data }
+          if (!this.form.items) this.form.items = []
+          this.dialogVisible = true
+        }
+      } catch (e) {
+        this.$message.error('获取详情失败')
+      } finally {
+        this.loading = false
+      }
+    },
+    async handleView(row) {
+      this.loading = true
+      try {
+        const res = await getFormulaById(row.id)
+        if (res.code === 20000) {
+          this.viewData = res.data
+          this.viewDialogVisible = true
+        }
+      } catch (e) {
+        this.$message.error('获取详情失败')
+      } finally {
+        this.loading = false
+      }
+    },
+    async handleSubmit() {
+      try {
+        await this.$refs.form.validate()
+      } catch (e) {
+        return
+      }
+
+      // 计算总重量
+      this.form.totalWeight = this.calculateTotalWeight()
+
+      this.submitting = true
+      try {
+        const res = this.form.id ? await updateFormula(this.form) : await createFormula(this.form)
+        if (res.code === 20000) {
+          this.$message.success(this.form.id ? '更新成功' : '创建成功')
+          this.dialogVisible = false
+          this.fetchData()
+        } else {
+          this.$message.error(res.msg || '操作失败')
+        }
+      } catch (e) {
+        this.$message.error('操作失败')
+      } finally {
+        this.submitting = false
+      }
+    },
+    handleDelete(row) {
+      this.$confirm(`确认删除配方 "${row.productName}" 吗?`, '提示', { type: 'warning' })
+        .then(async() => {
+          try {
+            const res = await deleteFormula(row.id)
+            if (res.code === 20000) {
+              this.$message.success('删除成功')
+              this.fetchData()
+            }
+          } catch (e) {
+            this.$message.error('删除失败')
+          }
+        }).catch(() => {})
+    },
+    async handleExport(row) {
+      if (!row || !row.id) return
+      try {
+        const blob = await exportFormula(row.id)
+        const url = window.URL.createObjectURL(new Blob([blob]))
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', `配胶标准单_${row.materialCode || 'export'}.xlsx`)
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+      } catch (e) {
+        this.$message.error('导出失败')
+      }
+    },
+    // 原料操作
+    addItem() {
+      this.form.items.push({
+        materialCode: '',
+        materialName: '',
+        weight: null,
+        ratio: null,
+        remark: ''
+      })
+    },
+    removeItem(index) {
+      this.form.items.splice(index, 1)
+    },
+    calculateTotalWeight() {
+      if (!this.form.items || this.form.items.length === 0) return 0
+      let total = 0
+      this.form.items.forEach(item => {
+        if (item.weight) total += parseFloat(item.weight) || 0
+      })
+      return total.toFixed(4)
+    }, formatDate(date) {
+      if (!date) return ''
+      const d = new Date(date)
+      return d.toLocaleDateString()
+    },
+    // ============ 导入导出方法 ============
+    async handleDownloadTemplate() {
+      try {
+        const blob = await downloadTemplate()
+        const url = window.URL.createObjectURL(new Blob([blob]))
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', '配胶标准单导入模板.xlsx')
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+        this.$message.success('模板下载成功')
+      } catch (e) {
+        this.$message.error('模板下载失败')
+      }
+    },
+    handleImportClick() {
+      this.$refs.importFile.click()
+    },
+    async handleImportChange(e) {
+      const file = e.target.files[0]
+      if (!file) return
+
+      this.loading = true
+      try {
+        const res = await importFormula(file)
+        if (res.code === 20000) {
+          this.$message.success(res.msg || '导入成功')
+          this.fetchData()
+          // 如果有错误信息，显示详情
+          if (res.data && res.data.errors && res.data.errors.length > 0) {
+            this.$alert(res.data.errors.join('<br>'), '导入提示', {
+              dangerouslyUseHTMLString: true,
+              type: 'warning'
+            })
+          }
+        } else {
+          this.$message.error(res.msg || '导入失败')
+        }
+      } catch (e) {
+        this.$message.error('导入失败：' + (e.message || '未知错误'))
+      } finally {
+        this.loading = false
+        this.$refs.importFile.value = '' // 清空文件选择
+      }
+    },
+    async handleExportAll() {
+      try {
+        this.loading = true
+        const blob = await exportAllFormula()
+        const url = window.URL.createObjectURL(new Blob([blob]))
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', '配胶标准单数据.xlsx')
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+        this.$message.success('导出成功')
+      } catch (e) {
+        this.$message.error('导出失败')
+      } finally {
+        this.loading = false
+      }
+    }
+  }
+}
+</script>
+
+<style lang="scss" scoped>
+.formula-container {
+  padding: 20px;
+
+  .search-card, .toolbar-card {
+    margin-bottom: 15px;
+  }
+
+  .el-pagination {
+    margin-top: 15px;
+    text-align: right;
+  }
+}
+
+.formula-detail {
+  .header-info {
+    margin-bottom: 10px;
+  }
+
+  .company-title {
+    text-align: center;
+    font-size: 20px;
+    font-weight: bold;
+    color: #409eff;
+    margin-bottom: 5px;
+  }
+
+  .form-title {
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 15px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 15px;
+
+    td, th {
+      border: 1px solid #ddd;
+      padding: 8px;
+    }
+
+    .label {
+      background: #f5f7fa;
+      font-weight: bold;
+      width: 100px;
+    }
+
+    .number {
+      text-align: right;
+    }
+
+    .remark-cell {
+      font-size: 12px;
+      line-height: 1.5;
+    }
+  }
+
+  .item-table {
+    th {
+      background: #f5f7fa;
+      text-align: center;
+    }
+
+    .total-row {
+      background: #fef0f0;
+    }
+  }
+
+  .approve-table {
+    td {
+      width: 16.66%;
+    }
+  }
+}
+</style>

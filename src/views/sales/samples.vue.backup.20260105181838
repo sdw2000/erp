@@ -1,0 +1,235 @@
+<template>
+  <div class="sales-samples">
+    <el-card>
+      <div slot="header" class="clearfix">
+        <span>送样管理</span>
+        <el-button type="primary" style="float:right" @click="openCreate">新建送样</el-button>
+      </div>
+
+      <!-- 搜索栏 -->
+      <div class="filter-container" style="margin-bottom: 20px;">
+        <el-input
+          v-model="queryParams.customerName"
+          placeholder="客户名称"
+          style="width: 200px; margin-right: 10px;"
+          clearable
+          @clear="fetchSamples"
+        />
+        <el-select
+          v-model="queryParams.status"
+          placeholder="状态筛选"
+          style="width: 150px; margin-right: 10px;"
+          clearable
+          @clear="fetchSamples"
+        >
+          <el-option label="待发货" value="待发货" />
+          <el-option label="已发货" value="已发货" />
+          <el-option label="运输中" value="运输中" />
+          <el-option label="已签收" value="已签收" />
+          <el-option label="已拒收" value="已拒收" />
+          <el-option label="已取消" value="已取消" />
+        </el-select>
+        <el-input
+          v-model="queryParams.trackingNumber"
+          placeholder="快递单号"
+          style="width: 200px; margin-right: 10px;"
+          clearable
+          @clear="fetchSamples"
+        />
+        <el-button type="primary" icon="el-icon-search" @click="fetchSamples">搜索</el-button>
+        <el-button icon="el-icon-refresh" @click="resetQuery">重置</el-button>
+      </div>
+
+      <el-table :data="samples" style="width:100%" stripe v-loading="loading">
+        <el-table-column prop="sampleNo" label="送样编号" width="140" />
+        <el-table-column prop="customerName" label="客户名称" width="180" />
+        <el-table-column prop="contactName" label="联系人" width="100" />
+        <el-table-column prop="contactPhone" label="联系电话" width="120" />
+        <el-table-column prop="trackingNumber" label="快递单号" width="140">
+          <template slot-scope="scope">
+            <el-link v-if="scope.row.trackingNumber" type="primary" @click="viewLogistics(scope.row)">
+              {{ scope.row.trackingNumber }}
+            </el-link>
+            <span v-else style="color: #ccc;">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="100">
+          <template slot-scope="scope">
+            <el-tag :type="getStatusType(scope.row.status)" size="small">
+              {{ scope.row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="sendDate" label="送样日期" width="110" />
+        <el-table-column label="操作" width="280" fixed="right">
+          <template slot-scope="scope">
+            <el-button size="mini" @click="viewDetail(scope.row)">详情</el-button>
+            <el-button size="mini" type="primary" @click="openEdit(scope.row)">编辑</el-button>
+            <el-button size="mini" type="warning" @click="openLogistics(scope.row)">物流</el-button>
+            <el-button size="mini" type="danger" @click="confirmDelete(scope.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- 分页 -->
+      <div style="margin-top: 20px; text-align: right;">
+        <el-pagination
+          :current-page="pagination.current"
+          :page-size="pagination.size"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="pagination.total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+        />
+      </div>
+    </el-card>
+
+    <!-- 编辑/新增对话框 -->
+    <el-dialog :title="isEditing ? '编辑送样' : '新建送样'" :visible.sync="editVisible" width="800px">
+      <el-form :model="editForm" label-width="100px">
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="客户">
+              <el-input v-model="editForm.customer" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="样品编号">
+              <el-input v-model="editForm.sampleNo" :disabled="isEditing" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="送样日期">
+              <el-input v-model="editForm.sendDate" placeholder="YYYY-MM-DD" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="状态">
+              <el-select v-model="editForm.status" placeholder="请选择">
+                <el-option label="未处理" value="未处理" />
+                <el-option label="已送达" value="已送达" />
+                <el-option label="已拒收" value="已拒收" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="备注">
+          <el-input type="textarea" v-model="editForm.remark" :rows="3" />
+        </el-form-item>
+      </el-form>
+
+      <span slot="footer">
+        <el-button @click="editVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveSample">保存</el-button>
+      </span>
+    </el-dialog>
+  </div>
+</template>
+
+<script>
+import axios from 'axios'
+export default {
+  name: 'SalesSamples',
+  data() {
+    return {
+      samples: [],
+      editVisible: false,
+      isEditing: false,
+      editForm: this.emptyForm()
+    }
+  },
+  created() {
+    this.fetchSamples()
+  },
+  methods: {
+    emptyForm() {
+      return { sampleNo: '', customer: '', sendDate: '', status: '', remark: '' }
+    },
+    async fetchSamples() {
+      try {
+        const res = await axios.get('/api/sales/samples')
+        if (res.data && (res.data.code === 200 || res.data.code === 20000)) {
+          this.samples = res.data.data
+        } else {
+          this.$message.error('获取送样记录失败')
+        }
+      } catch (e) {
+        this.$message.error('获取送样记录失败')
+      }
+    },
+    openCreate() {
+      this.isEditing = false
+      this.editForm = this.emptyForm()
+      this.editVisible = true
+    },
+    openEdit(row) {
+      this.isEditing = true
+      this.editForm = JSON.parse(JSON.stringify(row))
+      this.editVisible = true
+    },
+    async saveSample() {
+      try {
+        // basic validation
+        if (!this.editForm.customer) {
+          this.$message.error('请填写客户')
+          return
+        }
+        if (!this.editForm.sendDate) {
+          this.$message.error('请填写送样日期')
+          return
+        }
+
+        const payload = JSON.parse(JSON.stringify(this.editForm))
+        if (this.isEditing) {
+          const res = await axios.put('/api/sales/samples', payload)
+          if (res.data && (res.data.code === 200 || res.data.code === 20000)) {
+            await this.fetchSamples()
+            this.$message.success('更新成功')
+            this.editVisible = false
+          } else {
+            this.$message.error('更新失败')
+          }
+        } else {
+          const res = await axios.post('/api/sales/samples', payload)
+          if (res.data && (res.data.code === 200 || res.data.code === 20000)) {
+            await this.fetchSamples()
+            this.$message.success('创建成功')
+            this.editVisible = false
+          } else {
+            this.$message.error('创建失败')
+          }
+        }
+      } catch (e) {
+        this.$message.error('保存失败')
+      }
+    },
+    confirmDelete(row) {
+      this.$confirm(`确认删除样品 ${row.sampleNo} 吗？`, '提示', { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' })
+        .then(() => this.deleteSample(row))
+        .catch(() => {})
+    },
+    async deleteSample(row) {
+      try {
+        const res = await axios.delete('/api/sales/samples', { params: { sampleNo: row.sampleNo } })
+        if (res.data && (res.data.code === 200 || res.data.code === 20000)) {
+          await this.fetchSamples()
+          this.$message.success('删除成功')
+        } else {
+          this.$message.error('删除失败')
+        }
+      } catch (e) {
+        this.$message.error('删除失败')
+      }
+    }
+  }
+}
+</script>
+
+<style scoped>
+.sales-samples { padding: 20px }
+</style>
