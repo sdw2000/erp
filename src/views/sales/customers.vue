@@ -53,15 +53,12 @@
       >
         <el-table-column type="index" label="序号" width="60" align="center" />
         <el-table-column prop="customerCode" label="客户编号" width="120" />
-        <el-table-column prop="customerName" label="客户名称" width="200" show-overflow-tooltip />
-        <el-table-column prop="shortName" label="客户简称" width="120" />
-        <el-table-column prop="customerType" label="客户类型" width="100">
+        <el-table-column label="客户名称" width="200" show-overflow-tooltip>
           <template slot-scope="scope">
-            <el-tag :type="scope.row.customerType === '企业客户' ? 'primary' : 'success'" size="small">
-              {{ scope.row.customerType }}
-            </el-tag>
+            {{ scope.row.customerName || scope.row.name || scope.row.companyName || '-' }}
           </template>
         </el-table-column>
+        <el-table-column prop="shortName" label="客户简称" width="120" />
         <el-table-column prop="customerLevel" label="客户等级" width="100">
           <template slot-scope="scope">
             <el-tag :type="getLevelTagType(scope.row.customerLevel)" size="small">{{ scope.row.customerLevel }}</el-tag>
@@ -72,8 +69,7 @@
             <el-tag :type="getStatusTagType(scope.row.status)" size="small">{{ scope.row.status }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="primaryContactName" label="主联系人" width="100" />
-        <el-table-column prop="primaryContactMobile" label="联系电话" width="120" />
+        <!-- 隐藏：主联系人、联系电话、客户类型（按需求移除显示） -->
         <el-table-column prop="salesUserName" label="销售" width="100" />
         <el-table-column prop="documentationPersonUserName" label="跟单员" width="100" />
         <el-table-column prop="createTime" label="创建时间" width="160">
@@ -276,50 +272,61 @@
 
           <!-- 联系人 -->
           <el-tab-pane label="联系人" name="contacts">
-            <el-button type="primary" size="small" icon="el-icon-plus" style="margin-bottom: 10px" @click="handleAddContact">添加联系人</el-button>
-            <el-table :data="formData.contacts" border style="width: 100%">
-              <el-table-column label="姓名" width="100">
-                <template slot-scope="scope">
-                  <el-input v-model="scope.row.contactName" size="small" placeholder="请输入姓名" />
-                </template>
-              </el-table-column>
-              <el-table-column label="职位" width="100">
-                <template slot-scope="scope">
-                  <el-input v-model="scope.row.contactPosition" size="small" placeholder="请输入职位" />
-                </template>
-              </el-table-column>
-              <el-table-column label="手机" width="130">
-                <template slot-scope="scope">
-                  <el-input v-model="scope.row.contactPhone" size="small" placeholder="请输入手机号" />
-                </template>
-              </el-table-column>
-              <el-table-column label="邮箱" width="180">
-                <template slot-scope="scope">
-                  <el-input v-model="scope.row.contactEmail" size="small" placeholder="请输入邮箱" />
-                </template>
-              </el-table-column>
-              <el-table-column label="微信" width="120">
-                <template slot-scope="scope">
-                  <el-input v-model="scope.row.contactWechat" size="small" placeholder="请输入微信号" />
-                </template>
-              </el-table-column>
-              <el-table-column label="主联系人" width="100" align="center">
-                <template slot-scope="scope">
-                  <el-checkbox v-model="scope.row.isPrimary" :true-label="1" :false-label="0" @change="handlePrimaryChange(scope.$index)" />
-                </template>
-              </el-table-column>
-              <el-table-column label="决策人" width="80" align="center">
-                <template slot-scope="scope">
-                  <el-checkbox v-model="scope.row.isDecisionMaker" :true-label="1" :false-label="0" />
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="80" fixed="right">
-                <template slot-scope="scope">
-                  <el-button type="text" size="small" @click="handleDeleteContact(scope.$index)">删除</el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-            <div style="color: #f56c6c; margin-top: 10px;">* 每个客户至少需要一个联系人，至少一个主联系人</div>
+            <div class="contact-pane">
+              <div class="contact-actions">
+                <el-button type="primary" size="mini" icon="el-icon-plus" @click="handleAddContact">添加联系人</el-button>
+              </div>
+              <el-table
+                :data="formData.contacts"
+                border
+                stripe
+                size="small"
+                style="width: 100%"
+                table-layout="fixed"
+              >
+                <el-table-column label="姓名" width="100">
+                  <template slot-scope="scope">
+                    <el-input v-model="scope.row.contactName" size="small" placeholder="请输入姓名" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="职位" width="100">
+                  <template slot-scope="scope">
+                    <el-input v-model="scope.row.contactPosition" size="small" placeholder="请输入职位" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="手机" width="130">
+                  <template slot-scope="scope">
+                    <el-input v-model="scope.row.contactPhone" size="small" placeholder="请输入手机号" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="邮箱" width="180">
+                  <template slot-scope="scope">
+                    <el-input v-model="scope.row.contactEmail" size="small" placeholder="请输入邮箱" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="微信" width="120">
+                  <template slot-scope="scope">
+                    <el-input v-model="scope.row.contactWechat" size="small" placeholder="请输入微信号" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="主联系人" width="100" align="center">
+                  <template slot-scope="scope">
+                    <el-checkbox v-model="scope.row.isPrimary" :true-label="1" :false-label="0" @change="handlePrimaryChange(scope.$index)" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="决策人" width="80" align="center">
+                  <template slot-scope="scope">
+                    <el-checkbox v-model="scope.row.isDecisionMaker" :true-label="1" :false-label="0" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="80" fixed="right">
+                  <template slot-scope="scope">
+                    <el-button type="text" size="small" @click="handleDeleteContact(scope.$index)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div class="contact-tip">* 每个客户至少需要一个联系人，至少一个主联系人</div>
+            </div>
           </el-tab-pane>
         </el-tabs>
       </el-form>
@@ -328,7 +335,8 @@
         <el-button @click="dialogVisible = false">取 消</el-button>
         <el-button type="primary" :loading="submitLoading" @click="handleSubmit">确 定</el-button>
       </span>
-    </el-dialog>    <!-- 查看详情弹窗 -->
+    </el-dialog>
+    <!-- 查看详情弹窗 -->
     <el-dialog
       title="客户详情"
       :visible.sync="detailVisible"
@@ -1200,5 +1208,19 @@ export default {
   display: flex;
   align-items: center;
   padding: 15px;
+}
+
+.contact-pane {
+  padding-top: 4px;
+}
+
+.contact-actions {
+  margin-bottom: 8px;
+}
+
+.contact-tip {
+  color: #f56c6c;
+  margin-top: 8px;
+  font-size: 12px;
 }
 </style>
