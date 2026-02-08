@@ -1,5 +1,7 @@
 import request from '@/utils/request'
 
+const BASE_URL = '/api/production/coating-schedule'
+
 /**
  * 动态涂布排程 API
  */
@@ -11,7 +13,7 @@ import request from '@/utils/request'
  */
 export function getPendingCoatingPool(params) {
   return request({
-    url: '/api/production/coating-schedule/pending-pool',
+    url: `${BASE_URL}/pending-pool`,
     method: 'get',
     params
   })
@@ -23,7 +25,7 @@ export function getPendingCoatingPool(params) {
  */
 export function getPendingCoatingByMaterial() {
   return request({
-    url: '/api/production/coating-schedule/pending-by-material',
+    url: `${BASE_URL}/pending-by-material`,
     method: 'get'
   })
 }
@@ -35,7 +37,7 @@ export function getPendingCoatingByMaterial() {
  */
 export function addToPendingCoatingPool(data) {
   return request({
-    url: '/api/production/coating-schedule/add-to-pool',
+    url: `${BASE_URL}/add-to-pool`,
     method: 'post',
     data
   })
@@ -49,7 +51,7 @@ export function addToPendingCoatingPool(data) {
  */
 export function removeFromPendingCoatingPool(poolId, operator) {
   return request({
-    url: `/api/production/coating-schedule/remove-from-pool/${poolId}`,
+    url: `${BASE_URL}/remove-from-pool/${poolId}`,
     method: 'post',
     params: { operator }
   })
@@ -62,7 +64,7 @@ export function removeFromPendingCoatingPool(poolId, operator) {
  */
 export function generateCoatingTasks(data) {
   return request({
-    url: '/api/production/coating-schedule/generate-tasks',
+    url: `${BASE_URL}/generate-tasks`,
     method: 'post',
     data
   })
@@ -75,7 +77,7 @@ export function generateCoatingTasks(data) {
  */
 export function getCoatingQueue(params) {
   return request({
-    url: '/api/production/coating-schedule/queue',
+    url: `${BASE_URL}/queue`,
     method: 'get',
     params
   })
@@ -88,7 +90,7 @@ export function getCoatingQueue(params) {
  */
 export function getCoatingMergeRecords(params) {
   return request({
-    url: '/api/production/coating-schedule/merge-records',
+    url: `${BASE_URL}/merge-records`,
     method: 'get',
     params
   })
@@ -102,7 +104,21 @@ export function getCoatingMergeRecords(params) {
  */
 export function adjustCoatingTaskTime(taskId, data) {
   return request({
-    url: `/api/production/coating-schedule/adjust-time/${taskId}`,
+    url: `${BASE_URL}/adjust-time/${taskId}`,
+    method: 'post',
+    data
+  })
+}
+
+/**
+ * 调整涂布任务涂布量
+ * @param {Number} taskId - 任务ID
+ * @param {Object} data - { planSqm }
+ * @returns {Promise}
+ */
+export function adjustCoatingTaskQuantity(taskId, data) {
+  return request({
+    url: `${BASE_URL}/adjust-quantity/${taskId}`,
     method: 'post',
     data
   })
@@ -115,7 +131,7 @@ export function adjustCoatingTaskTime(taskId, data) {
  */
 export function getCoatingTimeline(planDate) {
   return request({
-    url: '/api/production/coating-schedule/timeline',
+    url: `${BASE_URL}/timeline`,
     method: 'get',
     params: { planDate }
   })
@@ -127,7 +143,7 @@ export function getCoatingTimeline(planDate) {
  */
 export function getCoatingStats() {
   return request({
-    url: '/api/production/coating-schedule/stats',
+    url: `${BASE_URL}/stats`,
     method: 'get'
   })
 }
@@ -140,7 +156,7 @@ export function getCoatingStats() {
  */
 export function createScheduleFromPool(poolId, equipmentId, scheduledStart) {
   return request({
-    url: '/api/production/coating-schedule/create-from-pool',
+    url: `${BASE_URL}/create-from-pool`,
     method: 'post',
     params: { poolId, equipmentId, scheduledStart }
   })
@@ -153,7 +169,7 @@ export function createScheduleFromPool(poolId, equipmentId, scheduledStart) {
  */
 export function getSchedulePage(params) {
   return request({
-    url: '/api/production/coating-schedule/page',
+    url: `${BASE_URL}/page`,
     method: 'get',
     params
   })
@@ -168,9 +184,22 @@ export function getSchedulePage(params) {
  */
 export function checkEquipmentConflicts(equipmentId, startTime, endTime) {
   return request({
-    url: '/api/production/coating-schedule/check-conflicts',
+    url: `${BASE_URL}/check-conflicts`,
     method: 'get',
     params: { equipmentId, startTime, endTime }
+  })
+}
+
+/**
+ * 更新涂布任务设备
+ * @param {Object} data { taskId, equipmentId }
+ * @returns {Promise}
+ */
+export function updateCoatingEquipment(data) {
+  return request({
+    url: `${BASE_URL}/equipment`,
+    method: 'post',
+    data
   })
 }
 
@@ -182,7 +211,7 @@ export function checkEquipmentConflicts(equipmentId, startTime, endTime) {
  */
 export function completeSchedule(scheduleId, actualEnd) {
   return request({
-    url: `/api/production/coating-schedule/complete/${scheduleId}`,
+    url: `${BASE_URL}/complete/${scheduleId}`,
     method: 'post',
     params: { actualEnd }
   })
@@ -195,7 +224,17 @@ export function completeSchedule(scheduleId, actualEnd) {
  */
 export function cancelSchedule(scheduleId) {
   return request({
-    url: `/api/production/coating-schedule/cancel/${scheduleId}`,
+    url: `${BASE_URL}/cancel/${scheduleId}`,
     method: 'post'
+  })
+}
+
+/**
+ * 获取复卷汇总（后端聚合，按料号+长度）
+ */
+export function getRewindSummary() {
+  return request({
+    url: `${BASE_URL}/rewind-summary`,
+    method: 'get'
   })
 }

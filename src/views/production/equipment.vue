@@ -86,7 +86,7 @@
                                               :page-sizes="[10, 20, 50, 100]"
                                               :page-size="pagination.pageSize"
                                               layout="total, sizes, prev, pager, next, jumper"
-                                              :total="pagination.total"
+                                              :total="Number(pagination.total || 0)"
                                               @size-change="handleSizeChange"
                                               @current-change="handleCurrentChange"
                                             />
@@ -231,7 +231,7 @@ export default {
     async fetchEquipmentTypes() {
       try {
         const res = await getEquipmentTypes()
-        if (res && res.code === 200) {
+        if (res && (res.code === 200 || res.code === 20000)) {
           this.equipmentTypes = res.data || []
         }
       } catch (e) {
@@ -241,7 +241,7 @@ export default {
     async fetchWorkshops() {
       try {
         const res = await getWorkshops()
-        if (res && res.code === 200) {
+        if (res && (res.code === 200 || res.code === 20000)) {
           this.workshops = res.data || []
         }
       } catch (e) {
@@ -256,15 +256,15 @@ export default {
           pageSize: this.pagination.pageSize
         }
         const res = await getEquipmentList(params)
-        if (res && res.code === 200) {
+        if (res && (res.code === 200 || res.code === 20000)) {
           // 适配 MyBatis-Plus IPage 分页结构
           if (res.data && res.data.records) {
             this.equipmentList = res.data.records
-            this.pagination.total = res.data.total
+            this.pagination.total = Number(res.data.total || 0)
           } else {
             // 兼容旧的 List 结构
             this.equipmentList = res.data || []
-            this.pagination.total = this.equipmentList.length
+            this.pagination.total = Number(this.equipmentList.length || 0)
           }
         }
       } catch (e) {
@@ -372,8 +372,10 @@ export default {
     async handleStatusChange(row, status) {
       try {
         const res = await updateEquipmentStatus(row.id, status)
-        if (res && res.code === 200) {
+        if (res && (res.code === 200 || res.code === 20000)) {
           this.$message.success('状态更新成功')
+          // 立即在当前行反映状态，避免用户等待列表刷新
+          if (row) this.$set(row, 'status', status)
           this.fetchList()
         } else {
           this.$message.error(res.message || '状态更新失败')

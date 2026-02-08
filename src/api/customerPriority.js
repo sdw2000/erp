@@ -22,11 +22,11 @@ export function getCustomerPriorityList(params) {
  * @param {Array} orderIds - 订单ID数组
  * @returns {Promise}
  */
-export function calculatePriority(orderIds) {
+export function calculatePriority(customerIds) {
   return request({
     url: '/api/production/customer-priority/calculate',
     method: 'post',
-    data: { orderIds }
+    data: { orderIds: customerIds }
   })
 }
 

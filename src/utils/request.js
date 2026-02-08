@@ -50,10 +50,13 @@ service.interceptors.response.use(
 
     const res = response.data
 
+    // 兼容后端字段 msg/message
+    const serverMsg = res.message || res.msg
+
     // if the custom code is not 20000 or 200, it is judged as an error.
     if (res.code !== 20000 && res.code !== 200) {
       Message({
-        message: res.message || 'Error',
+        message: serverMsg || 'Error',
         type: 'error',
         duration: 5 * 1000
       })
@@ -72,7 +75,7 @@ service.interceptors.response.use(
         })
       }
       // create Error and attach full response so callers can inspect server data
-      const err = new Error(res.message || 'Error')
+      const err = new Error(serverMsg || 'Error')
       err.response = response
       return Promise.reject(err)
     } else {
@@ -85,8 +88,8 @@ service.interceptors.response.use(
     if (error.response) {
       // Server returned an error response
       const { status, data } = error.response
-      if (data && data.message) {
-        message = data.message
+      if (data && (data.message || data.msg)) {
+        message = data.message || data.msg
       } else if (status === 500) {
         message = '服务器内部错误'
       } else if (status === 404) {

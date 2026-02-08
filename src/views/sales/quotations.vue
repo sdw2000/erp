@@ -71,7 +71,7 @@
             <el-table-column prop="materialCode" label="物料代码" width="120" />
             <el-table-column prop="materialName" label="物料名称" width="150" />
             <el-table-column prop="specifications" label="规格型号" width="120" />
-            <el-table-column prop="length" label="长度(mm)" width="100" />
+            <el-table-column prop="length" label="长度(m)" width="100" />
             <el-table-column prop="width" label="宽度(mm)" width="100" />
             <el-table-column prop="thickness" label="厚度(μm)" width="100" />
             <el-table-column prop="quantity" label="数量" width="80" />
@@ -184,7 +184,7 @@
                 <el-input v-model="scope.row.specifications" size="small" placeholder="规格型号" />
               </template>
             </el-table-column>
-            <el-table-column label="长度(mm)" width="110">
+            <el-table-column label="长度(m)" width="110">
               <template slot-scope="scope">
                 <el-input v-model.number="scope.row.length" size="small" type="number" placeholder="长度" @input="calculateItem(scope.row)" />
               </template>

@@ -45,7 +45,7 @@
               <i class="el-icon-minus" />
             </div>
             <div class="stat-info">
-              <div class="stat-label">低优先级（<15分）</div>
+              <div class="stat-label">低优先级（&lt;15分）</div>
               <div class="stat-value">{{ stats.low || 0 }}</div>
             </div>
           </div>
@@ -67,10 +67,10 @@
     <!-- 筛选表单 -->
     <el-card shadow="never">
       <el-form :inline="true" :model="queryParams" size="small">
-        <el-form-item label="订单号">
+        <el-form-item label="客户代码">
           <el-input
-            v-model="queryParams.orderNo"
-            placeholder="请输入订单号"
+            v-model="queryParams.customerCode"
+            placeholder="请输入客户代码"
             clearable
             style="width: 180px"
           />
@@ -87,7 +87,7 @@
           <el-select v-model="queryParams.priorityRange" placeholder="全部" clearable style="width: 150px">
             <el-option label="高优先级（≥25分）" value="high" />
             <el-option label="中优先级（15-25分）" value="medium" />
-            <el-option label="低优先级（<15分）" value="low" />
+            <el-option label="低优先级（&lt;15分）" value="low" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -105,9 +105,8 @@
         style="margin-top: 15px"
       >
         <el-table-column type="index" label="排名" width="60" align="center" />
-        <el-table-column prop="orderNo" label="订单号" width="140" />
+        <el-table-column prop="customerCode" label="客户代码" width="140" />
         <el-table-column prop="customerName" label="客户名称" width="150" show-overflow-tooltip />
-        <el-table-column prop="materialCode" label="料号" width="120" />
         <el-table-column prop="totalScore" label="总分" width="80" align="center" sortable>
           <template slot-scope="{ row }">
             <el-tag :type="getPriorityType(row.totalScore)" size="small">
@@ -132,7 +131,7 @@
             </template>
           </el-table-column>
         </el-table-column>
-        <el-table-column prop="orderTime" label="下单时间" width="160" />
+        <el-table-column prop="statsDate" label="统计时间" width="160" />
         <el-table-column label="操作" width="180" align="center" fixed="right">
           <template slot-scope="{ row }">
             <el-button type="text" size="small" @click="handleViewDetail(row)">
@@ -167,11 +166,11 @@
     >
       <div v-if="detailData">
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="订单号">{{ detailData.orderNo }}</el-descriptions-item>
+          <el-descriptions-item label="客户代码">{{ detailData.customerCode }}</el-descriptions-item>
           <el-descriptions-item label="客户名称">{{ detailData.customerName }}</el-descriptions-item>
-          <el-descriptions-item label="料号">{{ detailData.materialCode }}</el-descriptions-item>
-          <el-descriptions-item label="订单单价">¥{{ detailData.orderPrice }}</el-descriptions-item>
-          <el-descriptions-item label="下单时间">{{ detailData.orderTime }}</el-descriptions-item>
+          <el-descriptions-item label="近3个月金额">¥{{ detailData.last3mAmount }}</el-descriptions-item>
+          <el-descriptions-item label="月均金额">¥{{ detailData.avgMonthlyAmount }}</el-descriptions-item>
+          <el-descriptions-item label="平均单价">¥{{ detailData.avgUnitPrice }}</el-descriptions-item>
           <el-descriptions-item label="优先级总分">
             <el-tag :type="getPriorityType(detailData.totalScore)" size="medium">
               {{ detailData.totalScore ? detailData.totalScore.toFixed(2) : '0.00' }} 分
@@ -183,32 +182,22 @@
 
         <el-card shadow="never" style="margin-bottom: 15px">
           <div slot="header">账期得分：{{ detailData.paymentTermScore || 0 }} 分</div>
-          <p>客户账期：{{ detailData.paymentTermMonths || 0 }} 个月</p>
+          <p>客户账期：{{ detailData.paymentTermScore || 0 }} 分</p>
           <p>计算公式：max[10 - 1×(账期月数-3), 0]</p>
-          <p v-if="detailData.paymentTermMonths <= 3">
-            计算：max[10 - 1×({{ detailData.paymentTermMonths }}-3), 0] = {{ detailData.paymentTermScore }}
-          </p>
+          <p>得分：{{ detailData.paymentTermScore || 0 }}</p>
         </el-card>
 
         <el-card shadow="never" style="margin-bottom: 15px">
           <div slot="header">月均成交金额得分：{{ detailData.avgAmountScore ? detailData.avgAmountScore.toFixed(2) : '0.00' }} 分</div>
-          <p>近3个月总成交金额：¥{{ detailData.totalAmount3Months || 0 }}</p>
+          <p>近3个月总成交金额：¥{{ detailData.last3mAmount || 0 }}</p>
           <p>计算公式：近3个月总成交金额 ÷ 30</p>
-          <p>计算：{{ detailData.totalAmount3Months }} ÷ 30 = {{ detailData.avgAmountScore ? detailData.avgAmountScore.toFixed(2) : '0.00' }}</p>
+          <p>计算：{{ detailData.last3mAmount }} ÷ 30 = {{ detailData.avgAmountScore ? detailData.avgAmountScore.toFixed(2) : '0.00' }}</p>
         </el-card>
 
         <el-card shadow="never">
           <div slot="header">单价得分：{{ detailData.priceScore || 0 }} 分</div>
-          <p>订单单价：¥{{ detailData.orderPrice }}</p>
-          <p>料号平均单价：¥{{ detailData.avgMaterialPrice }}</p>
-          <p>单价偏差率：{{ detailData.priceDeviation ? (detailData.priceDeviation * 100).toFixed(2) : '0.00' }}%</p>
-          <p>得分规则：
-            <span v-if="detailData.priceDeviation >= 0.2">≥20% → 10分</span>
-            <span v-else-if="detailData.priceDeviation >= 0.1">10%-20% → 8分</span>
-            <span v-else-if="detailData.priceDeviation >= 0">0%-10% → 5分</span>
-            <span v-else-if="detailData.priceDeviation >= -0.1">-10%-0% → 3分</span>
-            <span v-else><-10% → 0分</span>
-          </p>
+          <p>平均单价：¥{{ detailData.avgUnitPrice }}</p>
+          <p>得分：{{ detailData.priceScore || 0 }} 分</p>
         </el-card>
       </div>
       <div v-else style="text-align: center; padding: 50px 0; color: #909399">
@@ -241,7 +230,7 @@ export default {
       queryParams: {
         pageNum: 1,
         pageSize: 20,
-        orderNo: '',
+        customerCode: '',
         customerName: '',
         priorityRange: ''
       },
@@ -264,7 +253,7 @@ export default {
       try {
         const res = await getCustomerPriorityList(this.queryParams)
         this.priorityList = res.data.list || []
-        this.total = res.data.total || 0
+        this.total = Number(res.data?.total || 0)
         this.calculateStats()
       } catch (error) {
         this.$message.error('加载数据失败：' + error.message)
@@ -293,7 +282,7 @@ export default {
       this.queryParams = {
         pageNum: 1,
         pageSize: 20,
-        orderNo: '',
+        customerCode: '',
         customerName: '',
         priorityRange: ''
       }
@@ -309,7 +298,7 @@ export default {
     },
     async handleViewDetail(row) {
       try {
-        const res = await getPriorityDetail(row.orderId)
+        const res = await getPriorityDetail(row.customerId)
         this.detailData = res.data
         this.detailVisible = true
       } catch (error) {
@@ -318,7 +307,7 @@ export default {
     },
     async handleRecalculate(row) {
       try {
-        await calculatePriority([row.orderId])
+        await calculatePriority([row.customerId])
         this.$message.success('重新计算成功')
         this.loadData()
       } catch (error) {

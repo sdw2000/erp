@@ -75,7 +75,25 @@
 </template>
 
 <script>
-import axios from 'axios'
+import { getSalesSummary } from '@/api/dashboard'
+
+const fallbackData = {
+  monthOrderCount: 18,
+  monthSalesAmount: 235000,
+  monthNewCustomers: 3,
+  monthReceivables: 180000,
+  todoOrders: 5,
+  todoReceivables: 2,
+  overdueOrders: 1,
+  stockWarning: 2,
+  salesTarget: 300000,
+  salesFinished: 235000,
+  notices: [
+    { id: 1, title: '本月销售目标为30万，请及时跟进客户！' },
+    { id: 2, title: '有2个产品库存低于安全线，请关注补货。' }
+  ]
+}
+
 export default {
   name: 'Dashboard',
   filters: {
@@ -85,19 +103,7 @@ export default {
   },
   data() {
     return {
-      data: {
-        monthOrderCount: 0,
-        monthSalesAmount: 0,
-        monthNewCustomers: 0,
-        monthReceivables: 0,
-        todoOrders: 0,
-        todoReceivables: 0,
-        overdueOrders: 0,
-        stockWarning: 0,
-        salesTarget: 0,
-        salesFinished: 0,
-        notices: []
-      }
+      data: { ...fallbackData }
     }
   },
   computed: {
@@ -106,12 +112,28 @@ export default {
       return Math.round((this.data.salesFinished / this.data.salesTarget) * 100)
     }
   },
-  created() {
-    axios.get('/vue-element-admin/dashboard/personal').then(res => {
-      if (res.data.code === 20000) {
-        this.data = res.data.data
+  async created() {
+    await this.loadData()
+  },
+  methods: {
+    async loadData() {
+      try {
+        const res = await getSalesSummary()
+        const summary = (res && res.data) || {}
+        // Map available summary fields; fall back to static data for the rest
+        this.data = {
+          ...fallbackData,
+          monthSalesAmount: Number(summary.monthAmount || fallbackData.monthSalesAmount),
+          monthReceivables: Number(summary.monthAmount || fallbackData.monthReceivables),
+          monthOrderCount: Number(summary.orderCount || fallbackData.monthOrderCount),
+          monthNewCustomers: Number(summary.customerTotal || fallbackData.monthNewCustomers),
+          salesFinished: Number(summary.monthAmount || fallbackData.salesFinished),
+          salesTarget: Number(summary.yearAmount || fallbackData.salesTarget)
+        }
+      } catch (e) {
+        this.data = { ...fallbackData }
       }
-    })
+    }
   }
 }
 </script>

@@ -89,6 +89,11 @@
             <span style="color: #e6a23c">{{ scope.row.lockedRolls }}</span>
           </template>
         </el-table-column>
+        <el-table-column prop="safetyStock" label="安全库存(㎡)" width="130" align="right">
+          <template slot-scope="scope">
+            <span>{{ scope.row.safetyStock || '-' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="100" align="center">
           <template slot-scope="scope">
             <el-tag :type="getStatusType(scope.row.status)" size="small">
@@ -112,7 +117,7 @@
         <el-table-column prop="batchNo" label="批次号" width="140" />
         <el-table-column prop="rollNo" label="卷号" width="120" />
         <el-table-column prop="width" label="宽度(mm)" width="120" align="center" />
-        <el-table-column prop="length" label="长度(mm)" width="120" align="center" />
+        <el-table-column prop="length" label="长度(m)" width="120" align="center" />
         <el-table-column prop="area" label="面积(㎡)" width="120" align="right" />
         <el-table-column prop="qcStatus" label="质检状态" width="100" align="center">
           <template slot-scope="scope">

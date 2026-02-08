@@ -2,16 +2,19 @@
   <el-card shadow="never">
     <div slot="header" class="card-header">
       <span>检验统计分析</span>
-      <el-date-picker
-        v-model="dateRange"
-        type="daterange"
-        range-separator="至"
-        start-placeholder="开始日期"
-        end-placeholder="结束日期"
-        value-format="yyyy-MM-dd"
-        style="width: 240px"
-        @change="onDateChange"
-      />
+      <div class="header-actions">
+        <el-date-picker
+          v-model="dateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          value-format="yyyy-MM-dd"
+          style="width: 240px"
+          @change="onDateChange"
+        />
+        <el-button size="small" @click="loadMockData">填充测试数据</el-button>
+      </div>
     </div>
 
     <el-tabs v-model="activeTab" @tab-click="handleTabChange">
@@ -169,7 +172,7 @@ export default {
           getDefectRateTrend(params)
         ])
 
-        if (statsRes.code === 200) {
+        if (statsRes && (statsRes.code === 200 || statsRes.code === 20000)) {
           const data = statsRes.data
           this.statistics = {
             totalSamples: data.totalSamples || 0,
@@ -181,11 +184,11 @@ export default {
           this.staffEfficiencyStats = data.staffStats || this.getMockStaffStats()
         }
 
-        if (defectRes.code === 200) {
+        if (defectRes && (defectRes.code === 200 || defectRes.code === 20000)) {
           this.defectTypeStats = defectRes.data || this.getMockDefectStats()
         }
 
-        if (trendRes.code === 200) {
+        if (trendRes && (trendRes.code === 200 || trendRes.code === 20000)) {
           this.trendData = trendRes.data || []
         }
 
@@ -249,11 +252,6 @@ export default {
     drawPassFailChart() {
       const container = document.getElementById('chartContainer1')
       if (!container) return
-
-      const chartData = [
-        { name: '合格', value: this.statistics.passSamples },
-        { name: '不合格', value: this.statistics.failSamples }
-      ]
 
       const html = `
         <div style="padding: 20px">
@@ -385,5 +383,11 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 </style>

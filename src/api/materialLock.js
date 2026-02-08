@@ -91,7 +91,7 @@ export function getMaterialSharedLocks(qrCode) {
  */
 export function getCoatingMaterialLocks(params) {
   return request({
-    url: '/api/production/material-lock/coating-locks',
+    url: '/api/production/schedule/coating-schedule/material-locks',
     method: 'get',
     params
   })

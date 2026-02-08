@@ -55,60 +55,85 @@ export function deleteInspection(id) {
   })
 }
 
+// 新：来料 / 过程 / 出货 检测接口（拆分四页面用）
+export function listIncomingInspections(params) {
+  return request({ url: '/api/quality/incoming', method: 'get', params })
+}
+
+export function listProcessInspections(params) {
+  return request({ url: '/api/quality/process', method: 'get', params })
+}
+
+export function listOutboundInspections(params) {
+  return request({ url: '/api/quality/outbound', method: 'get', params })
+}
+
+export function createIncomingInspection(data) {
+  return request({ url: '/api/quality/incoming', method: 'post', data })
+}
+
+export function createProcessInspection(data) {
+  return request({ url: '/api/quality/process', method: 'post', data })
+}
+
+export function createOutboundInspection(data) {
+  return request({ url: '/api/quality/outbound', method: 'post', data })
+}
+
+export function updateIncomingInspection(data) {
+  return request({ url: '/api/quality/incoming', method: 'put', data })
+}
+
+export function updateProcessInspection(data) {
+  return request({ url: '/api/quality/process', method: 'put', data })
+}
+
+export function updateOutboundInspection(data) {
+  return request({ url: '/api/quality/outbound', method: 'put', data })
+}
+
+export function deleteIncomingInspection(id) {
+  return request({ url: `/api/quality/incoming/${id}`, method: 'delete' })
+}
+
+export function deleteProcessInspection(id) {
+  return request({ url: `/api/quality/process/${id}`, method: 'delete' })
+}
+
+export function deleteOutboundInspection(id) {
+  return request({ url: `/api/quality/outbound/${id}`, method: 'delete' })
+}
+
 // ========== 不良品处置接口 ==========
 
-/**
- * 获取不良品处置列表
- */
 export function getDispositionList(params) {
-  return request({
-    url: '/api/quality/disposition/list',
-    method: 'get',
-    params
-  })
+  return request({ url: '/api/quality/disposition', method: 'get', params })
 }
 
-/**
- * 获取不良品处置详情
- */
 export function getDispositionDetail(id) {
-  return request({
-    url: `/api/quality/disposition/${id}`,
-    method: 'get'
-  })
+  return request({ url: `/api/quality/disposition/${id}`, method: 'get' })
 }
 
-/**
- * 创建不良品处置
- */
 export function createDisposition(data) {
-  return request({
-    url: '/api/quality/disposition',
-    method: 'post',
-    data
-  })
+  return request({ url: '/api/quality/disposition', method: 'post', data })
 }
 
-/**
- * 更新不良品处置
- */
-export function updateDisposition(id, data) {
-  return request({
-    url: `/api/quality/disposition/${id}`,
-    method: 'put',
-    data
-  })
+export function updateDisposition(data) {
+  return request({ url: '/api/quality/disposition', method: 'put', data })
 }
 
-/**
- * 审批不良品处置
- */
-export function approveDisposition(id, approved, remark, operator = 'admin') {
-  return request({
-    url: `/api/quality/disposition/${id}/approve`,
-    method: 'post',
-    params: { approved, remark, operator }
-  })
+export function deleteDisposition(id) {
+  return request({ url: `/api/quality/disposition/${id}`, method: 'delete' })
+}
+
+export function approveDisposition(id, status, remark) {
+  return request({ url: `/api/quality/disposition/${id}/approve`, method: 'post', params: {status, remark} })
+}
+
+// ========== 报表统计 ==========
+
+export function getQualitySummary() {
+  return request({ url: '/api/quality/report/summary', method: 'get' })
 }
 
 // ========== 检验统计接口 ==========

@@ -3,7 +3,7 @@
     <!-- 页面标题 -->
     <el-card shadow="never" style="margin-bottom: 15px">
       <div slot="header" class="clearfix">
-        <span style="font-weight: bold; font-size: 16px">待涂布订单池管理</span>
+        <span style="font-weight: bold; font-size: 16px">待排订单池</span>
         <div style="float: right">
           <el-button
             type="primary"
@@ -32,8 +32,8 @@
               <i class="el-icon-time" />
             </div>
             <div class="stat-info">
-              <div class="stat-label">等待中</div>
-              <div class="stat-value">{{ stats.waiting || 0 }}</div>
+              <div class="stat-label">{{ (displayStats && displayStats.label) || '等待中' }}</div>
+              <div class="stat-value">{{ (displayStats && displayStats.value) || 0 }}</div>
             </div>
           </div>
         </el-col>
@@ -76,8 +76,8 @@
     <!-- 按料号分组展示 -->
     <el-card shadow="never">
       <el-tabs v-model="activeTab" @tab-click="handleTabClick">
-        <!-- 按料号分组视图 -->
-        <el-tab-pane label="按料号分组" name="byMaterial">
+        <!-- 涂布汇总视图 -->
+        <el-tab-pane label="涂布汇总" name="byMaterial">
           <el-collapse v-model="activeNames" accordion>
             <el-collapse-item
               v-for="material in materialGroups"
@@ -157,12 +157,51 @@
                     size="small"
                     @click="handleGenerateCoating(material)"
                   >
-                    生成涂布任务
+                    提交到涂布看板
                   </el-button>
                 </div>
               </el-card>
             </el-collapse-item>
           </el-collapse>
+        </el-tab-pane>
+
+        <!-- 复卷汇总视图：按料号+长度聚合，方便集中复卷 -->
+        <el-tab-pane label="复卷汇总" name="rewindSummary">
+          <el-table
+            v-loading="loading"
+            :data="rewindingGroups"
+            border
+            stripe
+          >
+            <el-table-column type="index" label="序号" width="70" align="center" />
+            <el-table-column prop="materialCode" label="料号" width="140" sortable />
+            <el-table-column prop="materialName" label="料号名称" min-width="180" show-overflow-tooltip sortable />
+            <el-table-column prop="length" label="长度(m)" width="110" align="right" sortable>
+              <template slot-scope="{ row }">{{ row.length || '—' }}</template>
+            </el-table-column>
+            <el-table-column prop="totalArea" label="面积合计(㎡)" width="130" align="right" sortable />
+            <el-table-column prop="defaultWidth" label="复卷宽度(mm)" width="130" align="right">
+              <template slot-scope="{ row }">{{ row.defaultWidth == null ? '—' : row.defaultWidth }}</template>
+            </el-table-column>
+            <el-table-column prop="totalShortage" label="待复卷数量" width="120" align="right" sortable />
+            <el-table-column prop="orderCount" label="订单数" width="100" align="center" sortable>
+              <template slot-scope="{ row }">
+                <el-tag size="small" type="info">{{ row.orderCount }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="orderNos" label="关联订单号" min-width="220" show-overflow-tooltip>
+              <template slot-scope="{ row }">
+                <div style="display: flex; flex-wrap: wrap; gap: 6px">
+                  <el-tag v-for="no in row.orderNos" :key="no" size="mini" type="success">{{ no }}</el-tag>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="140" align="center" fixed="right">
+              <template slot-scope="{ row }">
+                <el-button type="text" size="small" @click="submitRewindingLengthGroup(row)">提交此长度</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </el-tab-pane>
 
         <!-- 全部订单列表视图 -->
@@ -264,7 +303,7 @@
       width="800px"
       :close-on-click-modal="false"
     >
-      <el-descriptions :column="2" border v-if="detailData">
+      <el-descriptions v-if="detailData" :column="2" border>
         <el-descriptions-item label="订单号">{{ detailData.orderNo }}</el-descriptions-item>
         <el-descriptions-item label="客户名称">{{ detailData.customerName }}</el-descriptions-item>
         <el-descriptions-item label="料号">{{ detailData.materialCode }}</el-descriptions-item>
@@ -298,17 +337,31 @@ import {
   getPendingCoatingByMaterial,
   removeFromPendingCoatingPool,
   generateCoatingTasks,
-  getCoatingStats
+  getCoatingStats,
+  getRewindSummary
 } from '@/api/coatingSchedule'
+import { addRewindingTask } from '@/api/schedule'
+import {
+  getUnscheduledOrdersPage,
+  getOrderShortages,
+  getAvailableSourceMaterials,
+  createSlittingTaskForShortage
+} from '@/api/unscheduledOrders'
+import { Descriptions, DescriptionsItem } from 'element-ui'
 
 export default {
   name: 'PendingCoatingPool',
+  components: {
+    ElDescriptions: Descriptions,
+    ElDescriptionsItem: DescriptionsItem
+  },
   data() {
     return {
       loading: false,
       activeTab: 'byMaterial',
       activeNames: [],
       materialGroups: [],
+      rewindingGroups: [],
       poolList: [],
       total: 0,
       queryParams: {
@@ -328,6 +381,20 @@ export default {
       detailData: null
     }
   },
+  computed: {
+    displayStats() {
+      if (this.activeTab === 'rewindSummary') {
+        const total = (this.rewindingGroups || []).reduce((s, r) => s + (Number(r.totalShortage) || 0), 0)
+        return { label: '待复卷', value: total }
+      }
+      return { label: '等待中', value: this.stats.waiting || 0 }
+    }
+  },
+  watch: {
+    activeTab(newVal) {
+      if (newVal === 'rewindSummary') this.loadRewindingGroups()
+    }
+  },
   created() {
     this.loadMaterialGroups()
     this.loadStats()
@@ -344,12 +411,168 @@ export default {
         this.loading = false
       }
     },
+    async submitRewindingByMaterial(row) {
+      // 针对某料号，按长度拆分创建复卷任务
+      const list = this.rewindingGroups.filter(g => String(g.materialCode) === String(row.materialCode))
+      if (list.length === 0) {
+        this.$message.info('该料号无长度明细可提交')
+        return
+      }
+      try {
+        for (const g of list) {
+          await addRewindingTask({
+            materialCode: g.materialCode,
+            materialName: g.materialName,
+            length: g.length,
+            quantity: g.totalShortage,
+            requiredRolls: g.requiredRolls,
+            orderNos: g.orderNos,
+            pendingPoolIds: g.poolIds
+          })
+        }
+        this.$message.success('已提交该料号的复卷任务')
+      } catch (error) {
+        this.$message.error('提交复卷任务失败：' + error.message)
+      }
+    },
+    async submitRewindingLengthGroup(row) {
+      // 提交单个长度的复卷任务
+      try {
+        await addRewindingTask({
+          materialCode: row.materialCode,
+          materialName: row.materialName,
+          length: row.length,
+          quantity: row.totalShortage,
+          requiredRolls: row.requiredRolls,
+          orderNos: row.orderNos,
+          pendingPoolIds: row.poolIds
+        })
+        this.$message.success('该长度的复卷任务已提交')
+        this.loadRewindingGroups()
+      } catch (error) {
+        this.$message.error('提交失败：' + error.message)
+      }
+    },
+    async submitAllRewinding() {
+      // 提交所有长度聚合的复卷任务
+      if (!this.rewindingGroups || this.rewindingGroups.length === 0) {
+        this.$message.info('暂无可提交的复卷汇总')
+        return
+      }
+      try {
+        for (const g of this.rewindingGroups) {
+          await addRewindingTask({
+            materialCode: g.materialCode,
+            materialName: g.materialName,
+            length: g.length,
+            quantity: g.totalShortage,
+            requiredRolls: g.requiredRolls,
+            orderNos: g.orderNos,
+            pendingPoolIds: g.poolIds
+          })
+        }
+        this.$message.success('全部复卷汇总已提交')
+        this.loadRewindingGroups()
+      } catch (error) {
+        this.$message.error('提交失败：' + error.message)
+      }
+    },
+    async submitAvailableSlitting() {
+      // 遍历未排程订单，自动为有可用源物料的缺口创建分切任务
+      try {
+        const res = await getUnscheduledOrdersPage({ pageNum: 1, pageSize: 200 })
+        const rows = (res.data && (res.data.records || res.data.list)) ? (res.data.records || res.data.list) : []
+        const today = new Date().toISOString().split('T')[0]
+        for (const r of rows) {
+          // 获取缺口
+          const sh = await getOrderShortages(r.orderId || r.id)
+          const shortages = (sh && sh.data) ? sh.data : []
+          if (!shortages.length) continue
+          // 查询可用源物料
+          const av = await getAvailableSourceMaterials(r.orderId || r.id)
+          const sources = (av && av.data) ? av.data : []
+          if (!sources.length) continue
+          // 简化：为每个缺口创建一个分切任务，设备使用1号，计划日期为今日
+          for (const s of shortages) {
+            await createSlittingTaskForShortage(s.id, 1, today, 'admin')
+          }
+        }
+        this.$message.success('有物料的分切任务已提交')
+      } catch (error) {
+        this.$message.error('分切任务提交失败：' + error.message)
+      }
+    },
+    async loadRewindingGroups() {
+      this.loading = true
+      try {
+        // 调用后端聚合接口，直接返回按料号+长度的复卷汇总
+        const res = await getRewindSummary()
+        // 打印调试信息以便快速定位后端返回结构
+        // eslint-disable-next-line no-console
+        console.debug('getRewindSummary response:', res)
+
+        // 兼容后端不同封装层级：直接数组 | { data: [...] } | { data: { list: [...] } } | { data: { records: [...] } }
+        let rows = []
+        if (!res) {
+          rows = []
+        } else if (Array.isArray(res)) {
+          rows = res
+        } else if (res.data) {
+          if (Array.isArray(res.data)) rows = res.data
+          else if (Array.isArray(res.data.list)) rows = res.data.list
+          else if (Array.isArray(res.data.records)) rows = res.data.records
+          else if (Array.isArray(res.data.rows)) rows = res.data.rows
+          else rows = []
+        } else {
+          rows = []
+        }
+
+        // 规范每行字段，确保前端模板能消费（orderNos 必须为数组，poolIds 为 ID 数组）
+        this.rewindingGroups = (rows || []).map(r => {
+          const item = Object.assign({}, r)
+
+          // orderNos 兼容处理
+          if (!item.orderNos) {
+            if (item.orderNosConcat && typeof item.orderNosConcat === 'string') {
+              item.orderNos = item.orderNosConcat.split(',').map(s => s.trim()).filter(Boolean)
+            } else if (item.orderNosText && typeof item.orderNosText === 'string') {
+              item.orderNos = item.orderNosText.split(',').map(s => s.trim()).filter(Boolean)
+            } else {
+              item.orderNos = item.orderNos || []
+            }
+          }
+
+          // poolIds：后端可能返回 poolIds（数组）/ poolIdsConcat（逗号分隔字符串）/ poolId（单个id）
+          if (!item.poolIds || !Array.isArray(item.poolIds)) {
+            if (item.poolIdsConcat && typeof item.poolIdsConcat === 'string') {
+              item.poolIds = item.poolIdsConcat.split(',').map(s => Number(s.trim())).filter(n => !Number.isNaN(n))
+            } else if (item.poolId != null) {
+              item.poolIds = [Number(item.poolId)]
+            } else {
+              item.poolIds = Array.isArray(item.poolIds) ? item.poolIds : []
+            }
+          }
+
+          // totalShortage 或 requiredRolls 兼容
+          if (item.totalShortage == null && item.requiredRolls != null) {
+            item.totalShortage = Number(item.requiredRolls) || 0
+          }
+          return item
+        })
+      } catch (error) {
+        this.$message.error('加载复卷汇总失败：' + (error.message || error))
+        this.rewindingGroups = []
+      } finally {
+        this.loading = false
+      }
+    },
     async loadPoolList() {
       this.loading = true
       try {
         const res = await getPendingCoatingPool(this.queryParams)
         this.poolList = res.data.list || []
-        this.total = res.data.total || 0
+        // 后端可能返回字符串，显式转为数字以满足分页组件的类型要求
+        this.total = Number(res.data.total || 0)
       } catch (error) {
         this.$message.error('加载数据失败：' + error.message)
       } finally {
@@ -367,6 +590,8 @@ export default {
     handleTabClick(tab) {
       if (tab.name === 'allOrders') {
         this.loadPoolList()
+      } else if (tab.name === 'rewindSummary') {
+        this.loadRewindingGroups()
       } else {
         this.loadMaterialGroups()
       }
@@ -443,7 +668,7 @@ export default {
       this.detailVisible = true
     },
     async handleRemove(row) {
-      this.$confirm('确定要从待涂布池中移除该订单吗？', '提示', {
+      this.$confirm('确定要从待排订单池中移除该订单吗？', '提示', {
         type: 'warning'
       }).then(async() => {
         try {

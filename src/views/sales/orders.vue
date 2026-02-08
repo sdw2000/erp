@@ -34,12 +34,12 @@
       <el-table-column type="index" label="序号" width="60" align="center" :index="indexMethod" />
       <el-table-column prop="customerDisplay" label="客户名称" width="150" sortable="custom" />
       <el-table-column prop="orderNo" label="订单编号" width="160" sortable="custom" />
-      <el-table-column prop="salesUserName" label="销售" width="100" />
-      <el-table-column prop="documentationPersonUserName" label="跟单员" width="100" />
       <el-table-column prop="totalAmount" label="总金额" width="120" sortable="custom" />
       <el-table-column prop="totalArea" label="总面积(㎡)" width="120" sortable="custom" />
       <el-table-column prop="orderDate" label="订单日期" width="140" sortable="custom" />
       <el-table-column prop="deliveryDate" label="交货日期" width="140" sortable="custom" />
+      <el-table-column prop="salesUserName" label="销售" width="100" />
+      <el-table-column prop="documentationPersonUserName" label="跟单员" width="100" />
       <el-table-column label="操作" width="280">
         <template slot-scope="scope">
           <el-button size="mini" @click="viewDetail(scope.row)">详情</el-button>
@@ -283,10 +283,10 @@
       <div v-if="currentPrint" id="printArea" class="print-content">
         <!-- 公司抬头 -->
         <div class="company-header">
-          <h1 class="company-name">东莞市方恩电子材料科技有限公司</h1>
+          <h1 class="company-name">{{ companyInfo.companyName }}</h1>
           <div class="company-info">
-            <p>地址：东莞市东城区主山乌石岗工业区</p>
-            <p>电话：0769-82551118 &nbsp;&nbsp; 传真：0769-82551160 &nbsp;&nbsp; www.finechemfr.com</p>
+            <p>地址：{{ companyInfo.address }}</p>
+            <p>电话：{{ companyInfo.phone }} &nbsp;&nbsp; 传真：{{ companyInfo.fax }} &nbsp;&nbsp; {{ companyInfo.website }}</p>
           </div>
         </div>
 
@@ -298,7 +298,7 @@
 
         <!-- 基本信息 -->
         <div class="basic-info">
-          <p><strong>签定时间：</strong>{{ currentPrint.orderDate }} &nbsp;&nbsp;&nbsp;&nbsp; <strong>签订地点：</strong>东莞市东城区主山乌石岗工业区</p>
+          <p><strong>签定时间：</strong>{{ currentPrint.orderDate }} &nbsp;&nbsp;&nbsp;&nbsp; <strong>签订地点：</strong>{{ companyInfo.address }}</p>
           <p><strong>甲  方：</strong>{{ currentPrint.customer }} （以下简称"甲方"）</p>
           <p><strong>乙  方：</strong>方恩电子材料科技有限公司（以下简称"乙方"）</p>
         </div>
@@ -370,10 +370,10 @@
             <p><strong>联系地址：</strong>{{ currentPrint.deliveryAddress || '_________________' }}</p>
           </div>
           <div class="signature-block">
-            <p><strong>乙方（盖章）：</strong>方恩电子材料科技有限公司</p>
+            <p><strong>乙方（盖章）：</strong>{{ companyInfo.companyName }}</p>
             <p><strong>授权代表：</strong>_________________</p>
-            <p><strong>联系电话：</strong>0769-82551118</p>
-            <p><strong>联系地址：</strong>东莞市东城区主山乌石岗工业区</p>
+            <p><strong>联系电话：</strong>{{ companyInfo.phone }}</p>
+            <p><strong>联系地址：</strong>{{ companyInfo.address }}</p>
           </div>
         </div>
 
@@ -395,6 +395,7 @@
 import { getOrders, createOrder, updateOrder, deleteOrder, downloadOrderTemplate, importOrders, exportOrders, getOrderDetail } from '@/api/sales'
 import { getCustomerList } from '@/api/customer'
 import { getAllEnabledSpecs } from '@/api/tapeSpec'
+import request from '@/utils/request'
 
 export default {
   name: 'SalesOrders',
@@ -431,7 +432,15 @@ export default {
 
       // 打印
       printVisible: false,
-      currentPrint: null
+      currentPrint: null,
+      // Company info for print header (will be fetched from backend)
+      companyInfo: {
+        companyName: '东莞市方恩电子材料科技有限公司',
+        address: '广东省东莞市桥头镇东新路13号2号楼102室',
+        phone: '0769-82551118',
+        fax: '0769-82551160',
+        website: 'www.finechemfr.com'
+      }
     }
   },
   computed: {
@@ -466,6 +475,7 @@ export default {
     }
   },
   async created() {
+    await this.fetchCompanyInfo()
     await this.fetchCustomers()
     await this.fetchSpecs()
     this.fetchOrders()
@@ -571,7 +581,7 @@ export default {
         if (res && res.code === 200) {
           const pageInfo = res.data
           const list = pageInfo.list || pageInfo.records || []
-          this.total = pageInfo.total || 0
+          this.total = Number(pageInfo.total || 0)
 
           if (Array.isArray(list)) {
             // 为每个订单添加customerDisplay字段（客户简称）
@@ -931,6 +941,17 @@ export default {
       } catch (e) {
         console.error('打开打印预览异常:', e)
         this.$message.error('打开打印预览失败')
+      }
+    },
+
+    async fetchCompanyInfo() {
+      try {
+        const res = await request({ url: '/config/company', method: 'get' })
+        if (res && (res.code === 200 || res.code === 20000) && res.data) {
+          this.companyInfo = Object.assign({}, this.companyInfo, res.data)
+        }
+      } catch (e) {
+        console.error('加载公司信息失败', e)
       }
     },
     // 格式化规格显示: 厚度μm×宽度mm×长度m

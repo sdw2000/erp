@@ -39,9 +39,9 @@
       <div slot="header" class="clearfix">
         <span>📌 筛选条件</span>
         <el-button-group style="float: right;">
-          <el-button type="primary" size="small" @click="handleSearch" icon="el-icon-search">查询</el-button>
-          <el-button size="small" @click="handleReset" icon="el-icon-refresh">重置</el-button>
-          <el-button size="small" @click="handleRefresh" icon="el-icon-refresh-right">刷新</el-button>
+          <el-button type="primary" size="small" icon="el-icon-search" @click="handleSearch">查询</el-button>
+          <el-button size="small" icon="el-icon-refresh" @click="handleReset">重置</el-button>
+          <el-button size="small" icon="el-icon-refresh-right" @click="handleRefresh">刷新</el-button>
         </el-button-group>
       </div>
 
@@ -49,8 +49,8 @@
         <el-row :gutter="20">
           <el-col :xs="24" :sm="12" :md="6">
             <el-form-item label="订单号">
-              <el-input 
-                v-model="queryForm.orderNo" 
+              <el-input
+                v-model="queryForm.orderNo"
                 placeholder="输入订单号"
                 clearable
               />
@@ -58,8 +58,8 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="6">
             <el-form-item label="客户名称">
-              <el-input 
-                v-model="queryForm.customerName" 
+              <el-input
+                v-model="queryForm.customerName"
                 placeholder="输入客户名称"
                 clearable
               />
@@ -67,8 +67,8 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="6">
             <el-form-item label="物料代码">
-              <el-input 
-                v-model="queryForm.materialCode" 
+              <el-input
+                v-model="queryForm.materialCode"
                 placeholder="输入物料代码"
                 clearable
               />
@@ -76,15 +76,15 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="6">
             <el-form-item label="操作建议">
-              <el-select 
-                v-model="queryForm.statusBadge" 
+              <el-select
+                v-model="queryForm.statusBadge"
                 placeholder="选择操作建议"
                 clearable
               >
-                <el-option label="✅ 可直接排程" value="directScheduleable"/>
-                <el-option label="🟡 需要复卷分切" value="needSlitting"/>
-                <el-option label="🔴 需要手动处理" value="needManual"/>
-                <el-option label="🔵 已入池待排程" value="inPool"/>
+                <el-option label="✅ 可直接排程" value="directScheduleable" />
+                <el-option label="🟡 需要复卷分切" value="needSlitting" />
+                <el-option label="🔴 需要手动处理" value="needManual" />
+                <el-option label="🔵 已入池待排程" value="inPool" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -97,7 +97,7 @@
       <div slot="header" class="clearfix">
         <span>📊 未排程订单列表</span>
         <el-button-group style="float: right;">
-          <el-button type="success" size="small" @click="handleBatchEnterPool" :disabled="!selectedOrders.length">
+          <el-button type="success" size="small" :disabled="!selectedOrders.length" @click="handleBatchEnterPool">
             批量进入排程池 ({{ selectedOrders.length }})
           </el-button>
           <el-button size="small" @click="handleExport">导出</el-button>
@@ -107,25 +107,25 @@
       <el-table
         :data="tableData"
         :loading="loading"
-        @selection-change="handleSelectionChange"
         stripe
         size="small"
         style="width: 100%"
+        @selection-change="handleSelectionChange"
       >
-        <el-table-column type="selection" width="55"></el-table-column>
-        <el-table-column prop="orderNo" label="订单号" width="120" sortable></el-table-column>
-        <el-table-column prop="customerName" label="客户" width="100"></el-table-column>
+        <el-table-column type="selection" width="55" />
+        <el-table-column prop="orderNo" label="订单号" width="120" sortable />
+        <el-table-column prop="customerName" label="客户" width="100" />
         <el-table-column prop="priority" label="优先级" width="80" align="center">
           <template slot-scope="scope">
-            <el-progress 
-              :percentage="scope.row.priority || 0" 
+            <el-progress
+              :percentage="scope.row.priority || 0"
               :color="scope.row.priority > 70 ? '#f56c6c' : '#e6a23c'"
               show-text
             />
           </template>
         </el-table-column>
-        <el-table-column prop="planDate" label="计划日期" width="110" sortable></el-table-column>
-        <el-table-column prop="totalQty" label="需求量" width="80" align="right"></el-table-column>
+        <el-table-column prop="planDate" label="计划日期" width="110" sortable />
+        <el-table-column prop="totalQty" label="需求量" width="80" align="right" />
         <el-table-column prop="lockedQty" label="已锁定" width="80" align="right">
           <template slot-scope="scope">
             <span style="color: #67c23a">{{ scope.row.lockedQty }}</span>
@@ -138,11 +138,11 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="inPoolQty" label="已入池" width="80" align="right"></el-table-column>
+        <el-table-column prop="inPoolQty" label="已入池" width="80" align="right" />
         <el-table-column prop="statusBadge" label="操作建议" width="140">
           <template slot-scope="scope">
-            <el-tag 
-              :type="getStatusTagType(scope.row.statusBadge)" 
+            <el-tag
+              :type="getStatusTagType(scope.row.statusBadge)"
               size="small"
             >
               {{ scope.row.statusBadge }}
@@ -151,16 +151,16 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template slot-scope="scope">
-            <el-button 
-              size="mini" 
-              type="primary" 
+            <el-button
+              size="mini"
+              type="primary"
               @click="handleViewDetail(scope.row)"
             >
               详情
             </el-button>
-            <el-dropdown @command="handleAction" size="mini">
+            <el-dropdown size="mini" @command="handleAction">
               <el-button type="success" size="mini">
-                操作 <i class="el-icon-arrow-down el-icon--right"></i>
+                操作 <i class="el-icon-arrow-down el-icon--right" />
               </el-button>
               <el-dropdown-menu slot="dropdown">
                 <el-dropdown-item :command="{ action: 'enterPool', row: scope.row }">
@@ -183,19 +183,19 @@
 
       <!-- 分页 -->
       <el-pagination
-        @size-change="handleSizeChange"
-        @current-change="handleCurrentChange"
         :current-page="pageNum"
         :page-sizes="[10, 20, 30, 50]"
         :page-size="pageSize"
         layout="total, sizes, prev, pager, next, jumper"
         :total="total"
         style="margin-top: 20px; text-align: right;"
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange"
       />
     </el-card>
 
     <!-- 详情面板 (右侧抽屉) -->
-    <el-drawer 
+    <el-drawer
       title="📋 订单详情"
       :visible.sync="detailDrawerVisible"
       direction="rtl"
@@ -223,11 +223,11 @@
         <div class="section">
           <h4>📦 物料明细</h4>
           <el-table :data="detailData.materials" size="small" border>
-            <el-table-column prop="materialCode" label="料号" width="100"></el-table-column>
-            <el-table-column prop="qty" label="需求" width="60" align="right"></el-table-column>
-            <el-table-column prop="lockedQty" label="已锁定" width="60" align="right"></el-table-column>
-            <el-table-column prop="shortageQty" label="缺口" width="60" align="right"></el-table-column>
-            <el-table-column prop="inPoolQty" label="已入池" width="60" align="right"></el-table-column>
+            <el-table-column prop="materialCode" label="料号" width="100" />
+            <el-table-column prop="qty" label="需求" width="60" align="right" />
+            <el-table-column prop="lockedQty" label="已锁定" width="60" align="right" />
+            <el-table-column prop="shortageQty" label="缺口" width="60" align="right" />
+            <el-table-column prop="inPoolQty" label="已入池" width="60" align="right" />
             <el-table-column prop="status" label="状态" width="80">
               <template slot-scope="scope">
                 <el-tag :type="getStatusTagType(scope.row.status)" size="mini">
@@ -239,12 +239,12 @@
         </div>
 
         <!-- 缺口处理 -->
-        <div class="section" v-if="detailData.shortages && detailData.shortages.length > 0">
+        <div v-if="detailData.shortages && detailData.shortages.length > 0" class="section">
           <h4>⚠️ 物料缺口</h4>
           <el-table :data="detailData.shortages" size="small" border>
-            <el-table-column prop="materialCode" label="料号" width="100"></el-table-column>
-            <el-table-column prop="shortageQty" label="缺口数" width="70" align="right"></el-table-column>
-            <el-table-column prop="sourceMaterial" label="源物料" width="100"></el-table-column>
+            <el-table-column prop="materialCode" label="料号" width="100" />
+            <el-table-column prop="shortageQty" label="缺口数" width="70" align="right" />
+            <el-table-column prop="sourceMaterial" label="源物料" width="100" />
             <el-table-column prop="needSlitting" label="分切" width="60">
               <template slot-scope="scope">
                 {{ scope.row.needSlitting ? '✅是' : '❌否' }}
@@ -252,9 +252,9 @@
             </el-table-column>
             <el-table-column label="操作" width="100" align="center">
               <template slot-scope="scope">
-                <el-button 
+                <el-button
                   v-if="scope.row.needSlitting"
-                  type="warning" 
+                  type="warning"
                   size="mini"
                   @click="handleCreateSlittingTask(scope.row)"
                 >
@@ -275,37 +275,37 @@
     </el-drawer>
 
     <!-- 创建分切任务对话框 -->
-    <el-dialog 
+    <el-dialog
       title="🔧 创建复卷分切任务"
       :visible.sync="slittingDialogVisible"
       width="500px"
     >
       <el-form :model="slittingForm" label-width="120px" size="small">
         <el-form-item label="缺口料号">
-          <el-input v-model="slittingForm.materialCode" disabled></el-input>
+          <el-input v-model="slittingForm.materialCode" disabled />
         </el-form-item>
         <el-form-item label="缺口数量">
-          <el-input v-model="slittingForm.shortageQty" disabled></el-input>
+          <el-input v-model="slittingForm.shortageQty" disabled />
         </el-form-item>
         <el-form-item label="源物料">
-          <el-input v-model="slittingForm.sourceMaterial" disabled></el-input>
+          <el-input v-model="slittingForm.sourceMaterial" disabled />
         </el-form-item>
         <el-form-item label="可用库存">
-          <el-input v-model="slittingForm.availableQty" disabled></el-input>
+          <el-input v-model="slittingForm.availableQty" disabled />
         </el-form-item>
         <el-form-item label="分切设备">
           <el-select v-model="slittingForm.equipmentId" placeholder="选择分切设备">
-            <el-option 
-              v-for="eq in equipments" 
-              :key="eq.id" 
-              :label="eq.name" 
+            <el-option
+              v-for="eq in equipments"
+              :key="eq.id"
+              :label="eq.name"
               :value="eq.id"
             />
           </el-select>
         </el-form-item>
         <el-form-item label="计划分切日期">
-          <el-date-picker 
-            v-model="slittingForm.scheduledDate" 
+          <el-date-picker
+            v-model="slittingForm.scheduledDate"
             type="date"
             placeholder="选择日期"
           />
@@ -323,8 +323,6 @@
 import {
   getUnscheduledOrdersPage,
   getUnscheduledOrderDetail,
-  getOrderShortages,
-  getAvailableSourceMaterials,
   getUnscheduledOrdersStats,
   enterCoatingPool,
   batchEnterCoatingPool,
@@ -389,7 +387,7 @@ export default {
         ...this.queryForm
       }).then(res => {
         this.tableData = res.data.records || []
-        this.total = res.data.total || 0
+        this.total = Number(res.data?.total || 0)
         this.loading = false
       }).catch(err => {
         this.$message.error(err.message)

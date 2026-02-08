@@ -134,17 +134,17 @@ export default {
           const body = res.data
           if (body.items && Array.isArray(body.items)) {
             this.users = body.items
-            this.total = body.total || body.totalCount || this.users.length
+            this.total = Number(body.total || body.totalCount || this.users.length || 0)
           } else if (Array.isArray(body)) {
             this.users = body
-            this.total = body.length
+            this.total = Number(body.length || 0)
           } else if (body.data && Array.isArray(body.data)) {
             this.users = body.data
-            this.total = body.total || body.totalCount || this.users.length
+            this.total = Number(body.total || body.totalCount || this.users.length || 0)
           } else {
             // fallback: try res.data.rows
             this.users = body.rows || []
-            this.total = body.total || this.users.length
+            this.total = Number(body.total || this.users.length || 0)
           }
         }
       }).catch(() => {

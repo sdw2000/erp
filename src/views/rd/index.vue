@@ -398,7 +398,7 @@ export default {
         const res = await getSpecList(params)
         if (res.code === 20000) {
           this.list = res.data.records
-          this.pagination.total = res.data.total
+          this.pagination.total = Number(res.data?.total || 0)
         }
       } catch (e) {
         console.error('获取列表失败', e)

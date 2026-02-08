@@ -37,9 +37,35 @@
         border
         stripe
       >
+        <el-table-column type="index" label="序号" width="60" />
+        <el-table-column prop="customer" label="客户名称" width="220" />
         <el-table-column prop="noticeNo" label="发货单号" width="180" />
+        <el-table-column prop="customerCode" label="客户代码" width="140">
+          <template slot-scope="scope">
+            <span>{{ scope.row.customerCode || scope.row.customerCode === 0 ? scope.row.customerCode : '-' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="orderNo" label="销售订单号" width="180" />
-        <el-table-column prop="customer" label="客户名称" />
+        <el-table-column label="明细(规格)" min-width="220">
+          <template slot-scope="scope">
+            <div v-if="scope.row.items && scope.row.items.length">
+              <div v-for="(it, idx) in scope.row.items" :key="idx" style="margin-bottom:6px;">
+                <div>{{ it.spec }}</div>
+              </div>
+            </div>
+            <div v-else>-</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="数量/卷" min-width="140">
+          <template slot-scope="scope">
+            <div v-if="scope.row.items && scope.row.items.length">
+              <div v-for="(it, idx) in scope.row.items" :key="idx" style="margin-bottom:6px;">
+                <el-input-number v-model.number="it.quantity" :min="0" size="small" @change="onQuantityChange(scope.$index, idx, it.quantity)" :step="1" style="width:100px;" />
+              </div>
+            </div>
+            <div v-else>-</div>
+          </template>
+        </el-table-column>
         <el-table-column prop="deliveryDate" label="发货日期" width="120" />
         <el-table-column prop="status" label="状态" width="120">
           <template slot-scope="scope">
@@ -51,6 +77,7 @@
           <template slot-scope="scope">
             <el-button size="mini" type="text" @click="viewDetail(scope.row)">详情</el-button>
             <el-button size="mini" type="text" @click="handlePrint(scope.row)">打印</el-button>
+            <el-button size="mini" type="text" @click="saveRow(scope.row)">保存</el-button>
             <el-button v-if="scope.row.status !== '已发货' && scope.row.status !== 'shipped'" size="mini" type="text" @click="handleEdit(scope.row)">编辑</el-button>
             <el-button v-if="scope.row.status === '待发货' || scope.row.status === 'pending' || !scope.row.status" size="mini" type="text" style="color: #67C23A;" @click="confirmShip(scope.row)">确认发货</el-button>
             <el-button v-if="scope.row.status !== '已发货' && scope.row.status !== 'shipped'" size="mini" type="text" style="color: #F56C6C;" @click="handleDelete(scope.row)">删除</el-button>
@@ -234,12 +261,12 @@
         <!-- 联次说明 -->
         <div class="copy-label">白联:跟单 绿联:客户 红联:财务 黄联:业务</div>
 
-        <!-- 公司抬头 -->
-        <h1 class="company-title">东莞市方恩电子材料科技有限公司</h1>
+        <!-- 公司抬头（来自后端，可配置） -->
+        <h1 class="company-title">{{ companyInfo.companyName }}</h1>
         <div class="company-info">
-          地址:东莞市桥头镇东新路13号2号楼102室<br>
-          电话：0769-82551118 &nbsp;&nbsp; 传真：0769-82551160<br>
-          www.finechemfr.com
+          地址: {{ companyInfo.address }}<br>
+          电话：{{ companyInfo.phone }} &nbsp;&nbsp; 传真：{{ companyInfo.fax }}<br>
+          {{ companyInfo.website }}
         </div>
 
         <h2 class="form-title">发 货 单</h2>
@@ -301,9 +328,11 @@
               <td>{{ item.remark || '-' }}</td>
             </tr>
             <!-- 补空行保持格式美观 -->
-            <tr v-for="n in (5 - (currentPrint.items ? currentPrint.items.length : 0))" v-if="!currentPrint.items || currentPrint.items.length < 5" :key="'empty'+n" class="empty-row">
-              <td>&nbsp;</td><td /><td /><td /><td /><td /><td /><td /><td />
-            </tr>
+            <template v-if="!currentPrint.items || currentPrint.items.length < 5">
+              <tr v-for="n in (5 - (currentPrint.items ? currentPrint.items.length : 0))" :key="'empty'+n" class="empty-row">
+                <td>&nbsp;</td><td /><td /><td /><td /><td /><td /><td /><td />
+              </tr>
+            </template>
             <tr class="total-row">
               <td colspan="3" style="text-align: right; padding-right: 10px;">合计：</td>
               <td>{{ sumQuantity }}</td>
@@ -391,7 +420,15 @@ export default {
 
       // Print
       printVisible: false,
-      currentPrint: {}
+      currentPrint: {},
+      // Company info for print header (fetched from backend)
+      companyInfo: {
+        companyName: '东莞市方恩电子材料科技有限公司',
+        address: '广东省东莞市桥头镇东新路13号2号楼102室',
+        phone: '0769-82551118',
+        fax: '0769-82551160',
+        website: 'www.finechemfr.com'
+      }
     }
   },
   computed: {
@@ -415,6 +452,7 @@ export default {
   },
   created() {
     this.fetchNotices()
+    this.fetchCompanyInfo()
   },
   methods: {
     // --- Query Methods ---
@@ -431,15 +469,42 @@ export default {
           }
         })
         if (res.code === 200 || res.code === 20000) {
+          let rows = []
           if (res.data.records) {
-            this.tableData = res.data.records
+            rows = res.data.records
             this.page.total = Number(res.data.total) || 0
           } else if (res.data.list) {
-            this.tableData = res.data.list
+            rows = res.data.list
             this.page.total = Number(res.data.total) || 0
           } else {
-            this.tableData = res.data
-            this.page.total = res.data.length || 0
+            rows = Array.isArray(res.data) ? res.data : []
+            this.page.total = rows.length || 0
+          }
+
+          this.tableData = rows
+
+          // 并行请求当前页每条发货单详情以填充 items（仅在列表中未包含明细时）
+          try {
+            const detailPromises = this.tableData.map((row, idx) => {
+              if (!row.items || row.items.length === 0) {
+                return request({ url: `/delivery/${row.id}`, method: 'get' })
+                  .then(det => ({ idx, data: det && (det.code === 200 || det.code === 20000) ? det.data : null }))
+                  .catch(() => ({ idx, data: null }))
+              }
+              return Promise.resolve({ idx, data: { items: row.items } })
+            })
+
+            const details = await Promise.all(detailPromises)
+            // 统一写回，避免并发赋值导致的 race-condition 警告
+            details.forEach(resItem => {
+              if (resItem && resItem.data) {
+                const items = resItem.data.items || []
+                // 可能 tableData 已经被翻页或更新，先检查索引有效性
+                if (this.tableData[resItem.idx]) this.tableData[resItem.idx].items = items
+              }
+            })
+          } catch (e) {
+            // 忽略整体详情请求错误，保持页面可用
           }
         }
       } catch (error) {
@@ -513,7 +578,8 @@ export default {
             method: 'get',
             params: {
               keyword: query,
-              status: 'pending'
+              // 仅从已完成的订单中选择用于发货通知（支持分批发货）
+              status: 'completed'
             }
           })
           if (res.code === 200) {
@@ -627,6 +693,15 @@ export default {
       this.currentNotice.items.splice(index, 1)
     },
 
+    onQuantityChange(rowIdx, itemIdx, val) {
+      // 确保更新为数字并保持响应式
+      const v = Number(val || 0)
+      if (this.tableData && this.tableData[rowIdx] && this.tableData[rowIdx].items && this.tableData[rowIdx].items[itemIdx]) {
+        const old = this.tableData[rowIdx].items[itemIdx]
+        this.$set(this.tableData[rowIdx].items, itemIdx, Object.assign({}, old, { quantity: v }))
+      }
+    },
+
     handleDialogClose() {
       this.dialogVisible = false
     },
@@ -641,14 +716,10 @@ export default {
 
           this.submitting = true
           try {
-            const url = this.isEdit ? '/delivery/update' : '/delivery/create' // Assuming update endpoint exists or we use create for now
             // Adjust payload if necessary
             const payload = { ...this.currentNotice }
 
-            // If it's create, force the URL to create
-            const finalUrl = this.currentNotice.id ? '/delivery/create' : '/delivery/create' // Simplified as controller only has create shown.
-            // NOTE: Usually edit would be PUT /delivery and mapping id. Controller only shows create.
-            // If user edits, we might need to handle it. For now, assuming create mode primarily.
+            // NOTE: Usually edit would be PUT /delivery with id. 当前仅示例 create 路径。
 
             const res = await request({
               url: '/delivery/create',
@@ -729,6 +800,42 @@ export default {
         this.$message.error('获取详情失败')
       }
       return null
+    },
+
+    async fetchCompanyInfo() {
+      try {
+        const res = await request({ url: '/config/company', method: 'get' })
+        if (res && (res.code === 200 || res.code === 20000) && res.data) {
+          this.companyInfo = Object.assign({}, this.companyInfo, res.data)
+        }
+      } catch (e) {
+        // ignore, keep defaults
+        console.error('加载公司信息失败', e)
+      }
+    },
+
+    async saveRow(row) {
+      // 保存单行修改（包括 items 中的数量变更）
+      try {
+        const payload = JSON.parse(JSON.stringify(row))
+        // 尝试使用常见的 update 接口路径
+        const res = await request({ url: `/delivery/update`, method: 'post', data: payload })
+        if (res && (res.code === 200 || res.code === 20000)) {
+          this.$message.success('保存成功')
+          // 重新拉取该条详情以同步最新数据
+          const fresh = await request({ url: `/delivery/${row.id}`, method: 'get' })
+          if (fresh && (fresh.code === 200 || fresh.code === 20000) && fresh.data) {
+            // 在 tableData 中找到并替换
+            const idx = this.tableData.findIndex(r => r.id === row.id)
+            if (idx !== -1) this.$set(this.tableData, idx, fresh.data)
+          }
+        } else {
+          this.$message.error(res.msg || '保存失败')
+        }
+      } catch (e) {
+        console.error('保存失败', e)
+        this.$message.error('保存失败')
+      }
     },
 
     handlePrint(row) {

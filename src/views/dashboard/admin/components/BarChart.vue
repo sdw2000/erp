@@ -23,11 +23,31 @@ export default {
     height: {
       type: String,
       default: '300px'
+    },
+    categories: {
+      type: Array,
+      default: () => []
+    },
+    seriesData: {
+      type: Array,
+      default: () => []
+    },
+    seriesName: {
+      type: String,
+      default: '金额'
     }
   },
   data() {
     return {
       chart: null
+    }
+  },
+  watch: {
+    categories() {
+      this.setChartOptions()
+    },
+    seriesData() {
+      this.setChartOptions()
     }
   },
   mounted() {
@@ -45,7 +65,10 @@ export default {
   methods: {
     initChart() {
       this.chart = echarts.init(this.$el, 'macarons')
-
+      this.setChartOptions()
+    },
+    setChartOptions() {
+      if (!this.chart) return
       this.chart.setOption({
         tooltip: {
           trigger: 'axis',
@@ -62,7 +85,7 @@ export default {
         },
         xAxis: [{
           type: 'category',
-          data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+          data: this.categories.length ? this.categories : ['-'],
           axisTick: {
             alignWithLabel: true
           }
@@ -74,25 +97,10 @@ export default {
           }
         }],
         series: [{
-          name: 'pageA',
+          name: this.seriesName,
           type: 'bar',
-          stack: 'vistors',
-          barWidth: '60%',
-          data: [79, 52, 200, 334, 390, 330, 220],
-          animationDuration
-        }, {
-          name: 'pageB',
-          type: 'bar',
-          stack: 'vistors',
-          barWidth: '60%',
-          data: [80, 52, 200, 334, 390, 330, 220],
-          animationDuration
-        }, {
-          name: 'pageC',
-          type: 'bar',
-          stack: 'vistors',
-          barWidth: '60%',
-          data: [30, 52, 200, 334, 390, 330, 220],
+          barWidth: '50%',
+          data: this.seriesData.length ? this.seriesData : [0],
           animationDuration
         }]
       })

@@ -61,10 +61,11 @@ export default {
       this.chart = echarts.init(this.$el, 'macarons')
       this.setOptions(this.chartData)
     },
-    setOptions({ expectedData, actualData } = {}) {
+    setOptions({ xAxis = [], series = [] } = {}) {
+      const names = series.map(s => s.name)
       this.chart.setOption({
         xAxis: {
-          data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+          data: xAxis,
           boundaryGap: false,
           axisTick: {
             show: false
@@ -90,44 +91,26 @@ export default {
           }
         },
         legend: {
-          data: ['expected', 'actual']
+          data: names
         },
-        series: [{
-          name: 'expected', itemStyle: {
-            normal: {
-              color: '#FF005A',
-              lineStyle: {
-                color: '#FF005A',
-                width: 2
-              }
-            }
-          },
-          smooth: true,
+        series: series.map((s, idx) => ({
+          name: s.name || `系列${idx + 1}`,
           type: 'line',
-          data: expectedData,
-          animationDuration: 2800,
-          animationEasing: 'cubicInOut'
-        },
-        {
-          name: 'actual',
           smooth: true,
-          type: 'line',
+          data: s.data || [],
           itemStyle: {
             normal: {
-              color: '#3888fa',
+              color: s.color || '#3888fa',
               lineStyle: {
-                color: '#3888fa',
+                color: s.color || '#3888fa',
                 width: 2
               },
-              areaStyle: {
-                color: '#f3f8ff'
-              }
+              areaStyle: s.area !== false ? { color: s.areaColor || '#f3f8ff' } : undefined
             }
           },
-          data: actualData,
-          animationDuration: 2800,
+          animationDuration: 1200,
           animationEasing: 'quadraticOut'
-        }]
+        }))
       })
     }
   }

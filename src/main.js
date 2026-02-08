@@ -50,6 +50,25 @@ Object.keys(filters).forEach(key => {
 // 全局注册权限检查混入
 Vue.mixin(permissionMixin)
 
+// 屏蔽 ResizeObserver 的无害告警（开发态常见噪声）
+const ignoreResizeObserverErr = e => {
+  const msg = e?.message || e?.reason?.message
+  if (msg === 'ResizeObserver loop completed with undelivered notifications.') {
+    e.stopImmediatePropagation()
+  }
+}
+window.addEventListener('error', ignoreResizeObserverErr)
+window.addEventListener('unhandledrejection', ignoreResizeObserverErr)
+
+// 额外兜底：过滤控制台输出的 ResizeObserver 噪声
+const rawConsoleError = window.console.error
+window.console.error = (...args) => {
+  if (args && typeof args[0] === 'string' && args[0].includes('ResizeObserver loop completed with undelivered notifications.')) {
+    return
+  }
+  if (rawConsoleError) rawConsoleError.apply(window.console, args)
+}
+
 Vue.config.productionTip = false
 
 new Vue({

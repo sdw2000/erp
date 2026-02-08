@@ -62,12 +62,14 @@ const actions = {
         accessedRoutes = filterAsyncRoutes(asyncRoutes, roles)
       }
 
-      // debug: log roles and which top-level routes were included
-      try {
-        console.log('[permission] generateRoutes roles:', roles)
-        console.log('[permission] accessedRoutes paths:', (accessedRoutes || []).map(r => r.path))
-      } catch (e) {
-        // ignore logging errors
+      // debug logs only during local development
+      if (process.env.NODE_ENV === 'development') {
+        try {
+          console.log('[permission] generateRoutes roles:', roles)
+          console.log('[permission] accessedRoutes paths:', (accessedRoutes || []).map(r => r.path))
+        } catch (e) {
+          // ignore logging errors
+        }
       }
 
       commit('SET_ROUTES', accessedRoutes)

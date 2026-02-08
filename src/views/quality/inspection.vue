@@ -313,7 +313,7 @@ export default {
         const res = await getInspectionList(params)
         if (res.code === 200) {
           this.inspectionList = res.data.list || []
-          this.total = res.data.total || 0
+          this.total = Number(res.data?.total || 0)
         } else {
           this.$message.error(res.message || '加载失败')
         }

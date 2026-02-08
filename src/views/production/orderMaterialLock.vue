@@ -227,7 +227,7 @@
       width="900px"
       :close-on-click-modal="false"
     >
-      <el-descriptions :column="2" border v-if="detailData">
+      <el-descriptions v-if="detailData" :column="2" border>
         <el-descriptions-item label="锁定单号" :span="2">{{ detailData.lockNo }}</el-descriptions-item>
         <el-descriptions-item label="订单号">{{ detailData.orderNo }}</el-descriptions-item>
         <el-descriptions-item label="客户名称">{{ detailData.customerName }}</el-descriptions-item>

@@ -428,7 +428,7 @@ export default {
       const res = await axios.get('/api/sales/samples', { params })
       if (res.data && res.data.code === 20000) {
         this.samples = res.data.data.records || []
-        this.pagination.total = res.data.data.total || 0
+        this.pagination.total = Number(res.data?.data?.total || 0)
       } else {
         this.$message.error(res.data.message || '获取数据失败')
       }

@@ -48,6 +48,13 @@ module.exports = {
         logLevel: 'debug'
       }
     },
+    // 为局域网访问和 HMR 显式配置 sockjs 地址，避免被 proxy 干扰或 host 不匹配
+    // 为局域网访问和 HMR 显式配置 sockjs 地址，使用上面计算的 port 变量保持一致
+    public: '192.168.0.138:' + port,
+    // webpack-dev-server (v3) 支持以下 sock 配置，确保客户端通过正确的 host/port 连接
+    sockHost: '192.168.0.138',
+    sockPort: port,
+    sockPath: '/sockjs-node',
     // 注意：如果需要使用 mock，请注释掉上面的 proxy 配置
     // before: require('./mock/mock-server.js')
   },

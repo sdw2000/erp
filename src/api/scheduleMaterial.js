@@ -81,6 +81,19 @@ export function allocateMaterials(lockIds) {
 }
 
 /**
+ * 生产退料（库存归还）
+ * @param {array} lockIds 锁定记录IDs
+ * @returns {Promise}
+ */
+export function returnMaterials(lockIds) {
+  return request({
+    url: '/production/schedule-material/return',
+    method: 'post',
+    data: { lockIds }
+  })
+}
+
+/**
  * 释放排程的锁定（排程取消时）
  * @param {number} scheduleId 排程ID
  * @returns {Promise}

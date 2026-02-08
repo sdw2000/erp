@@ -191,6 +191,24 @@ export function addRewindingTask(data) {
   })
 }
 
+// 更新复卷任务设备
+export function updateRewindingEquipment(data) {
+  return request({
+    url: '/api/production/schedule/rewinding/equipment',
+    method: 'post',
+    data
+  })
+}
+
+// 调整复卷任务时间
+export function adjustRewindingTaskTime(taskId, data) {
+  return request({
+    url: `/api/production/schedule/rewinding/adjust-time/${taskId}`,
+    method: 'post',
+    data
+  })
+}
+
 // ========== 分切任务接口 ==========
 
 /**
