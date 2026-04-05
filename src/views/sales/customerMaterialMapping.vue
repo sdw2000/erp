@@ -1,0 +1,608 @@
+<template>
+  <div class="app-container">
+    <el-card shadow="never">
+      <div slot="header" class="flex-between">
+        <span>客户物料映射（客户料号/客户品名）</span>
+        <div>
+          <input ref="importInput" type="file" accept=".csv" style="display:none" @change="handleImportChange">
+          <el-button size="mini" @click="downloadCsvTemplate">下载模板</el-button>
+          <el-button size="mini" @click="triggerImport">导入</el-button>
+          <el-button size="mini" @click="exportCsv">导出</el-button>
+          <el-button size="mini" type="warning" :loading="initLoading" @click="initFromHistory">历史初始化</el-button>
+          <el-button type="primary" size="mini" @click="openDialog()">新增映射</el-button>
+        </div>
+      </div>
+
+      <el-form :inline="true" size="small" class="mb-10">
+        <el-form-item label="客户代码">
+          <el-input v-model.trim="query.customerCode" placeholder="如 DGFN001" clearable style="width: 160px" />
+        </el-form-item>
+        <el-form-item label="我司料号">
+          <el-input v-model.trim="query.materialCode" placeholder="如 FT-001" clearable style="width: 180px" />
+        </el-form-item>
+        <el-form-item label="厚度(μm)">
+          <el-input-number v-model="query.thickness" :min="0" :precision="3" :controls="false" style="width: 120px" />
+        </el-form-item>
+        <el-form-item label="宽度(mm)">
+          <el-input-number v-model="query.width" :min="0" :precision="2" :controls="false" style="width: 120px" />
+        </el-form-item>
+        <el-form-item label="长度(m)">
+          <el-input-number v-model="query.length" :min="0" :precision="2" :controls="false" style="width: 120px" />
+        </el-form-item>
+        <el-form-item label="客户厚度(μm)">
+          <el-input-number v-model="query.customerThickness" :min="0" :precision="3" :controls="false" style="width: 140px" />
+        </el-form-item>
+        <el-form-item label="客户宽度(mm)">
+          <el-input-number v-model="query.customerWidth" :min="0" :precision="2" :controls="false" style="width: 140px" />
+        </el-form-item>
+        <el-form-item label="客户长度(m)">
+          <el-input-number v-model="query.customerLength" :min="0" :precision="2" :controls="false" style="width: 140px" />
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="query.isActive" clearable style="width: 100px">
+            <el-option label="启用" :value="1" />
+            <el-option label="禁用" :value="0" />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="fetchList">查询</el-button>
+          <el-button @click="resetQuery">重置</el-button>
+        </el-form-item>
+      </el-form>
+
+      <el-table v-loading="loading" :data="list" border stripe size="small">
+        <el-table-column prop="customerCode" label="客户代码" width="120" />
+        <el-table-column prop="materialCode" label="物料代码" min-width="170" />
+        <el-table-column prop="thickness" label="厚度(μm)" width="110" align="right" />
+        <el-table-column prop="width" label="宽度(mm)" width="100" align="right" />
+        <el-table-column prop="length" label="长度(m)" width="100" align="right" />
+        <el-table-column prop="customerThickness" label="客户厚度(μm)" width="130" align="right" />
+        <el-table-column prop="customerWidth" label="客户宽度(mm)" width="130" align="right" />
+        <el-table-column prop="customerLength" label="客户长度(m)" width="130" align="right" />
+        <el-table-column prop="customerMaterialCode" label="客户料号" min-width="170" />
+        <el-table-column prop="customerMaterialName" label="客户物料名称" min-width="180" show-overflow-tooltip />
+        <el-table-column label="状态" width="90" align="center">
+          <template slot-scope="scope">
+            <el-tag :type="Number(scope.row.isActive) === 1 ? 'success' : 'info'">
+              {{ Number(scope.row.isActive) === 1 ? '启用' : '禁用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
+        <el-table-column label="操作" width="150" align="center">
+          <template slot-scope="scope">
+            <el-button type="text" size="mini" @click="openDialog(scope.row)">编辑</el-button>
+            <el-button type="text" size="mini" style="color:#f56c6c" @click="handleDelete(scope.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="mt-10 right">
+        <el-pagination
+          :current-page="query.pageNum"
+          :page-size="query.pageSize"
+          :total="total"
+          layout="total, prev, pager, next, sizes"
+          :page-sizes="[10,20,50,100]"
+          @current-change="handlePageChange"
+          @size-change="handleSizeChange"
+        />
+      </div>
+    </el-card>
+
+    <el-dialog :title="form.id ? '编辑映射' : '新增映射'" :visible.sync="dialogVisible" width="860px" @close="resetForm">
+      <el-form :model="form" :rules="rules" ref="formRef" label-width="120px" size="small">
+        <el-form-item label="客户代码" prop="customerCode">
+          <el-select
+            v-model="form.customerCode"
+            filterable
+            clearable
+            placeholder="搜索客户代码"
+            style="width:100%"
+          >
+            <el-option
+              v-for="item in customerOptions"
+              :key="item.id || item.customerCode"
+              :label="formatCustomerLabel(item)"
+              :value="item.customerCode"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="物料代码" prop="materialCode">
+          <el-select
+            v-model="form.materialCode"
+            filterable
+            clearable
+            allow-create
+            default-first-option
+            placeholder="搜索物料代码"
+            style="width:100%"
+            @change="onMaterialCodeSelected"
+          >
+            <el-option
+              v-for="item in specOptions"
+              :key="item.id || item.materialCode"
+              :label="`${item.materialCode || '-'}${item.productName ? ' / ' + item.productName : ''}`"
+              :value="item.materialCode"
+            />
+          </el-select>
+        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :span="8">
+            <el-form-item label="厚度(μm)" prop="thickness">
+              <el-input-number v-model="form.thickness" :min="0" :precision="3" :controls="false" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="宽度(mm)" prop="width">
+              <el-input-number v-model="form.width" :min="0" :precision="2" :controls="false" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="长度(m)" prop="length">
+              <el-input-number v-model="form.length" :min="0" :precision="2" :controls="false" style="width:100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="8">
+            <el-form-item label="客户厚度(μm)">
+              <el-input-number v-model="form.customerThickness" :min="0" :precision="3" :controls="false" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="客户宽度(mm)">
+              <el-input-number v-model="form.customerWidth" :min="0" :precision="2" :controls="false" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="客户长度(m)">
+              <el-input-number v-model="form.customerLength" :min="0" :precision="2" :controls="false" style="width:100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="客户料号">
+          <el-input v-model.trim="form.customerMaterialCode" placeholder="可为空，空则回退物料代码" />
+        </el-form-item>
+        <el-form-item label="客户物料名称">
+          <el-input v-model.trim="form.customerMaterialName" placeholder="可为空，空则回退我司品名" />
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-switch v-model="form.isActive" :active-value="1" :inactive-value="0" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="form.remark" type="textarea" :rows="2" />
+        </el-form-item>
+      </el-form>
+      <span slot="footer">
+        <el-button size="small" @click="dialogVisible = false">取消</el-button>
+        <el-button size="small" type="primary" :loading="saving" @click="handleSave">保存</el-button>
+      </span>
+    </el-dialog>
+  </div>
+</template>
+
+<script>
+import {
+  getCustomerMaterialMappingPage,
+  getAllCustomerMaterialMappings,
+  saveCustomerMaterialMapping,
+  batchSaveCustomerMaterialMappings,
+  deleteCustomerMaterialMapping,
+  initCustomerMaterialMappingsFromHistory
+} from '@/api/customerMaterialMapping'
+import { getCustomerList } from '@/api/customer'
+import { getAllEnabledSpecs } from '@/api/tapeSpec'
+
+function defaultForm() {
+  return {
+    id: null,
+    customerCode: '',
+    materialCode: '',
+    thickness: null,
+    width: null,
+    length: null,
+    customerThickness: null,
+    customerWidth: null,
+    customerLength: null,
+    customerMaterialCode: '',
+    customerMaterialName: '',
+    isActive: 1,
+    remark: ''
+  }
+}
+
+export default {
+  name: 'SalesCustomerMaterialMapping',
+  data() {
+    return {
+      loading: false,
+      initLoading: false,
+      saving: false,
+      dialogVisible: false,
+      customerOptions: [],
+      specOptions: [],
+      list: [],
+      total: 0,
+      query: {
+        pageNum: 1,
+        pageSize: 20,
+        customerCode: '',
+        materialCode: '',
+        thickness: null,
+        width: null,
+        length: null,
+        customerThickness: null,
+        customerWidth: null,
+        customerLength: null,
+        isActive: null
+      },
+      form: defaultForm(),
+      rules: {
+        customerCode: [{ required: true, message: '请输入客户代码', trigger: 'blur' }],
+        materialCode: [{ required: true, message: '请输入物料代码', trigger: 'blur' }],
+        thickness: [{ required: true, message: '请输入厚度', trigger: 'blur' }],
+        width: [{ required: true, message: '请输入宽度', trigger: 'blur' }],
+        length: [{ required: true, message: '请输入长度', trigger: 'blur' }]
+      }
+    }
+  },
+  created() {
+    this.loadCustomerOptions()
+    this.loadSpecOptions()
+    this.fetchList()
+  },
+  methods: {
+    formatCustomerLabel(customer) {
+      if (!customer) return ''
+      const shortName = customer.shortName || customer.customerName || '-'
+      const code = customer.customerCode || '-'
+      return `${shortName} / ${code}`
+    },
+    async loadCustomerOptions() {
+      try {
+        const res = await getCustomerList({ size: 1000 })
+        if (res && (res.code === 200 || res.code === 20000)) {
+          const data = res.data
+          const rows = Array.isArray(data && data.records) ? data.records : (Array.isArray(data) ? data : [])
+          this.customerOptions = rows
+        } else {
+          this.customerOptions = []
+        }
+      } catch (e) {
+        this.customerOptions = []
+      }
+    },
+    async loadSpecOptions() {
+      try {
+        const res = await getAllEnabledSpecs()
+        if (res && (res.code === 200 || res.code === 20000)) {
+          this.specOptions = Array.isArray(res.data) ? res.data : []
+        } else {
+          this.specOptions = []
+        }
+      } catch (e) {
+        this.specOptions = []
+      }
+    },
+    onMaterialCodeSelected(materialCode) {
+      const code = String(materialCode || '').trim()
+      if (!code) return
+      const hit = (this.specOptions || []).find(item => String(item.materialCode || '').trim() === code)
+      if (!hit) return
+      const t = Number(hit.totalThickness || hit.baseThickness || hit.thickness)
+      const w = Number(hit.width)
+      const l = Number(hit.length)
+      if (Number.isFinite(t) && t > 0) {
+        this.$set(this.form, 'thickness', t)
+      }
+      if (Number.isFinite(w) && w > 0) {
+        this.$set(this.form, 'width', w)
+      }
+      if (Number.isFinite(l) && l > 0) {
+        this.$set(this.form, 'length', l)
+      }
+    },
+    async fetchList() {
+      this.loading = true
+      try {
+        const params = {
+          ...this.query,
+          customerCode: this.query.customerCode || undefined,
+          materialCode: this.query.materialCode || undefined,
+          thickness: this.query.thickness || undefined,
+          width: this.query.width || undefined,
+          length: this.query.length || undefined,
+          customerThickness: this.query.customerThickness || undefined,
+          customerWidth: this.query.customerWidth || undefined,
+          customerLength: this.query.customerLength || undefined,
+          isActive: this.query.isActive == null ? undefined : this.query.isActive
+        }
+        const res = await getCustomerMaterialMappingPage(params)
+        if (res && (res.code === 200 || res.code === 20000)) {
+          const data = res.data || {}
+          this.list = data.records || data.list || []
+          this.total = Number(data.total || this.list.length || 0)
+        } else {
+          this.list = []
+          this.total = 0
+          this.$message.error((res && (res.msg || res.message)) || '查询失败')
+        }
+      } finally {
+        this.loading = false
+      }
+    },
+    resetQuery() {
+      this.query = {
+        pageNum: 1,
+        pageSize: 20,
+        customerCode: '',
+        materialCode: '',
+        thickness: null,
+        width: null,
+        length: null,
+        customerThickness: null,
+        customerWidth: null,
+        customerLength: null,
+        isActive: null
+      }
+      this.fetchList()
+    },
+    handlePageChange(page) {
+      this.query.pageNum = page
+      this.fetchList()
+    },
+    handleSizeChange(size) {
+      this.query.pageSize = size
+      this.query.pageNum = 1
+      this.fetchList()
+    },
+    openDialog(row) {
+      this.form = row ? { ...defaultForm(), ...row } : defaultForm()
+      if (this.form.materialCode && (!this.form.thickness || !this.form.width || !this.form.length)) {
+        this.onMaterialCodeSelected(this.form.materialCode)
+      }
+      this.dialogVisible = true
+      this.$nextTick(() => this.$refs.formRef && this.$refs.formRef.clearValidate())
+    },
+    resetForm() {
+      this.form = defaultForm()
+    },
+    async handleSave() {
+      this.$refs.formRef.validate(async valid => {
+        if (!valid) return
+        this.saving = true
+        try {
+          const customerThicknessNum = Number(this.form.customerThickness)
+          const customerWidthNum = Number(this.form.customerWidth)
+          const customerLengthNum = Number(this.form.customerLength)
+          const payload = {
+            ...this.form,
+            customerCode: String(this.form.customerCode || '').trim(),
+            materialCode: String(this.form.materialCode || '').trim(),
+            customerThickness: Number.isFinite(customerThicknessNum) && customerThicknessNum > 0 ? customerThicknessNum : null,
+            customerWidth: Number.isFinite(customerWidthNum) && customerWidthNum > 0 ? customerWidthNum : null,
+            customerLength: Number.isFinite(customerLengthNum) && customerLengthNum > 0 ? customerLengthNum : null,
+            customerMaterialCode: String(this.form.customerMaterialCode || '').trim() || null,
+            customerMaterialName: String(this.form.customerMaterialName || '').trim() || null
+          }
+          const res = await saveCustomerMaterialMapping(payload)
+          if (res && (res.code === 200 || res.code === 20000)) {
+            this.$message.success('保存成功')
+            this.dialogVisible = false
+            this.fetchList()
+          } else {
+            this.$message.error((res && (res.msg || res.message)) || '保存失败')
+          }
+        } finally {
+          this.saving = false
+        }
+      })
+    },
+    async handleDelete(row) {
+      await this.$confirm('确认删除该映射吗？', '提示', { type: 'warning' })
+      const res = await deleteCustomerMaterialMapping(row.id)
+      if (res && (res.code === 200 || res.code === 20000)) {
+        this.$message.success('删除成功')
+        this.fetchList()
+      } else {
+        this.$message.error((res && (res.msg || res.message)) || '删除失败')
+      }
+    },
+    async initFromHistory() {
+      try {
+        await this.$confirm('将按历史订单一键初始化映射，已人工维护的值仅在为空时补全，是否继续？', '提示', { type: 'warning' })
+      } catch (e) {
+        return
+      }
+      this.initLoading = true
+      try {
+        const res = await initCustomerMaterialMappingsFromHistory({
+          customerCode: this.query.customerCode || undefined,
+          operator: (this.$store.getters.name || 'system')
+        })
+        if (res && (res.code === 200 || res.code === 20000)) {
+          const d = res.data || {}
+          const completed = d.completed ? '完成' : '未完成'
+          this.$message.success(`初始化${completed}：总${d.total || 0}，新增${d.inserted || 0}，补全${d.updated || 0}，跳过${d.skipped || 0}`)
+          this.fetchList()
+        } else {
+          this.$message.error((res && (res.msg || res.message)) || '历史初始化失败')
+        }
+      } finally {
+        this.initLoading = false
+      }
+    },
+    triggerImport() {
+      const input = this.$refs.importInput
+      if (!input) return
+      input.value = ''
+      input.click()
+    },
+    escapeCsvCell(value) {
+      const text = String(value == null ? '' : value)
+      if (/[",\r\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`
+      return text
+    },
+    parseCsvLine(line) {
+      const result = []
+      let current = ''
+      let inQuotes = false
+      for (let i = 0; i < line.length; i += 1) {
+        const ch = line[i]
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"'
+            i += 1
+          } else {
+            inQuotes = !inQuotes
+          }
+        } else if (ch === ',' && !inQuotes) {
+          result.push(current)
+          current = ''
+        } else {
+          current += ch
+        }
+      }
+      result.push(current)
+      return result
+    },
+    downloadCsvFile(lines, fileName) {
+      const content = `\uFEFF${(lines || []).join('\r\n')}`
+      const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    },
+    downloadCsvTemplate() {
+      const lines = [
+        'customerCode,materialCode,thickness,width,length,customerThickness,customerWidth,customerLength,customerMaterialCode,customerMaterialName,isActive,remark',
+        'DGFN001,FT-001,100,50,100,95,50,100,CUST-FT-001,客户胶带A,1,示例数据'
+      ]
+      this.downloadCsvFile(lines, 'customer-material-mapping-template.csv')
+      this.$message.success('CSV模板已下载')
+    },
+    async exportCsv() {
+      const res = await getAllCustomerMaterialMappings({ isActive: undefined })
+      if (!(res && (res.code === 200 || res.code === 20000))) {
+        this.$message.error((res && (res.msg || res.message)) || '导出失败')
+        return
+      }
+      const list = Array.isArray(res.data) ? res.data : []
+      const lines = ['customerCode,materialCode,thickness,width,length,customerThickness,customerWidth,customerLength,customerMaterialCode,customerMaterialName,isActive,remark']
+      list.forEach(item => {
+        lines.push([
+          this.escapeCsvCell(item.customerCode),
+          this.escapeCsvCell(item.materialCode),
+          this.escapeCsvCell(item.thickness),
+          this.escapeCsvCell(item.width),
+          this.escapeCsvCell(item.length),
+          this.escapeCsvCell(item.customerThickness),
+          this.escapeCsvCell(item.customerWidth),
+          this.escapeCsvCell(item.customerLength),
+          this.escapeCsvCell(item.customerMaterialCode),
+          this.escapeCsvCell(item.customerMaterialName),
+          this.escapeCsvCell(item.isActive == null ? 1 : item.isActive),
+          this.escapeCsvCell(item.remark)
+        ].join(','))
+      })
+      this.downloadCsvFile(lines, `customer-material-mapping-${new Date().toISOString().slice(0, 10)}.csv`)
+      this.$message.success('CSV导出成功')
+    },
+    parseImportRows(csvText) {
+      const text = String(csvText || '').replace(/^\uFEFF/, '')
+      const lines = text.split(/\r?\n/).map(x => x.trim()).filter(Boolean)
+      if (!lines.length) return []
+      const headers = this.parseCsvLine(lines[0]).map(h => String(h || '').trim())
+      const getIndex = (...names) => {
+        const lower = names.map(n => String(n || '').toLowerCase())
+        return headers.findIndex(h => lower.includes(String(h || '').toLowerCase()))
+      }
+      const idxCustomerCode = getIndex('customerCode', '客户代码', '客户编码')
+      const idxMaterialCode = getIndex('materialCode', '物料代码', '我司料号', '料号')
+      const idxThickness = getIndex('thickness', '厚度')
+      const idxWidth = getIndex('width', '宽度')
+      const idxLength = getIndex('length', '长度')
+      const idxCustomerThickness = getIndex('customerThickness', '客户厚度')
+      const idxCustomerWidth = getIndex('customerWidth', '客户宽度')
+      const idxCustomerLength = getIndex('customerLength', '客户长度')
+      const idxCustomerMaterialCode = getIndex('customerMaterialCode', '客户物料代码', '客户料号')
+      const idxCustomerMaterialName = getIndex('customerMaterialName', '客户物料名称', '客户材料名称', '客户品名')
+      const idxIsActive = getIndex('isActive', '状态', '启用')
+      const idxRemark = getIndex('remark', '备注')
+
+      if (idxCustomerCode < 0 || idxMaterialCode < 0 || idxThickness < 0 || idxWidth < 0 || idxLength < 0) {
+        throw new Error('CSV缺少必填列：customerCode/materialCode/thickness/width/length')
+      }
+
+      return lines.slice(1).map(line => {
+        const cols = this.parseCsvLine(line)
+        const isActiveRaw = idxIsActive >= 0 ? String(cols[idxIsActive] || '').trim() : '1'
+        const isActive = ['0', 'false', '禁用', 'N', 'n'].includes(isActiveRaw) ? 0 : 1
+        const customerThicknessRaw = idxCustomerThickness >= 0 ? String(cols[idxCustomerThickness] || '').trim() : ''
+        const customerWidthRaw = idxCustomerWidth >= 0 ? String(cols[idxCustomerWidth] || '').trim() : ''
+        const customerLengthRaw = idxCustomerLength >= 0 ? String(cols[idxCustomerLength] || '').trim() : ''
+        const customerThicknessNum = Number(customerThicknessRaw)
+        const customerWidthNum = Number(customerWidthRaw)
+        const customerLengthNum = Number(customerLengthRaw)
+        return {
+          customerCode: String(cols[idxCustomerCode] || '').trim(),
+          materialCode: String(cols[idxMaterialCode] || '').trim(),
+          thickness: Number(cols[idxThickness] || 0),
+          width: Number(cols[idxWidth] || 0),
+          length: Number(cols[idxLength] || 0),
+          customerThickness: customerThicknessRaw && Number.isFinite(customerThicknessNum) && customerThicknessNum > 0 ? customerThicknessNum : null,
+          customerWidth: customerWidthRaw && Number.isFinite(customerWidthNum) && customerWidthNum > 0 ? customerWidthNum : null,
+          customerLength: customerLengthRaw && Number.isFinite(customerLengthNum) && customerLengthNum > 0 ? customerLengthNum : null,
+          customerMaterialCode: idxCustomerMaterialCode >= 0 ? String(cols[idxCustomerMaterialCode] || '').trim() : '',
+          customerMaterialName: idxCustomerMaterialName >= 0 ? String(cols[idxCustomerMaterialName] || '').trim() : '',
+          isActive,
+          remark: idxRemark >= 0 ? String(cols[idxRemark] || '').trim() : ''
+        }
+      }).filter(x => x.customerCode && x.materialCode && x.thickness > 0 && x.width > 0 && x.length > 0)
+    },
+    async handleImportChange(event) {
+      const files = event && event.target && event.target.files
+      const file = files && files[0]
+      if (!file) return
+      try {
+        const text = await file.text()
+        const rows = this.parseImportRows(text)
+        if (!rows.length) {
+          this.$message.warning('导入文件无有效数据')
+          return
+        }
+        await this.$confirm(`将导入 ${rows.length} 条映射（同键自动更新），是否继续？`, '提示', {
+          type: 'warning'
+        })
+        const res = await batchSaveCustomerMaterialMappings(rows)
+        if (res && (res.code === 200 || res.code === 20000)) {
+          this.$message.success(`导入成功：${res.data || rows.length} 条`)
+          this.fetchList()
+        } else {
+          this.$message.error((res && (res.msg || res.message)) || '导入失败')
+        }
+      } catch (e) {
+        if (e !== 'cancel') {
+          this.$message.error(e.message || '导入失败，请检查CSV格式')
+        }
+      } finally {
+        const input = this.$refs.importInput
+        if (input) input.value = ''
+      }
+    }
+  }
+}
+</script>
+
+<style scoped>
+.mb-10 { margin-bottom: 10px; }
+.mt-10 { margin-top: 10px; }
+.right { text-align: right; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+</style>

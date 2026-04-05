@@ -26,11 +26,11 @@
             </div>
           </div>
 
-          <el-table v-loading="userLoading" :data="users" stripe border style="width: 100%; margin-top: 15px">
+          <el-table v-loading="userLoading" :data="users" stripe border size="small" style="width: 100%; margin-top: 15px" class="pretty-table user-table">
             <el-table-column type="index" label="序号" width="60" align="center" />
-            <el-table-column prop="username" label="用户名" width="120" />
-            <el-table-column prop="realName" label="真实姓名" width="120" />
-            <el-table-column label="角色" width="200">
+            <el-table-column prop="username" label="用户名" width="170" show-overflow-tooltip />
+            <el-table-column prop="realName" label="真实姓名" width="170" show-overflow-tooltip />
+            <el-table-column label="角色" min-width="220" show-overflow-tooltip>
               <template slot-scope="scope">
                 <el-tag v-for="role in scope.row.roleNames" :key="role" size="small" style="margin-right: 4px">
                   {{ role }}
@@ -45,12 +45,14 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="createdAt" label="创建时间" width="160" />
-            <el-table-column label="操作" width="280" align="center" fixed="right">
+            <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
+            <el-table-column label="操作" width="280" align="center" class-name="operation-col">
               <template slot-scope="scope">
-                <el-button size="mini" type="primary" @click="openEditUser(scope.row)">编辑</el-button>
-                <el-button size="mini" type="warning" @click="openAssignRole(scope.row)">分配角色</el-button>
-                <el-button size="mini" type="danger" @click="confirmDeleteUser(scope.row)">删除</el-button>
+                <div class="op-btns">
+                  <el-button size="mini" type="primary" @click="openEditUser(scope.row)">编辑</el-button>
+                  <el-button size="mini" type="warning" @click="openAssignRole(scope.row)">分配角色</el-button>
+                  <el-button size="mini" type="danger" @click="confirmDeleteUser(scope.row)">删除</el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -69,21 +71,30 @@
         </el-tab-pane>
 
         <!-- 角色管理Tab -->
-        <el-tab-pane label="角色管理" name="roles">          <div class="tab-header">
-                                                           <div />
-                                                           <div class="button-group">
-                                                             <el-button type="info" icon="el-icon-document" size="small" @click="downloadRoleTemplate">下载模板</el-button>
-                                                             <el-button type="warning" icon="el-icon-upload2" size="small" @click="$refs.roleFileInput.click()">导入</el-button>
-                                                             <el-button type="success" icon="el-icon-download" size="small" @click="exportRoles">导出</el-button>
-                                                             <el-button type="primary" icon="el-icon-plus" size="small" @click="openAddRole">新增角色</el-button>
-                                                             <input ref="roleFileInput" type="file" accept=".xlsx,.xls" style="display: none" @change="handleRoleImport">
-                                                           </div>
-                                                         </div>
+        <el-tab-pane label="角色管理" name="roles">
+          <div class="tab-header">
+            <el-form :inline="true" :model="roleSearch" class="search-form">
+              <el-form-item label="关键词">
+                <el-input v-model="roleSearch.keyword" placeholder="角色标识/显示名称" clearable style="width: 180px" @keyup.enter.native="fetchRoles" />
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" icon="el-icon-search" @click="fetchRoles">搜 索</el-button>
+                <el-button icon="el-icon-refresh-left" @click="resetRoleSearch">重 置</el-button>
+              </el-form-item>
+            </el-form>
+            <div class="button-group">
+              <el-button type="info" icon="el-icon-document" size="small" @click="downloadRoleTemplate">下载模板</el-button>
+              <el-button type="warning" icon="el-icon-upload2" size="small" @click="$refs.roleFileInput.click()">导入</el-button>
+              <el-button type="success" icon="el-icon-download" size="small" @click="exportRoles">导出</el-button>
+              <el-button type="primary" icon="el-icon-plus" size="small" @click="openAddRole">新增角色</el-button>
+              <input ref="roleFileInput" type="file" accept=".xlsx,.xls" style="display: none" @change="handleRoleImport">
+            </div>
+          </div>
 
-          <el-table v-loading="roleLoading" :data="roles" stripe border style="width: 100%; margin-top: 15px">
+          <el-table v-loading="roleLoading" :data="roles" stripe border size="small" style="width: 100%; margin-top: 15px" class="pretty-table role-table">
             <el-table-column type="index" label="序号" width="60" align="center" />
-            <el-table-column prop="name" label="角色标识" width="120" />
-            <el-table-column prop="displayName" label="显示名称" width="150" />
+            <el-table-column prop="name" label="角色标识" width="180" show-overflow-tooltip />
+            <el-table-column prop="displayName" label="显示名称" width="180" show-overflow-tooltip />
             <el-table-column prop="description" label="描述" min-width="200" />
             <el-table-column prop="status" label="状态" width="80" align="center">
               <template slot-scope="scope">
@@ -92,13 +103,27 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="160" align="center" fixed="right">
+            <el-table-column label="操作" width="200" align="center" class-name="operation-col">
               <template slot-scope="scope">
-                <el-button size="mini" type="primary" @click="openEditRole(scope.row)">编辑</el-button>
-                <el-button size="mini" type="danger" :disabled="scope.row.name === 'admin'" @click="confirmDeleteRole(scope.row)">删除</el-button>
+                <div class="op-btns">
+                  <el-button size="mini" type="primary" @click="openEditRole(scope.row)">编辑</el-button>
+                  <el-button size="mini" type="danger" :disabled="scope.row.name === 'admin'" @click="confirmDeleteRole(scope.row)">删除</el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
+
+          <div style="margin-top: 20px; text-align: right;">
+            <el-pagination
+              :current-page="rolePagination.page"
+              :page-size="rolePagination.size"
+              :page-sizes="[10, 20, 50]"
+              :total="rolePagination.total"
+              layout="total, sizes, prev, pager, next, jumper"
+              @size-change="handleRoleSizeChange"
+              @current-change="handleRolePageChange"
+            />
+          </div>
         </el-tab-pane>
       </el-tabs>
     </el-card>
@@ -112,8 +137,25 @@
         <el-form-item label="密码" prop="password">
           <el-input v-model="userForm.password" type="password" :placeholder="isEditUser ? '不修改请留空' : '请输入密码'" />
         </el-form-item>
+        <el-form-item label="关联人员" prop="staffId">
+          <el-select
+            v-model="userForm.staffId"
+            filterable
+            clearable
+            placeholder="请选择人员"
+            style="width: 100%"
+            @change="handleStaffChange"
+          >
+            <el-option
+              v-for="staff in staffOptions"
+              :key="staff.id"
+              :label="`${staff.staffName}${staff.staffCode ? '（' + staff.staffCode + '）' : ''}`"
+              :value="staff.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="真实姓名" prop="realName">
-          <el-input v-model="userForm.realName" placeholder="请输入真实姓名" />
+          <el-input v-model="userForm.realName" placeholder="选择关联人员后自动带出" :disabled="true" />
         </el-form-item>
         <el-form-item label="状态" prop="status">
           <el-select v-model="userForm.status" style="width: 100%">
@@ -134,7 +176,7 @@
         <strong>用户：</strong>{{ currentUser.username }} ({{ currentUser.realName }})
       </div>
       <el-checkbox-group v-model="selectedRoleIds">
-        <div v-for="role in roles" :key="role.id" style="margin-bottom: 10px;">
+        <div v-for="role in allRoles" :key="role.id" style="margin-bottom: 10px;">
           <el-checkbox :label="role.id">
             <span>{{ role.displayName }}</span>
             <span style="color: #999; margin-left: 10px;">({{ role.name }})</span>
@@ -177,6 +219,7 @@
 <script>
 import { getUsers, createUser, updateUser, deleteUser, exportUsers, importUsers, downloadUserTemplate } from '@/api/user'
 import { getRoles, createRole, updateRole, deleteRole, assignRolesToUser, getUserRoleIds, exportRoles, importRoles, downloadRoleTemplate } from '@/api/role'
+import { getAllActiveStaff } from '@/api/staff'
 
 export default {
   name: 'PermissionManagement',
@@ -202,12 +245,15 @@ export default {
         id: null,
         username: '',
         password: '',
+        staffId: null,
         realName: '',
         status: '0'
       },
+      staffOptions: [],
       userRules: {
         username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-        password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
+        password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+        staffId: [{ required: true, message: '请选择关联人员', trigger: 'change' }]
       },
 
       // 角色分配
@@ -218,6 +264,15 @@ export default {
       // 角色相关
       roleLoading: false,
       roles: [],
+      allRoles: [],
+      roleSearch: {
+        keyword: ''
+      },
+      rolePagination: {
+        page: 1,
+        size: 10,
+        total: 0
+      },
       roleDialogVisible: false,
       roleDialogTitle: '新增角色',
       isEditRole: false,
@@ -235,9 +290,11 @@ export default {
     }
   },
   created() {
-    this.fetchRoles().then(() => {
+    this.fetchAllRoles().then(() => {
+      this.fetchRoles()
       this.fetchUsers()
     })
+    this.fetchStaffOptions()
   },
   methods: {
     handleTabClick(tab) {
@@ -274,6 +331,7 @@ export default {
           this.users = list.map(u => ({
             ...u,
             id: u.id != null ? String(u.id) : u.id,
+            staffId: u.staffId != null ? String(u.staffId) : null,
             // 确保 status 为字符串，以便与 el-select 的 value="0" 匹配，并修复表格中 === '0' 的判断
             status: u.status != null ? String(u.status) : '0'
           }))
@@ -303,7 +361,7 @@ export default {
           const roleIds = (res.data || []).map(id => String(id))
           // 确保使用 $set 触发响应式更新
           this.$set(user, 'roleIds', roleIds)
-          const roleNames = this.roles
+          const roleNames = this.allRoles
             .filter(r => roleIds.includes(r.id))
             .map(r => r.displayName)
           this.$set(user, 'roleNames', roleNames)
@@ -338,6 +396,7 @@ export default {
         id: null,
         username: '',
         password: '',
+        staffId: null,
         realName: '',
         status: '0'
       }
@@ -352,6 +411,7 @@ export default {
         id: row.id,
         username: row.username,
         password: '',
+        staffId: row.staffId != null ? String(row.staffId) : null,
         realName: row.realName || row.real_name,
         status: row.status || '0'
       }
@@ -365,6 +425,11 @@ export default {
 
         try {
           const data = { ...this.userForm }
+          if (data.staffId !== null && data.staffId !== undefined && data.staffId !== '') {
+            data.staffId = Number(data.staffId)
+          } else {
+            delete data.staffId
+          }
           if (!data.password) {
             delete data.password
           }
@@ -402,6 +467,38 @@ export default {
       })
     },
 
+    async fetchStaffOptions() {
+      try {
+        const res = await getAllActiveStaff()
+        if (res.code === 200 || res.code === 20000) {
+          const raw = res.data
+          const list = Array.isArray(raw)
+            ? raw
+            : (Array.isArray(raw && raw.list) ? raw.list : [])
+          this.staffOptions = list
+            .map(item => ({
+              id: item.id != null ? String(item.id) : '',
+              staffName: item.staffName || '',
+              staffCode: item.staffCode || ''
+            }))
+            .filter(item => item.id)
+        }
+      } catch (e) {
+        console.error('获取人员列表失败:', e)
+      }
+    },
+
+    handleStaffChange(staffId) {
+      if (!staffId) {
+        this.userForm.realName = ''
+        return
+      }
+      const selected = this.staffOptions.find(item => item.id === String(staffId))
+      if (selected) {
+        this.userForm.realName = selected.staffName
+      }
+    },
+
     confirmDeleteUser(row) {
       this.$confirm(`确定要删除用户 "${row.username}" 吗？`, '提示', {
         confirmButtonText: '确定',
@@ -434,7 +531,7 @@ export default {
       try {
         const res = await getUserRoleIds(row.id)
         if (res.code === 200) {
-          this.selectedRoleIds = res.data || []
+          this.selectedRoleIds = (res.data || []).map(id => String(id))
         } else {
           this.selectedRoleIds = []
           this.$message.error(res.message || '获取用户角色失败')
@@ -482,10 +579,27 @@ export default {
     async fetchRoles() {
       this.roleLoading = true
       try {
-        const res = await getRoles()
-        if (res.code === 200) {
+        const params = {
+          page: this.rolePagination.page,
+          size: this.rolePagination.size,
+          keyword: this.roleSearch.keyword || undefined
+        }
+        const res = await getRoles(params)
+        if (res.code === 200 || res.code === 20000) {
+          const data = res.data || {}
+          let list = []
+          if (Array.isArray(data.list)) {
+            list = data.list
+          } else if (Array.isArray(data.records)) {
+            list = data.records
+          } else if (Array.isArray(data)) {
+            list = data
+          }
           // normalize role ids to strings
-          this.roles = (res.data || []).map(r => ({ ...r, id: r.id != null ? String(r.id) : r.id }))
+          this.roles = list.map(r => ({ ...r, id: r.id != null ? String(r.id) : r.id }))
+          this.rolePagination.total = Number(data.total || list.length)
+          this.rolePagination.page = Number(data.page || this.rolePagination.page)
+          this.rolePagination.size = Number(data.size || this.rolePagination.size)
         }
       } catch (e) {
         console.error('获取角色列表失败:', e)
@@ -493,6 +607,38 @@ export default {
       } finally {
         this.roleLoading = false
       }
+    },
+
+    async fetchAllRoles() {
+      try {
+        const res = await getRoles({ page: 1, size: 1000 })
+        if (res.code === 200 || res.code === 20000) {
+          const data = res.data || {}
+          const list = Array.isArray(data.list)
+            ? data.list
+            : (Array.isArray(data.records) ? data.records : (Array.isArray(data) ? data : []))
+          this.allRoles = list.map(r => ({ ...r, id: r.id != null ? String(r.id) : r.id }))
+        }
+      } catch (e) {
+        console.error('获取全量角色列表失败:', e)
+        this.allRoles = []
+      }
+    },
+
+    resetRoleSearch() {
+      this.roleSearch.keyword = ''
+      this.rolePagination.page = 1
+      this.fetchRoles()
+    },
+
+    handleRoleSizeChange(size) {
+      this.rolePagination.size = size
+      this.fetchRoles()
+    },
+
+    handleRolePageChange(page) {
+      this.rolePagination.page = page
+      this.fetchRoles()
     },
 
     openAddRole() {
@@ -530,7 +676,9 @@ export default {
           if (res.code === 200) {
             this.$message.success(this.isEditRole ? '更新成功' : '创建成功')
             this.roleDialogVisible = false
+            await this.fetchAllRoles()
             this.fetchRoles()
+            this.fetchUsers()
           } else {
             this.$message.error(res.message || '操作失败')
           }
@@ -556,7 +704,9 @@ export default {
           const res = await deleteRole(row.id)
           if (res.code === 200) {
             this.$message.success('删除成功')
+            await this.fetchAllRoles()
             this.fetchRoles()
+            this.fetchUsers()
           } else {
             this.$message.error(res.message || '删除失败')
           }
@@ -642,7 +792,9 @@ export default {
         const res = await importRoles(file)
         if (res.code === 20000 || res.code === 200) {
           this.$message.success(res.message || '导入成功')
+          await this.fetchAllRoles()
           this.fetchRoles()
+          this.fetchUsers()
         } else {
           this.$message.error(res.message || '导入失败')
         }
@@ -679,15 +831,48 @@ export default {
 .tab-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .search-form {
   display: flex;
   align-items: center;
+  margin-bottom: 0;
 }
 .button-group {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
+}
+
+.pretty-table ::v-deep .el-table__header th {
+  background: #fafafa;
+}
+
+.pretty-table ::v-deep .el-table__cell {
+  padding: 8px 0;
+}
+
+.pretty-table ::v-deep .el-table__body-wrapper .cell {
+  white-space: nowrap;
+}
+
+.pretty-table ::v-deep .operation-col .cell {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.op-btns {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.op-btns ::v-deep .el-button + .el-button {
+  margin-left: 0;
 }
 </style>

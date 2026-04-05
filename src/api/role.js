@@ -1,10 +1,11 @@
 import request from '@/utils/request'
 
 // 获取所有角色列表
-export function getRoles() {
+export function getRoles(params) {
   return request({
     url: '/api/roles',
-    method: 'get'
+    method: 'get',
+    params
   })
 }
 

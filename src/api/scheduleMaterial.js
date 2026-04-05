@@ -66,6 +66,19 @@ export function queryOrderLocks(orderId) {
 }
 
 /**
+ * 按订单维度查询仓库已锁定物料
+ * @param {string} materialCode 料号
+ * @param {string} planDate 日期 yyyy-MM-dd（可选，兼容参数）
+ */
+export function queryOrderLockedStocks(materialCode, planDate, orderNo, rollCode, processType, requiredLength) {
+  return request({
+    url: '/production/schedule-material/order-locked-stocks',
+    method: 'get',
+    params: { materialCode, planDate, orderNo, rollCode, processType, requiredLength }
+  })
+}
+
+/**
  * 生产领料（扣减库存）
  * @param {array} lockIds 锁定记录IDs
  * @returns {Promise}
@@ -77,6 +90,57 @@ export function allocateMaterials(lockIds) {
     data: {
       lockIds: lockIds
     }
+  })
+}
+
+/**
+ * 创建领料单（落库）
+ * @param {object} data
+ * @returns {Promise}
+ */
+export function createIssueOrder(data) {
+  return request({
+    url: '/production/schedule-material/issue-order/create',
+    method: 'post',
+    data
+  })
+}
+
+/**
+ * 查询领料单详情
+ * @param {string} issueNo
+ * @returns {Promise}
+ */
+export function getIssueOrder(issueNo) {
+  return request({
+    url: `/production/schedule-material/issue-order/${issueNo}`,
+    method: 'get'
+  })
+}
+
+/**
+ * 领料单分页查询
+ * @param {object} params
+ * @returns {Promise}
+ */
+export function getIssueOrderPage(params) {
+  return request({
+    url: '/production/schedule-material/issue-order/page',
+    method: 'get',
+    params
+  })
+}
+
+/**
+ * 锁定/领料/退料历史分页查询
+ * @param {object} params
+ * @returns {Promise}
+ */
+export function getLockHistoryPage(params) {
+  return request({
+    url: '/production/schedule-material/lock-history/page',
+    method: 'get',
+    params
   })
 }
 

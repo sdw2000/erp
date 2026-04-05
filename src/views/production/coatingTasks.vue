@@ -3,5 +3,5 @@
 </template>
 <script>
 import ProductionTasks from './components/ProductionTasks.vue'
-export default { name: 'CoatingTasks', components: { ProductionTasks } }
+export default { name: 'CoatingTasks', components: { ProductionTasks }}
 </script>

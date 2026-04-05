@@ -17,8 +17,9 @@ export function getSampleList(params) {
  * @param {String} sampleNo - 送样单号
  */
 export function getSampleDetail(sampleNo) {
+  const encodedSampleNo = encodeURIComponent(sampleNo)
   return request({
-    url: `/api/sales/samples/${sampleNo}`,
+    url: `/api/sales/samples/${encodedSampleNo}`,
     method: 'get'
   })
 }
@@ -62,8 +63,9 @@ export function updateSample(data) {
  * @param {String} sampleNo - 送样单号
  */
 export function deleteSample(sampleNo) {
+  const encodedSampleNo = encodeURIComponent(sampleNo)
   return request({
-    url: `/api/sales/samples/${sampleNo}`,
+    url: `/api/sales/samples/${encodedSampleNo}`,
     method: 'delete'
   })
 }
@@ -74,8 +76,9 @@ export function deleteSample(sampleNo) {
  * @param {Object} data - 物流数据
  */
 export function updateSampleLogistics(sampleNo, data) {
+  const encodedSampleNo = encodeURIComponent(sampleNo)
   return request({
-    url: `/api/sales/samples/${sampleNo}/logistics`,
+    url: `/api/sales/samples/${encodedSampleNo}/logistics`,
     method: 'put',
     data
   })
@@ -85,10 +88,12 @@ export function updateSampleLogistics(sampleNo, data) {
  * 获取物流信息
  * @param {String} sampleNo - 送样单号
  */
-export function getSampleLogistics(sampleNo) {
+export function getSampleLogistics(sampleNo, params) {
+  const encodedSampleNo = encodeURIComponent(sampleNo)
   return request({
-    url: `/api/sales/samples/${sampleNo}/logistics`,
-    method: 'get'
+    url: `/api/sales/samples/${encodedSampleNo}/logistics`,
+    method: 'get',
+    params
   })
 }
 

@@ -10,7 +10,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  font-family: Helvetica Neue, Helvetica, PingFang SC, Hiragino Sans GB, Microsoft YaHei, Arial, sans-serif;
+  font-family: Microsoft YaHei, PingFang SC, Hiragino Sans GB, Helvetica Neue, Helvetica, Arial, sans-serif;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  font-size: 13px;
+  color: #111111;
 }
 
 label {
@@ -121,7 +126,7 @@ aside {
 
 //main-container全局样式
 .app-container {
-  padding: 20px;
+  padding: 8px 10px;
 }
 
 .components-container {
@@ -130,7 +135,7 @@ aside {
 }
 
 .pagination-container {
-  margin-top: 30px;
+  margin-top: 8px;
 }
 
 .text-center {
@@ -172,13 +177,111 @@ aside {
 }
 
 .filter-container {
-  padding-bottom: 10px;
+  padding-bottom: 4px;
 
   .filter-item {
     display: inline-block;
     vertical-align: middle;
     margin-bottom: 10px;
   }
+}
+
+/* ===== 全局紧凑模式（默认开启） ===== */
+#app,
+.app-wrapper,
+.main-container {
+  overflow-x: hidden;
+}
+
+.el-card__header {
+  padding: 8px 12px;
+}
+
+.el-card__body {
+  padding: 10px 12px;
+}
+
+.el-form-item {
+  margin-bottom: 8px;
+}
+
+.el-form-item--small .el-form-item__label,
+.el-form-item--small .el-form-item__content {
+  line-height: 30px;
+}
+
+.el-input--small .el-input__inner,
+.el-textarea__inner,
+.el-select .el-input__inner,
+.el-date-editor .el-input__inner,
+.el-input-number--small {
+  height: 30px;
+}
+
+.el-button--small,
+.el-button--mini {
+  padding: 6px 10px;
+}
+
+.el-table {
+  width: 100% !important;
+}
+
+.el-table th.el-table__cell,
+.el-table td.el-table__cell {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.el-table th.el-table__cell {
+  color: #111111;
+  font-weight: 700;
+}
+
+.el-table td.el-table__cell {
+  color: #161616;
+  font-weight: 500;
+}
+
+.el-table .cell {
+  white-space: normal;
+  word-break: break-all;
+  line-height: 1.25;
+}
+
+.el-table__header,
+.el-table__body {
+  table-layout: auto;
+}
+
+.el-table .el-table__body-wrapper,
+.el-table .el-table__header-wrapper,
+.el-table .el-table__fixed-body-wrapper {
+  overflow-x: hidden;
+}
+
+.el-table .el-table__body-wrapper {
+  overflow-x: auto;
+}
+
+/* 操作列按钮紧凑化（全局） */
+.el-table td .el-button--mini,
+.el-table td .el-button--small {
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.el-table td .el-button--text {
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.el-table td .el-button + .el-button {
+  margin-left: 4px;
+}
+
+.el-table .op-btns {
+  gap: 4px !important;
 }
 
 //refine vue-multiselect plugin

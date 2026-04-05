@@ -6,9 +6,10 @@ const WIDTH = 992 // refer to Bootstrap's responsive design
 export default {
   watch: {
     $route(route) {
-      if (this.device === 'mobile' && this.sidebar.opened) {
-        store.dispatch('app/closeSideBar', { withoutAnimation: false })
-      }
+      // 移除路由变化时自动关闭侧边栏的逻辑
+      // if (this.device === 'mobile' && this.sidebar.opened) {
+      //   store.dispatch('app/closeSideBar', { withoutAnimation: false })
+      // }
     }
   },
   beforeMount() {
@@ -21,7 +22,8 @@ export default {
     const isMobile = this.$_isMobile()
     if (isMobile) {
       store.dispatch('app/toggleDevice', 'mobile')
-      store.dispatch('app/closeSideBar', { withoutAnimation: true })
+      // 移除自动关闭侧边栏的逻辑，保持侧边栏始终显示
+      // store.dispatch('app/closeSideBar', { withoutAnimation: true })
     }
   },
   methods: {
@@ -36,9 +38,10 @@ export default {
         const isMobile = this.$_isMobile()
         store.dispatch('app/toggleDevice', isMobile ? 'mobile' : 'desktop')
 
-        if (isMobile) {
-          store.dispatch('app/closeSideBar', { withoutAnimation: true })
-        }
+        // 移除自动关闭侧边栏的逻辑，保持侧边栏始终显示
+        // if (isMobile) {
+        //   store.dispatch('app/closeSideBar', { withoutAnimation: true })
+        // }
       }
     }
   }

@@ -497,7 +497,7 @@ import {
 } from '@/api/coatingSchedule'
 import { getUnscheduledOrdersPage } from '@/api/unscheduledOrders'
 import { getRewindingTasks, updateRewindingEquipment, adjustRewindingTaskTime } from '@/api/schedule'
-import { getOrderDetail } from '@/api/sales'
+import { getOrderDetailForProduction } from '@/api/sales'
 import { getAvailableByType } from '@/api/equipment'
 
 export default {
@@ -652,7 +652,7 @@ export default {
 
           // 获取订单详情以解析该料号的规格（厚度/宽度/长度）
           try {
-            const od = await getOrderDetail(orderNo)
+            const od = await getOrderDetailForProduction(orderNo)
             const items = (od && od.data && od.data.items) ? od.data.items : []
             const match = items.find(i => String(i.materialCode) === String(materialCode))
             if (match) {
@@ -853,9 +853,9 @@ export default {
         }
         let planStart = this.timeForm.planStartTime
         if (!planStart) {
-          const day = (Array.isArray(this.planDateRange) && this.planDateRange[0])
-            || (this.getPlanDateParam() && this.getPlanDateParam().split('~')[0])
-            || new Date().toISOString().slice(0, 10)
+          const day = (Array.isArray(this.planDateRange) && this.planDateRange[0]) ||
+            (this.getPlanDateParam() && this.getPlanDateParam().split('~')[0]) ||
+            new Date().toISOString().slice(0, 10)
           planStart = `${day} 08:00:00`
         }
         await adjustCoatingTaskTime(this.timeForm.taskId, { planStartTime: planStart })
@@ -895,9 +895,9 @@ export default {
       try {
         let planStart = this.rewindingTimeForm.planStartTime
         if (!planStart) {
-          const day = (Array.isArray(this.planDateRange) && this.planDateRange[0])
-            || (this.getPlanDateParam() && this.getPlanDateParam().split('~')[0])
-            || new Date().toISOString().slice(0, 10)
+          const day = (Array.isArray(this.planDateRange) && this.planDateRange[0]) ||
+            (this.getPlanDateParam() && this.getPlanDateParam().split('~')[0]) ||
+            new Date().toISOString().slice(0, 10)
           planStart = `${day} 08:00:00`
         }
         const gap = Number.isFinite(Number(this.rewindingTimeForm.gapMinutes))

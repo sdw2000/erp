@@ -23,11 +23,29 @@ export function getStockSummary() {
   })
 }
 
+// 按料号汇总库存（分页）
+export function getStockSummaryPage(params) {
+  return request({
+    url: '/api/tape-stock/summary/page',
+    method: 'get',
+    params
+  })
+}
+
 // 根据料号查询所有批次（FIFO排序）
 export function getStockByMaterial(materialCode) {
   return request({
     url: `/api/tape-stock/by-material/${materialCode}`,
     method: 'get'
+  })
+}
+
+// 根据料号查询库存明细（分页）
+export function getStockByMaterialPage(params) {
+  return request({
+    url: '/api/tape-stock/by-material/page',
+    method: 'get',
+    params
   })
 }
 
@@ -93,11 +111,20 @@ export function createInboundRequest(data) {
 }
 
 // 审批入库申请
-export function approveInbound(id, approved, auditor, auditRemark) {
+export function approveInbound(id, approved, auditor, auditRemark, scannedRollCode, scannedLocation) {
   return request({
     url: `/api/tape-stock/inbound/${id}/approve`,
     method: 'post',
-    params: { approved, auditor, auditRemark }
+    params: { approved, auditor, auditRemark, scannedRollCode, scannedLocation }
+  })
+}
+
+// 按母卷号批量审批入库（同一卡板）
+export function approveInboundByRollCodes(data) {
+  return request({
+    url: '/api/tape-stock/inbound/approve-by-roll-codes',
+    method: 'post',
+    data
   })
 }
 
@@ -147,11 +174,20 @@ export function createOutboundRequestFIFO(params) {
 }
 
 // 审批出库申请
-export function approveOutbound(id, approved, auditor, auditRemark) {
+export function approveOutbound(id, approved, auditor, auditRemark, scannedRollCode) {
   return request({
     url: `/api/tape-stock/outbound/${id}/approve`,
     method: 'post',
-    params: { approved, auditor, auditRemark }
+    params: { approved, auditor, auditRemark, scannedRollCode }
+  })
+}
+
+// 批量扫码审批出库
+export function approveOutboundByRollCodes(data) {
+  return request({
+    url: '/api/tape-stock/outbound/approve-by-roll-codes',
+    method: 'post',
+    data
   })
 }
 

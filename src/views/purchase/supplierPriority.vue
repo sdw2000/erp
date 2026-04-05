@@ -17,7 +17,7 @@
         </div>
       </div>
 
-      <el-table :data="records" v-loading="loading" stripe style="width:100%">
+      <el-table v-loading="loading" :data="records" stripe style="width:100%">
         <el-table-column type="index" label="序号" width="60" align="center" />
         <el-table-column prop="supplierCode" label="供应商编码" width="150" />
         <el-table-column prop="supplierName" label="供应商名称" width="200" />

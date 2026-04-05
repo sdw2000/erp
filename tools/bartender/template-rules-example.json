@@ -1,0 +1,21 @@
+{
+  "byBizType": {
+    "COATING_ROLL_LABEL": "COATING_ROLL_LABEL",
+    "COATING_INBOUND_SHEET": "COATING_INBOUND_SHEET",
+    "SLITTING_LABEL": "SLITTING_LABEL"
+  },
+  "byCustomer": {
+    "CUST001": {
+      "default": "COATING_ROLL_LABEL_CUST001",
+      "byBizType": {
+        "COATING_ROLL_LABEL": "COATING_ROLL_LABEL_CUST001",
+        "COATING_INBOUND_SHEET": "COATING_INBOUND_SHEET_CUST001"
+      }
+    },
+    "CUST002": {
+      "byBizType": {
+        "COATING_ROLL_LABEL": "COATING_ROLL_LABEL_CUST002"
+      }
+    }
+  }
+}

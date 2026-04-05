@@ -80,6 +80,66 @@ export function updateEquipmentStatus(id, status) {
   })
 }
 
+// 获取设备排程状态配置列表
+export function getEquipmentScheduleConfigList(params) {
+  return request({
+    url: '/production/equipment/schedule-config/list',
+    method: 'get',
+    params
+  })
+}
+
+// 批量保存设备排程状态配置
+export function saveEquipmentScheduleConfigBatch(data) {
+  return request({
+    url: '/production/equipment/schedule-config/batch-save',
+    method: 'post',
+    data
+  })
+}
+
+// ==================== 设备日历与排班 ====================
+
+export function getEquipmentDailyStatusList(params) {
+  return request({
+    url: '/production/equipment/daily-planning/status/list',
+    method: 'get',
+    params
+  })
+}
+
+export function getEquipmentDailyStatusSummary(params) {
+  return request({
+    url: '/production/equipment/daily-planning/status/summary',
+    method: 'get',
+    params
+  })
+}
+
+export function saveEquipmentDailyStatusBatch(data) {
+  return request({
+    url: '/production/equipment/daily-planning/status/batch-save',
+    method: 'post',
+    data
+  })
+}
+
+export function getEquipmentStaffAssignmentList(params) {
+  return request({
+    url: '/production/equipment/daily-planning/assignment/list',
+    method: 'get',
+    params
+  })
+}
+
+export function saveEquipmentStaffAssignments(data) {
+  return request({
+    url: '/production/equipment/daily-planning/assignment/save',
+    method: 'post',
+    data
+  })
+}
+
 // 导入设备
 export function importEquipment(data) {
   return request({

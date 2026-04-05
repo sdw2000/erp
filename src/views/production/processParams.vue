@@ -2,26 +2,27 @@
   <div class="app-container">
     <el-card shadow="never">
       <div slot="header" class="clearfix">
-        <span>工艺参数管理</span>        <div style="float: right">
+        <span>{{ tableTitle }}</span>        <div style="float: right">
           <el-button v-if="$canImportExport()" type="success" icon="el-icon-download" size="small" @click="handleDownloadTemplate">下载模板</el-button>
           <el-button v-if="$canImportExport()" type="warning" icon="el-icon-upload2" size="small" @click="handleImport">导入</el-button>
           <el-button v-if="$canImportExport()" type="info" icon="el-icon-download" size="small" @click="handleExport">导出</el-button>
-          <el-button type="primary" icon="el-icon-plus" size="small" @click="openAddDialog">新增参数</el-button>
+          <el-button type="primary" icon="el-icon-plus" size="small" @click="openAddDialog">新增{{ activeProcessLabel }}参数</el-button>
         </div>
       </div>
+
+      <el-tabs v-model="activeProcessType" @tab-click="handleProcessTabChange" style="margin-bottom: 10px">
+        <el-tab-pane label="涂布工艺参数表" name="COATING" />
+        <el-tab-pane label="复卷工艺参数表" name="REWINDING" />
+        <el-tab-pane label="分切工艺参数表" name="SLITTING" />
+      </el-tabs>
 
       <!-- 搜索区域 -->
       <el-form :inline="true" :model="queryParams" class="search-form">
         <el-form-item label="产品料号">
           <el-input v-model="queryParams.materialCode" placeholder="请输入料号" clearable style="width: 160px" />
         </el-form-item>
-        <el-form-item label="工序类型">
-          <el-select v-model="queryParams.processType" placeholder="全部工序" clearable style="width: 120px">
-            <el-option label="涂布" value="COATING" />
-            <el-option label="复卷" value="REWINDING" />
-            <el-option label="分切" value="SLITTING" />
-            <el-option label="分条" value="STRIPPING" />
-          </el-select>
+        <el-form-item label="设备编码">
+          <el-input v-model="queryParams.equipmentCode" placeholder="如 TB-01" clearable style="width: 140px" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="el-icon-search" @click="loadList">搜 索</el-button>
@@ -42,6 +43,7 @@
             <el-tag :type="getProcessTypeTag(row.processType)">{{ row.processTypeName }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="equipmentCode" label="设备编码" width="110" />
         <el-table-column label="主要参数" min-width="280">
           <template slot-scope="{ row }">
             <div v-if="row.processType === 'COATING'">
@@ -114,8 +116,11 @@
                 v-model="form.materialCode"
                 filterable
                 remote
+                clearable
+                allow-create
+                default-first-option
                 reserve-keyword
-                placeholder="输入料号搜索"
+                placeholder="输入料号搜索（可直接输入）"
                 :remote-method="searchMaterial"
                 :loading="materialLoading"
                 style="width: 100%"
@@ -132,12 +137,20 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="工序类型" prop="processType">
-              <el-select v-model="form.processType" placeholder="请选择工序类型" style="width: 100%" :disabled="isEditing" @change="handleProcessTypeChange">
+              <el-select v-model="form.processType" placeholder="请选择工序类型" style="width: 100%" :disabled="isEditing || activeProcessType !== 'ALL'" @change="handleProcessTypeChange">
                 <el-option label="涂布" value="COATING" />
                 <el-option label="复卷" value="REWINDING" />
                 <el-option label="分切" value="SLITTING" />
                 <el-option label="分条" value="STRIPPING" />
               </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="设备编码">
+              <el-input v-model="form.equipmentCode" placeholder="如 TB-01（可选）" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -304,18 +317,34 @@ import {
   deleteProcessParams,
   importProcessParams
 } from '@/api/processParams'
+import {
+  getRewindingProcessParamsList,
+  getRewindingProcessParamsById,
+  addRewindingProcessParams,
+  updateRewindingProcessParams,
+  deleteRewindingProcessParams
+} from '@/api/rewindingProcessParams'
+import {
+  getSlittingProcessParamsList,
+  getSlittingProcessParamsById,
+  addSlittingProcessParams,
+  updateSlittingProcessParams,
+  deleteSlittingProcessParams
+} from '@/api/slittingProcessParams'
 import { getTapeSpecList } from '@/api/tapeSpec'
 
 export default {
   name: 'ProcessParams',
   data() {
     return {
+      activeProcessType: 'COATING',
       loading: false,
       dataList: [],
       total: 0,
       queryParams: {
         materialCode: '',
-        processType: '',
+        processType: 'COATING',
+        equipmentCode: '',
         page: 1,
         size: 10
       },
@@ -327,7 +356,7 @@ export default {
       submitting: false,
       form: this.getEmptyForm(),
       rules: {
-        materialCode: [{ required: true, message: '请选择产品料号', trigger: 'change' }],
+        materialCode: [{ required: true, message: '请输入或选择产品料号', trigger: 'change' }],
         processType: [{ required: true, message: '请选择工序类型', trigger: 'change' }]
       },
 
@@ -339,11 +368,21 @@ export default {
   created() {
     this.loadList()
   },
+  computed: {
+    activeProcessLabel() {
+      const map = { COATING: '涂布', REWINDING: '复卷', SLITTING: '分切', STRIPPING: '分条', ALL: '工艺' }
+      return map[this.activeProcessType] || '工艺'
+    },
+    tableTitle() {
+      return `${this.activeProcessLabel}工艺参数管理`
+    }
+  },
   methods: {
     getEmptyForm() {
       return {
         materialCode: '',
         processType: '',
+        equipmentCode: '',
         coatingSpeed: 20,
         ovenTemp: 80,
         coatingThickness: 50,
@@ -368,8 +407,33 @@ export default {
     async loadList() {
       this.loading = true
       try {
-        const res = await getProcessParamsList(this.queryParams)
+        let res
+        if (this.activeProcessType === 'REWINDING') {
+          res = await getRewindingProcessParamsList({
+            materialCode: this.queryParams.materialCode,
+            equipmentCode: this.queryParams.equipmentCode,
+            page: this.queryParams.page,
+            size: this.queryParams.size
+          })
+        } else if (this.activeProcessType === 'SLITTING') {
+          res = await getSlittingProcessParamsList({
+            materialCode: this.queryParams.materialCode,
+            equipmentCode: this.queryParams.equipmentCode,
+            page: this.queryParams.page,
+            size: this.queryParams.size
+          })
+        } else {
+          if (this.activeProcessType && this.activeProcessType !== 'ALL') {
+            this.queryParams.processType = this.activeProcessType
+          }
+          res = await getProcessParamsList(this.queryParams)
+        }
         this.dataList = res.data?.list || []
+        this.dataList = this.dataList.map(item => ({
+          ...item,
+          processType: item.processType || this.activeProcessType,
+          processTypeName: item.processTypeName || this.activeProcessLabel
+        }))
         // 确保total字段为数字类型
         this.total = Number(res.data?.total) || 0
         this.queryParams.page = Number(res.data?.page) || this.queryParams.page
@@ -384,10 +448,17 @@ export default {
     resetQuery() {
       this.queryParams = {
         materialCode: '',
-        processType: '',
+        processType: this.activeProcessType === 'ALL' ? '' : this.activeProcessType,
+        equipmentCode: '',
         page: 1,
         size: 10
       }
+      this.loadList()
+    },
+
+    handleProcessTabChange() {
+      this.queryParams.page = 1
+      this.queryParams.processType = this.activeProcessType === 'ALL' ? '' : this.activeProcessType
       this.loadList()
     },
 
@@ -433,9 +504,12 @@ export default {
     },
 
     openAddDialog() {
-      this.dialogTitle = '新增工艺参数'
+      this.dialogTitle = `新增${this.activeProcessLabel}工艺参数`
       this.isEditing = false
       this.form = this.getEmptyForm()
+      if (this.activeProcessType && this.activeProcessType !== 'ALL') {
+        this.form.processType = this.activeProcessType
+      }
       this.materialOptions = []
       this.dialogVisible = true
     },
@@ -443,8 +517,19 @@ export default {
     async openEditDialog(row) {
       this.dialogTitle = '编辑工艺参数'
       this.isEditing = true
-      const res = await getProcessParamsById(row.id)
-      this.form = { ...res.data }
+      let res
+      if (this.activeProcessType === 'REWINDING') {
+        res = await getRewindingProcessParamsById(row.id)
+      } else if (this.activeProcessType === 'SLITTING') {
+        res = await getSlittingProcessParamsById(row.id)
+      } else {
+        res = await getProcessParamsById(row.id)
+      }
+      this.form = {
+        ...this.getEmptyForm(),
+        ...res.data,
+        processType: (res.data && res.data.processType) || this.activeProcessType
+      }
       // 预设料号选项
       this.materialOptions = [{ materialCode: row.materialCode, materialName: row.materialName || '' }]
       this.dialogVisible = true
@@ -455,13 +540,26 @@ export default {
         if (!valid) return
         this.submitting = true
         try {
-          if (this.isEditing) {
-            await updateProcessParams(this.form.id, this.form)
-            this.$message.success('更新成功')
+          if (this.activeProcessType === 'REWINDING') {
+            if (this.isEditing) {
+              await updateRewindingProcessParams(this.form.id, this.form)
+            } else {
+              await addRewindingProcessParams(this.form)
+            }
+          } else if (this.activeProcessType === 'SLITTING') {
+            if (this.isEditing) {
+              await updateSlittingProcessParams(this.form.id, this.form)
+            } else {
+              await addSlittingProcessParams(this.form)
+            }
           } else {
-            await addProcessParams(this.form)
-            this.$message.success('新增成功')
+            if (this.isEditing) {
+              await updateProcessParams(this.form.id, this.form)
+            } else {
+              await addProcessParams(this.form)
+            }
           }
+          this.$message.success(this.isEditing ? '更新成功' : '新增成功')
           this.dialogVisible = false
           this.loadList()
         } catch (error) {
@@ -478,7 +576,13 @@ export default {
       this.$confirm(`确定删除该工艺参数吗？`, '提示', {
         type: 'warning'
       }).then(async() => {
-        await deleteProcessParams(row.id)
+        if (this.activeProcessType === 'REWINDING') {
+          await deleteRewindingProcessParams(row.id)
+        } else if (this.activeProcessType === 'SLITTING') {
+          await deleteSlittingProcessParams(row.id)
+        } else {
+          await deleteProcessParams(row.id)
+        }
         this.$message.success('删除成功')
         this.loadList()
       }).catch(() => {})

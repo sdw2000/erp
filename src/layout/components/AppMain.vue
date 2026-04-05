@@ -11,12 +11,43 @@
 <script>
 export default {
   name: 'AppMain',
+  data() {
+    return {
+      layoutRefreshTimer: null
+    }
+  },
   computed: {
     cachedViews() {
       return this.$store.state.tagsView.cachedViews
     },
     key() {
       return this.$route.path
+    }
+  },
+  watch: {
+    key() {
+      this.triggerLayoutRefresh()
+    }
+  },
+  mounted() {
+    this.triggerLayoutRefresh()
+  },
+  beforeDestroy() {
+    if (this.layoutRefreshTimer) {
+      clearTimeout(this.layoutRefreshTimer)
+      this.layoutRefreshTimer = null
+    }
+  },
+  methods: {
+    triggerLayoutRefresh() {
+      this.$nextTick(() => {
+        if (this.layoutRefreshTimer) {
+          clearTimeout(this.layoutRefreshTimer)
+        }
+        this.layoutRefreshTimer = setTimeout(() => {
+          window.dispatchEvent(new Event('resize'))
+        }, 80)
+      })
     }
   }
 }
@@ -28,7 +59,8 @@ export default {
   min-height: calc(100vh - 50px);
   width: 100%;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .fixed-header+.app-main {

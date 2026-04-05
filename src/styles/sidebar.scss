@@ -159,7 +159,8 @@
   // mobile responsive
   .mobile {
     .main-container {
-      margin-left: 0px;
+      margin-left: $sideBarWidth;
+      min-width: 800px; // 保证主内容区有最小宽度，出现横向滚动条
     }
 
     .sidebar-container {
@@ -168,10 +169,15 @@
     }
 
     &.hideSidebar {
+      .main-container {
+        margin-left: 54px;
+        min-width: 800px;
+      }
       .sidebar-container {
-        pointer-events: none;
+        width: 54px !important;
+        pointer-events: auto;
         transition-duration: 0.3s;
-        transform: translate3d(-$sideBarWidth, 0, 0);
+        transform: translate3d(0, 0, 0);
       }
     }
   }

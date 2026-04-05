@@ -4,6 +4,7 @@
       <div slot="header" class="clearfix">
         <span>出库申请</span>
         <div style="float: right">
+          <el-button type="success" icon="el-icon-s-order" size="small" @click="openBatchScanDialog">批量扫码出库</el-button>
           <el-button type="success" icon="el-icon-s-operation" size="small" @click="handleAddFIFO">FIFO自动分配</el-button>
           <el-button type="primary" icon="el-icon-plus" size="small" @click="handleAdd">新增出库申请</el-button>
         </div>
@@ -29,7 +30,7 @@
       </el-form>
 
       <!-- 数据表格 -->
-      <el-table v-loading="loading" :data="list" style="width: 100%; margin-top: 15px" border stripe>
+      <el-table ref="outboundTable" v-loading="loading" :data="list" style="width: 100%; margin-top: 15px" border stripe>
         <el-table-column prop="requestNo" label="申请单号" width="160" />
         <el-table-column prop="materialCode" label="料号" width="180" />
         <el-table-column prop="productName" label="产品名称" width="160" show-overflow-tooltip />
@@ -169,8 +170,11 @@
     </el-dialog>
 
     <!-- 审批弹窗 -->
-    <el-dialog :title="approveTitle" :visible.sync="approveVisible" width="400px">
-      <el-form label-width="80px">
+    <el-dialog :title="approveTitle" :visible.sync="approveVisible" width="420px">
+      <el-form label-width="90px">
+        <el-form-item v-if="approveAction" label="扫码卷号">
+          <el-input v-model="scanRollCode" placeholder="请扫码卷号/二维码" clearable />
+        </el-form-item>
         <el-form-item label="审批备注">
           <el-input v-model="auditRemark" type="textarea" :rows="3" placeholder="请输入审批备注（可选）" />
         </el-form-item>
@@ -180,15 +184,62 @@
         <el-button type="primary" :loading="approveLoading" @click="confirmApprove">确 定</el-button>
       </div>
     </el-dialog>
+
+    <!-- 批量扫码出库弹窗 -->
+    <el-dialog title="批量扫码出库" :visible.sync="batchDialogVisible" width="560px">
+      <el-form label-width="90px">
+        <el-form-item label="批量卷号">
+          <el-input
+            v-model="batchScanRollCodes"
+            type="textarea"
+            :rows="6"
+            placeholder="连续扫码卷号（支持换行/逗号/空格分隔）"
+          />
+        </el-form-item>
+        <el-form-item label="出库备注">
+          <el-input v-model="batchAuditRemark" type="textarea" :rows="2" placeholder="可选" />
+        </el-form-item>
+      </el-form>
+      <div slot="footer">
+        <el-button @click="batchDialogVisible = false">取 消</el-button>
+        <el-button type="primary" :loading="batchApproveLoading" @click="confirmBatchScanApprove">确 定</el-button>
+      </div>
+    </el-dialog>
+
+    <!-- 批量出库结果明细 -->
+    <el-dialog title="批量出库结果" :visible.sync="batchResultVisible" width="760px">
+      <el-alert
+        :title="`总计${batchResult.total}条，成功${batchResult.successCount}条，失败${batchResult.failCount}条`"
+        :type="batchResult.failCount > 0 ? 'warning' : 'success'"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      />
+      <div v-if="batchResult.failCount > 0">
+        <div style="margin-bottom: 8px; font-weight: 600;">失败明细</div>
+        <el-table :data="batchResult.failed" border stripe size="mini" max-height="320">
+          <el-table-column type="index" label="#" width="60" align="center" />
+          <el-table-column prop="rollCode" label="卷号" min-width="180" />
+          <el-table-column prop="reason" label="失败原因" min-width="260" show-overflow-tooltip />
+        </el-table>
+      </div>
+      <div v-else class="text-muted">全部匹配并出库成功。</div>
+      <div slot="footer">
+        <el-button type="primary" @click="batchResultVisible = false">我知道了</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script>
-import { getOutboundList, createOutboundRequest, createOutboundRequestFIFO, approveOutbound, cancelOutbound, getStockByMaterial } from '@/api/tapeStock'
+import { getOutboundList, createOutboundRequest, createOutboundRequestFIFO, approveOutbound, approveOutboundByRollCodes, cancelOutbound, getStockByMaterial } from '@/api/tapeStock'
 import { mapGetters } from 'vuex'
+import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
 export default {
   name: 'OutboundRequest',
+  mixins: [elTableAutoLayout],
+  tableLayoutRefs: ['outboundTable'],
   data() {
     return {
       searchForm: { status: null, materialCode: '' },
@@ -219,7 +270,19 @@ export default {
       approveTitle: '',
       approveRow: null,
       approveAction: true,
-      auditRemark: ''
+      auditRemark: '',
+      scanRollCode: '',
+      batchDialogVisible: false,
+      batchApproveLoading: false,
+      batchScanRollCodes: '',
+      batchAuditRemark: '',
+      batchResultVisible: false,
+      batchResult: {
+        total: 0,
+        successCount: 0,
+        failCount: 0,
+        failed: []
+      }
     }
   },
   computed: {
@@ -228,178 +291,245 @@ export default {
   created() {
     this.fetchData()
   },
-  methods: { async fetchData() {
-    this.loading = true
-    try {
-      const params = { page: this.pagination.page, size: this.pagination.size, ...this.searchForm }
-      const res = await getOutboundList(params)
-      if (res.code === 20000) {
-        this.list = res.data.records
-        this.pagination.total = Number(res.data.total) || 0
-      }
-    } catch (e) {
-      console.error(e)
-    } finally {
-      this.loading = false
-    }
-  },
-  handleSearch() {
-    this.pagination.page = 1
-    this.fetchData()
-  },
-  handleReset() {
-    this.searchForm = { status: null, materialCode: '' }
-    this.handleSearch()
-  },
-  handleSizeChange(size) {
-    this.pagination.size = size
-    this.fetchData()
-  },
-  handleCurrentChange(page) {
-    this.pagination.page = page
-    this.fetchData()
-  },
-  handleAdd() {
-    this.selectMaterialCode = ''
-    this.stockList = []
-    this.selectedStock = null
-    this.form = { stockId: null, batchNo: '', rolls: 1, applyDept: '', remark: '' }
-    this.dialogVisible = true
-  },
-  async loadStockByMaterial() {
-    if (!this.selectMaterialCode) {
-      this.$message.warning('请输入料号')
-      return
-    }
-    try {
-      const res = await getStockByMaterial(this.selectMaterialCode)
-      if (res.code === 20000) {
-        this.stockList = res.data || []
-        if (this.stockList.length === 0) {
-          this.$message.info('该料号无可用库存')
-        }
-      }
-    } catch (e) {
-      this.$message.error('查询失败')
-    }
-  },
-  selectStock(row) {
-    this.selectedStock = row
-    this.form.stockId = row.id
-    this.form.batchNo = row.batchNo
-    this.form.rolls = 1
-  },
-  async handleSubmit() {
-    if (!this.form.stockId) {
-      this.$message.warning('请先选择一个批次')
-      return
-    }
-    this.$refs.form.validate(async(valid) => {
-      if (!valid) return
-      this.submitLoading = true
-      try {
-        this.form.applicant = this.name
-        const res = await createOutboundRequest(this.form)
-        if (res.code === 20000) {
-          this.$message.success('申请提交成功')
-          this.dialogVisible = false
-          this.fetchData()
-        } else {
-          this.$message.error(res.msg || '提交失败')
-        }
-      } catch (e) {
-        this.$message.error('提交失败')
-      } finally {
-        this.submitLoading = false
-      }
-    })
-  },
-  handleAddFIFO() {
-    this.fifoForm = { materialCode: '', totalRolls: 1, applyDept: '', remark: '' }
-    this.fifoDialogVisible = true
-  },
-  async handleFIFOSubmit() {
-    this.$refs.fifoForm.validate(async(valid) => {
-      if (!valid) return
-      this.fifoLoading = true
+  methods: {
+    async fetchData() {
+      this.loading = true
       try {
         const params = {
-          materialCode: this.fifoForm.materialCode,
-          totalRolls: this.fifoForm.totalRolls,
-          applicant: this.name,
-          applyDept: this.fifoForm.applyDept,
-          remark: this.fifoForm.remark
+          page: this.pagination.page,
+          size: this.pagination.size,
+          status: this.searchForm.status === null || this.searchForm.status === undefined || this.searchForm.status === '' ? undefined : this.searchForm.status,
+          materialCode: this.searchForm.materialCode ? this.searchForm.materialCode.trim() : undefined
         }
-        const res = await createOutboundRequestFIFO(params)
-        if (res.code === 20000) {
-          this.$message.success(res.msg || '申请提交成功')
-          this.fifoDialogVisible = false
-          this.fetchData()
-        } else {
-          this.$message.error(res.msg || '提交失败')
+        const res = await getOutboundList(params)
+        if (this.isApiSuccess(res)) {
+          this.list = res.data.records
+          this.pagination.total = Number(res.data.total) || 0
         }
       } catch (e) {
-        this.$message.error('提交失败')
+        console.error(e)
       } finally {
-        this.fifoLoading = false
+        this.loading = false
+        this.scheduleTableLayout()
       }
-    })
-  },
-  handleApprove(row, approved) {
-    this.approveRow = row
-    this.approveAction = approved
-    this.approveTitle = approved ? '审批通过' : '审批拒绝'
-    this.auditRemark = ''
-    this.approveVisible = true
-  },
-  async confirmApprove() {
-    this.approveLoading = true
-    try {
-      const res = await approveOutbound(this.approveRow.id, this.approveAction, this.name, this.auditRemark)
-      if (res.code === 20000) {
-        this.$message.success(this.approveAction ? '已通过' : '已拒绝')
-        this.approveVisible = false
-        this.fetchData()
-      } else {
-        this.$message.error(res.msg || '操作失败')
+    },
+    handleSearch() {
+      this.pagination.page = 1
+      this.fetchData()
+    },
+    handleReset() {
+      this.searchForm = { status: null, materialCode: '' }
+      this.handleSearch()
+    },
+    isApiSuccess(res) {
+      return !!res && (res.code === 200 || res.code === 20000)
+    },
+    handleSizeChange(size) {
+      this.pagination.size = size
+      this.fetchData()
+    },
+    handleCurrentChange(page) {
+      this.pagination.page = page
+      this.fetchData()
+    },
+    handleAdd() {
+      this.selectMaterialCode = ''
+      this.stockList = []
+      this.selectedStock = null
+      this.form = { stockId: null, batchNo: '', rolls: 1, applyDept: '', remark: '' }
+      this.dialogVisible = true
+    },
+    openBatchScanDialog() {
+      this.batchScanRollCodes = ''
+      this.batchAuditRemark = ''
+      this.batchDialogVisible = true
+    },
+    async loadStockByMaterial() {
+      if (!this.selectMaterialCode) {
+        this.$message.warning('请输入料号')
+        return
       }
-    } catch (e) {
-      this.$message.error('操作失败')
-    } finally {
-      this.approveLoading = false
-    }
-  },
-  handleCancel(row) {
-    this.$confirm('确定要取消该出库申请吗?', '提示', { type: 'warning' }).then(async() => {
       try {
-        const res = await cancelOutbound(row.id)
-        if (res.code === 20000) {
-          this.$message.success('已取消')
-          this.fetchData()
-        } else {
-          this.$message.error(res.msg || '取消失败')
+        const res = await getStockByMaterial(this.selectMaterialCode)
+        if (this.isApiSuccess(res)) {
+          this.stockList = res.data || []
+          if (this.stockList.length === 0) {
+            this.$message.info('该料号无可用库存')
+          }
         }
       } catch (e) {
-        this.$message.error('取消失败')
+        this.$message.error('查询失败')
       }
-    })
-  }, getStatusType(status) {
-    const map = { 0: 'warning', 1: 'success', 2: 'danger', 3: 'info' }
-    return map[status] || 'info'
-  },
-  getStatusText(status) {
-    const map = { 0: '待审批', 1: '已通过', 2: '已拒绝', 3: '已取消' }
-    return map[status] || '未知'
-  },
-  // 获取卷类型标签颜色
-  getRollTypeTag(rollType) {
-    const typeMap = {
-      '母卷': 'primary',
-      '复卷': 'success',
-      '分切卷': 'warning'
+    },
+    selectStock(row) {
+      this.selectedStock = row
+      this.form.stockId = row.id
+      this.form.batchNo = row.batchNo
+      this.form.rolls = 1
+    },
+    async handleSubmit() {
+      if (!this.form.stockId) {
+        this.$message.warning('请先选择一个批次')
+        return
+      }
+      this.$refs.form.validate(async(valid) => {
+        if (!valid) return
+        this.submitLoading = true
+        try {
+          this.form.applicant = this.name
+          const res = await createOutboundRequest(this.form)
+          if (this.isApiSuccess(res)) {
+            this.$message.success('申请提交成功')
+            this.dialogVisible = false
+            this.fetchData()
+          } else {
+            this.$message.error(res.msg || '提交失败')
+          }
+        } catch (e) {
+          this.$message.error('提交失败')
+        } finally {
+          this.submitLoading = false
+        }
+      })
+    },
+    handleAddFIFO() {
+      this.fifoForm = { materialCode: '', totalRolls: 1, applyDept: '', remark: '' }
+      this.fifoDialogVisible = true
+    },
+    async handleFIFOSubmit() {
+      this.$refs.fifoForm.validate(async(valid) => {
+        if (!valid) return
+        this.fifoLoading = true
+        try {
+          const params = {
+            materialCode: this.fifoForm.materialCode,
+            totalRolls: this.fifoForm.totalRolls,
+            applicant: this.name,
+            applyDept: this.fifoForm.applyDept,
+            remark: this.fifoForm.remark
+          }
+          const res = await createOutboundRequestFIFO(params)
+          if (this.isApiSuccess(res)) {
+            this.$message.success(res.msg || '申请提交成功')
+            this.fifoDialogVisible = false
+            this.fetchData()
+          } else {
+            this.$message.error(res.msg || '提交失败')
+          }
+        } catch (e) {
+          this.$message.error('提交失败')
+        } finally {
+          this.fifoLoading = false
+        }
+      })
+    },
+    handleApprove(row, approved) {
+      this.approveRow = row
+      this.approveAction = approved
+      this.approveTitle = approved ? '审批通过' : '审批拒绝'
+      this.auditRemark = ''
+      this.scanRollCode = ''
+      this.approveVisible = true
+    },
+    parseRollCodes(text) {
+      if (!text) return []
+      return String(text)
+        .split(/[\n,，;；\s]+/g)
+        .map(x => x && x.trim())
+        .filter(Boolean)
+    },
+    showBatchResult(data) {
+      const result = data || {}
+      this.batchResult = {
+        total: Number(result.total || 0),
+        successCount: Number(result.successCount || 0),
+        failCount: Number(result.failCount || 0),
+        failed: Array.isArray(result.failed) ? result.failed : []
+      }
+      this.batchResultVisible = true
+    },
+    async confirmBatchScanApprove() {
+      const multiCodes = this.parseRollCodes(this.batchScanRollCodes)
+      if (!multiCodes.length) {
+        this.$message.warning('请先录入卷号')
+        return
+      }
+      this.batchApproveLoading = true
+      try {
+        const res = await approveOutboundByRollCodes({
+          rollCodes: multiCodes,
+          auditor: this.name,
+          auditRemark: this.batchAuditRemark
+        })
+        if (this.isApiSuccess(res)) {
+          const data = res.data || {}
+          const successCount = Number(data.successCount || 0)
+          const failCount = Number(data.failCount || 0)
+          this.$message.success(`批量完成：成功${successCount}，失败${failCount}`)
+          this.batchDialogVisible = false
+          this.showBatchResult(data)
+          this.fetchData()
+        } else {
+          this.$message.error(res.msg || '批量审批失败')
+        }
+      } catch (e) {
+        this.$message.error('批量审批失败')
+      } finally {
+        this.batchApproveLoading = false
+      }
+    },
+    async confirmApprove() {
+      if (this.approveAction && !this.scanRollCode) {
+        this.$message.warning('请先扫码卷号')
+        return
+      }
+      this.approveLoading = true
+      try {
+        const res = await approveOutbound(this.approveRow.id, this.approveAction, this.name, this.auditRemark, this.scanRollCode)
+        if (this.isApiSuccess(res)) {
+          this.$message.success(this.approveAction ? '已通过' : '已拒绝')
+          this.approveVisible = false
+          this.fetchData()
+        } else {
+          this.$message.error(res.msg || '操作失败')
+        }
+      } catch (e) {
+        this.$message.error('操作失败')
+      } finally {
+        this.approveLoading = false
+      }
+    },
+    handleCancel(row) {
+      this.$confirm('确定要取消该出库申请吗?', '提示', { type: 'warning' }).then(async() => {
+        try {
+          const res = await cancelOutbound(row.id)
+          if (this.isApiSuccess(res)) {
+            this.$message.success('已取消')
+            this.fetchData()
+          } else {
+            this.$message.error(res.msg || '取消失败')
+          }
+        } catch (e) {
+          this.$message.error('取消失败')
+        }
+      })
+    },
+    getStatusType(status) {
+      const map = { 0: 'warning', 1: 'success', 2: 'danger', 3: 'info' }
+      return map[status] || 'info'
+    },
+    getStatusText(status) {
+      const map = { 0: '待审批', 1: '已通过', 2: '已拒绝', 3: '已取消' }
+      return map[status] || '未知'
+    },
+    getRollTypeTag(rollType) {
+      const typeMap = {
+        '母卷': 'primary',
+        '复卷': 'success',
+        '分切卷': 'warning'
+      }
+      return typeMap[rollType] || 'info'
     }
-    return typeMap[rollType] || 'info'
-  }
   }
 }
 </script>

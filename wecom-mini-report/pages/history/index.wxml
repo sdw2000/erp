@@ -1,0 +1,35 @@
+<view class="container">
+  <view class="card">
+    <view class="title">查询报工记录</view>
+
+    <view class="row">
+      <view>
+        <view class="label">scheduleId</view>
+        <input class="input" value="{{scheduleId}}" type="number" bindinput="onScheduleIdInput" />
+      </view>
+      <view>
+        <view class="label">工序</view>
+        <picker mode="selector" range="{{processTypeOptions}}" range-key="label" value="{{processTypeIndex}}" bindchange="onProcessTypeChange">
+          <view class="input">{{processTypeOptions[processTypeIndex].label}}</view>
+        </picker>
+      </view>
+    </view>
+
+    <button class="btn-primary" loading="{{loading}}" bindtap="onQuery">查询</button>
+  </view>
+
+  <view class="card" wx:if="{{list.length === 0}}">
+    <view class="muted">暂无记录</view>
+  </view>
+
+  <block wx:for="{{list}}" wx:key="id">
+    <view class="card">
+      <view class="tag">报工ID: {{item.id || '-'}}</view>
+      <view class="muted">开始: {{item.start_time || item.startTime || '-'}}</view>
+      <view class="muted">结束: {{item.end_time || item.endTime || '-'}}</view>
+      <view class="muted">产量: {{item.produced_qty || item.producedQty || '-'}}</view>
+      <view class="muted">操作人: {{item.operator || '-'}}</view>
+      <view class="muted">备注: {{item.remark || '-'}}</view>
+    </view>
+  </block>
+</view>

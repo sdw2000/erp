@@ -14,12 +14,12 @@
           </el-select>
         </el-form-item>
         <el-form-item label="计划日期">
-          <el-date-picker 
-            v-model="query.planDate" 
-            type="date" 
+          <el-date-picker
+            v-model="query.planDate"
+            type="date"
             placeholder="选择日期"
             value-format="yyyy-MM-dd"
-            style="width: 150px" 
+            style="width: 150px"
           />
         </el-form-item>
         <el-form-item label="机台">
@@ -65,8 +65,8 @@
               value-format="yyyy-MM-dd HH:mm:ss"
               format="yyyy-MM-dd HH:mm"
               placeholder="选择时间"
-              @change="val => updateTask(row, 'actualStartTime', val)"
               style="width: 100%"
+              @change="val => updateTask(row, 'actualStartTime', val)"
             />
           </template>
         </el-table-column>
@@ -99,8 +99,8 @@
     </el-card>
 
     <!-- 新增/编辑对话框 -->
-    <el-dialog 
-      :title="isEdit ? '编辑分切任务' : '新增分切任务'" 
+    <el-dialog
+      :title="isEdit ? '编辑分切任务' : '新增分切任务'"
       :visible.sync="dialogVisible"
       width="70%"
       @close="resetForm"
@@ -292,13 +292,13 @@ export default {
         return row.spec || '-'
       }
 
-      let parts = []
+      const parts = []
       if (width) parts.push(`${width}mm`)
       if (thickness) parts.push(`× ${thickness}μm`)
       if (length) parts.push(`/ ${length}m`)
       return parts.join(' ')
     },
-    
+
     statusText(status) {
       const map = {
         pending: '待生产',
@@ -308,7 +308,7 @@ export default {
       }
       return map[status] || status
     },
-    
+
     statusTagType(status) {
       const map = {
         pending: 'info',
@@ -466,7 +466,7 @@ export default {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
         type: 'warning'
-      }).then(async () => {
+      }).then(async() => {
         try {
           await deleteSlittingTask(row.id)
           this.$message.success('删除成功')

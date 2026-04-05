@@ -291,6 +291,17 @@ export function getTodayOutput() {
   })
 }
 
+/**
+ * 获取当班当月/当年生产报工总平米数
+ */
+export function getShiftProductionSummary(params) {
+  return request({
+    url: '/api/production/schedule/report/shift-summary',
+    method: 'get',
+    params
+  })
+}
+
 // ========== 生产看板接口 ==========
 
 /**

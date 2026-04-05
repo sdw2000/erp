@@ -205,3 +205,85 @@ export function getAllShifts() {
     method: 'get'
   })
 }
+
+// ==================== 请假管理 ====================
+
+export function getLeaveList(params) {
+  return request({
+    url: '/production/staff/leave/list',
+    method: 'get',
+    params
+  })
+}
+
+export function addLeave(data) {
+  return request({
+    url: '/production/staff/leave',
+    method: 'post',
+    data
+  })
+}
+
+export function updateLeave(id, data) {
+  return request({
+    url: `/production/staff/leave/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+export function approveLeave(id, status) {
+  return request({
+    url: `/production/staff/leave/${id}/approve`,
+    method: 'put',
+    params: { status }
+  })
+}
+
+export function deleteLeave(id) {
+  return request({
+    url: `/production/staff/leave/${id}`,
+    method: 'delete'
+  })
+}
+
+// ==================== 加班管理 ====================
+
+export function getOvertimeList(params) {
+  return request({
+    url: '/production/staff/overtime/list',
+    method: 'get',
+    params
+  })
+}
+
+export function addOvertime(data) {
+  return request({
+    url: '/production/staff/overtime',
+    method: 'post',
+    data
+  })
+}
+
+export function updateOvertime(id, data) {
+  return request({
+    url: `/production/staff/overtime/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+export function approveOvertime(id, status) {
+  return request({
+    url: `/production/staff/overtime/${id}/approve`,
+    method: 'put',
+    params: { status }
+  })
+}
+
+export function deleteOvertime(id) {
+  return request({
+    url: `/production/staff/overtime/${id}`,
+    method: 'delete'
+  })
+}

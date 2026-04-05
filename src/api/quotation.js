@@ -6,7 +6,20 @@ import request from '@/utils/request'
 export function getQuotationList() {
   return request({
     url: '/quotation/list',
-    method: 'get'
+    method: 'get',
+    timeout: 30000
+  })
+}
+
+/**
+ * 分页获取报价单列表
+ */
+export function getQuotationPage(params) {
+  return request({
+    url: '/quotation/page',
+    method: 'get',
+    params,
+    timeout: 30000
   })
 }
 
@@ -38,6 +51,14 @@ export function updateQuotation(data) {
   return request({
     url: '/quotation/update',
     method: 'put',
+    data
+  })
+}
+
+export function getQuotationVersionHistory(data) {
+  return request({
+    url: '/quotation/item-versions',
+    method: 'post',
     data
   })
 }

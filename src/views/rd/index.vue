@@ -548,16 +548,32 @@ export default {
       this.loading = true
       try {
         const res = await importSpec(file)
-        if (res.code === 20000) {
-          this.$message.success('导入完成')
-          this.importResult = res.data
+        if (res.code === 20000 || res.code === 200) {
+          const result = res.data || {}
+          const successCount = Number(result.successCount || 0)
+          const failCount = Number(result.failCount || 0)
+          const errors = Array.isArray(result.errors) ? result.errors : []
+
+          this.importResult = {
+            successCount,
+            failCount,
+            errors
+          }
           this.importResultVisible = true
+
+          if (failCount > 0) {
+            const summary = errors.slice(0, 3).join('；')
+            this.$message.warning(`导入完成：成功${successCount}条，失败${failCount}条${summary ? `，失败原因：${summary}` : ''}`)
+          } else {
+            this.$message.success(`导入完成：成功${successCount}条，失败${failCount}条`)
+          }
+
           this.fetchData()
         } else {
-          this.$message.error(res.msg || '导入失败')
+          this.$message.error(res.msg || res.message || '导入失败')
         }
       } catch (e) {
-        this.$message.error('导入失败')
+        this.$message.error((e && e.message) || (e && e.response && e.response.data && (e.response.data.msg || e.response.data.message)) || '导入失败')
       } finally {
         this.loading = false
         this.$refs.fileInput.value = ''

@@ -1,6 +1,7 @@
 <template>
   <div :class="classObj" class="app-wrapper">
-    <div v-if="device==='mobile'&&sidebar.opened" class="drawer-bg" @click="handleClickOutside" />
+    <!-- 移除移动端遮罩层，因为侧边栏不再覆盖在内容上方 -->
+    <!-- <div v-if="device==='mobile'&&sidebar.opened" class="drawer-bg" @click="handleClickOutside" /> -->
     <sidebar class="sidebar-container" />
     <div :class="{hasTagsView:needTagsView}" class="main-container">
       <div :class="{'fixed-header':fixedHeader}">
@@ -67,10 +68,11 @@ export default {
     height: 100%;
     width: 100%;
 
-    &.mobile.openSidebar {
-      position: fixed;
-      top: 0;
-    }
+    // 移除移动端打开侧边栏时的 fixed 定位
+    // &.mobile.openSidebar {
+    //   position: fixed;
+    //   top: 0;
+    // }
   }
 
   .drawer-bg {
@@ -97,6 +99,10 @@ export default {
   }
 
   .mobile .fixed-header {
-    width: 100%;
+    width: calc(100% - #{$sideBarWidth});
+  }
+
+  .mobile.hideSidebar .fixed-header {
+    width: calc(100% - 54px);
   }
 </style>

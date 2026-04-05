@@ -40,11 +40,24 @@ module.exports = {
       errors: true
     },
     proxy: {
+      '/api-proxy': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+        ws: true,
+        timeout: 600000,
+        proxyTimeout: 600000,
+        pathRewrite: {
+          '^/api-proxy': ''
+        },
+        logLevel: 'debug'
+      },
       // 所有 /api 请求都转发到后端
       '/api': {
         target: 'http://localhost:8090',
         changeOrigin: true,
         ws: true,
+        timeout: 600000,
+        proxyTimeout: 600000,
         logLevel: 'debug'
       }
     },

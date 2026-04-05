@@ -28,7 +28,7 @@
 
     <!-- 数据表格 -->
     <el-card>
-      <el-table v-loading="loading" :data="list" style="width: 100%" border stripe>
+      <el-table ref="stockLogTable" v-loading="loading" :data="list" style="width: 100%" border stripe>
         <el-table-column prop="createTime" label="时间" width="160" />
         <el-table-column prop="type" label="类型" width="80" align="center">
           <template slot-scope="scope">
@@ -67,9 +67,12 @@
 
 <script>
 import { getStockLogList, getExportLogUrl } from '@/api/tapeStock'
+import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
 export default {
   name: 'StockLog',
+  mixins: [elTableAutoLayout],
+  tableLayoutRefs: ['stockLogTable'],
   data() {
     return {
       searchForm: {
@@ -98,6 +101,7 @@ export default {
         console.error(e)
       } finally {
         this.loading = false
+        this.scheduleTableLayout()
       }
     },
     handleSearch() {

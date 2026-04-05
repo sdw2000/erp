@@ -55,7 +55,7 @@
       </el-row>
 
       <!-- 数据表格 -->
-      <el-table v-loading="loading" :data="filmStockList" style="width: 100%" border stripe>
+      <el-table ref="filmStockTable" v-loading="loading" :data="filmStockList" style="width: 100%" border stripe>
         <el-table-column type="index" label="序号" width="60" align="center" />
         <el-table-column prop="materialCode" label="物料编号" width="140" />
         <el-table-column prop="materialName" label="物料名称" width="180" show-overflow-tooltip />
@@ -144,9 +144,12 @@
 
 <script>
 import { getFilmStockList, getFilmStockBySpec, getFilmStockDetails } from '@/api/rawMaterialStock'
+import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
 export default {
   name: 'FilmStock',
+  mixins: [elTableAutoLayout],
+  tableLayoutRefs: ['filmStockTable'],
   data() {
     return {
       loading: false,
@@ -182,6 +185,7 @@ export default {
         this.$message.error('加载薄膜库存失败')
       } finally {
         this.loading = false
+        this.scheduleTableLayout()
       }
     },
 
@@ -210,6 +214,7 @@ export default {
         this.$message.error('查询失败')
       } finally {
         this.loading = false
+        this.scheduleTableLayout()
       }
     },
 

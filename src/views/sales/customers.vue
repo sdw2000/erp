@@ -12,11 +12,8 @@
 
       <!-- 查询表单 -->
       <el-form :inline="true" :model="searchForm" class="search-form">
-        <el-form-item label="客户名称">
-          <el-input v-model="searchForm.customerName" placeholder="请输入客户名称" clearable style="width: 140px" />
-        </el-form-item>
-        <el-form-item label="客户编号">
-          <el-input v-model="searchForm.customerCode" placeholder="请输入客户编号" clearable style="width: 140px" />
+        <el-form-item label="客户搜索">
+          <el-input v-model="searchForm.customerKeyword" placeholder="请输入客户名称/简称/编号" clearable style="width: 220px" @keyup.enter.native="handleSearch" />
         </el-form-item>
         <el-form-item label="客户类型">
           <el-select v-model="searchForm.customerType" placeholder="全部类型" clearable style="width: 120px">
@@ -45,43 +42,36 @@
         </el-form-item>
       </el-form>      <!-- 数据表格 -->
       <el-table
+        ref="customerTable"
         v-loading="loading"
         :data="customers"
-        style="width: 100%; margin-top: 15px"
+        class="customer-table"
+        size="small"
+        style="width: 100%; margin-top: 12px"
         border
         stripe
       >
-        <el-table-column type="index" label="序号" width="60" align="center" />
-        <el-table-column prop="customerCode" label="客户编号" width="120" />
-        <el-table-column prop="customerName" label="客户名称" width="200" show-overflow-tooltip />
-        <el-table-column prop="shortName" label="客户简称" width="120" />
-        <el-table-column prop="customerType" label="客户类型" width="100">
-          <template slot-scope="scope">
-            <el-tag :type="scope.row.customerType === '企业客户' ? 'primary' : 'success'" size="small">
-              {{ scope.row.customerType }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="customerLevel" label="客户等级" width="100">
+        <el-table-column type="index" label="序号" width="56" align="center" />
+        <el-table-column prop="customerCode" label="客户编号" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="shortName" label="客户简称" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="customerLevel" label="客户等级" width="88">
           <template slot-scope="scope">
             <el-tag :type="getLevelTagType(scope.row.customerLevel)" size="small">{{ scope.row.customerLevel }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="80">
+        <el-table-column prop="status" label="状态" width="76">
           <template slot-scope="scope">
             <el-tag :type="getStatusTagType(scope.row.status)" size="small">{{ scope.row.status }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="primaryContactName" label="主联系人" width="100" />
-        <el-table-column prop="primaryContactMobile" label="联系电话" width="120" />
-        <el-table-column prop="salesUserName" label="销售" width="100" />
-        <el-table-column prop="documentationPersonUserName" label="跟单员" width="100" />
-        <el-table-column prop="createTime" label="创建时间" width="160">
+        <el-table-column prop="salesUserName" label="销售" min-width="88" show-overflow-tooltip />
+        <el-table-column prop="documentationPersonUserName" label="跟单员" min-width="88" show-overflow-tooltip />
+        <el-table-column prop="createTime" label="创建日期" width="90">
           <template slot-scope="scope">
-            {{ formatDateTime(scope.row.createTime) }}
+            {{ formatDateCompact(scope.row.createTime) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="210" align="center">
           <template slot-scope="scope">
             <el-button type="text" size="small" icon="el-icon-view" @click="handleView(scope.row)">查看</el-button>
             <el-button type="text" size="small" icon="el-icon-edit" @click="handleEdit(scope.row)">编辑</el-button>
@@ -174,6 +164,18 @@
             </el-row>
             <el-row :gutter="20">
               <el-col :span="12">
+                <el-form-item label="订单号前缀">
+                  <el-input v-model="formData.orderNoPrefix" placeholder="如：DH" maxlength="10" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="订单号后缀">
+                  <el-input v-model="formData.orderNoSuffix" placeholder="如：-SZ" maxlength="10" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
                 <el-form-item label="销售">
                   <el-select v-model="formData.salesUserId" placeholder="请选择销售" clearable filterable style="width: 100%">
                     <el-option v-for="user in users" :key="user.id" :label="user.realName || user.username" :value="user.id" />
@@ -218,9 +220,14 @@
               </el-col>
             </el-row>
             <el-row :gutter="20">
-              <el-col :span="24">
+              <el-col :span="12">
                 <el-form-item label="联系地址">
-                  <el-input v-model="formData.contactAddress" placeholder="请输入联系地址（默认收货地址）" />
+                  <el-input v-model="formData.contactAddress" placeholder="请输入联系地址" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="收货地址">
+                  <el-input v-model="formData.receiveAddress" placeholder="请输入收货地址（优先用于发货）" />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -313,13 +320,18 @@
                   <el-checkbox v-model="scope.row.isDecisionMaker" :true-label="1" :false-label="0" />
                 </template>
               </el-table-column>
+              <el-table-column label="是否收货人" width="100" align="center">
+                <template slot-scope="scope">
+                  <el-checkbox v-model="scope.row.isReceiver" :true-label="1" :false-label="0" />
+                </template>
+              </el-table-column>
               <el-table-column label="操作" width="80" fixed="right">
                 <template slot-scope="scope">
                   <el-button type="text" size="small" @click="handleDeleteContact(scope.$index)">删除</el-button>
                 </template>
               </el-table-column>
             </el-table>
-            <div style="color: #f56c6c; margin-top: 10px;">* 每个客户至少需要一个联系人，至少一个主联系人</div>
+            <div style="color: #f56c6c; margin-top: 10px;">* 每个客户至少需要一个联系人，至少一个主联系人，至少一个收货人</div>
           </el-tab-pane>
         </el-tabs>
       </el-form>
@@ -379,82 +391,115 @@
         <el-tabs v-model="detailActiveTab" type="border-card">
           <!-- 基本信息 -->
           <el-tab-pane label="基本信息" name="basic">
-            <el-descriptions :column="3" border>
-              <el-descriptions-item label="客户编号">
-                <el-tag type="primary" size="medium">{{ detailData.customerCode }}</el-tag>
-              </el-descriptions-item>
-              <el-descriptions-item label="客户名称">{{ detailData.customerName }}</el-descriptions-item>
-              <el-descriptions-item label="客户简称">{{ detailData.shortName || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="客户类型">
-                <el-tag :type="detailData.customerType === '企业客户' ? 'primary' : 'success'" size="small">
-                  {{ detailData.customerType }}
-                </el-tag>
-              </el-descriptions-item>
-              <el-descriptions-item label="客户等级">
-                <el-tag :type="getLevelTagType(detailData.customerLevel)" size="small">{{ detailData.customerLevel }}</el-tag>
-              </el-descriptions-item>
-              <el-descriptions-item label="状态">
-                <el-tag :type="getStatusTagType(detailData.status)" size="small">{{ detailData.status }}</el-tag>
-              </el-descriptions-item>
-              <el-descriptions-item label="所属行业">{{ detailData.industry || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="客户来源">{{ detailData.source || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="创建时间">{{ detailData.createTime || '-' }}</el-descriptions-item>
-            </el-descriptions>
+            <el-table :data="[detailData]" border size="small" style="width: 100%" empty-text="暂无数据">
+              <el-table-column prop="customerCode" label="客户编号" width="150">
+                <template slot-scope="scope">
+                  <el-tag type="primary" size="medium">{{ scope.row.customerCode || '-' }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="customerName" label="客户名称" min-width="200" />
+              <el-table-column prop="shortName" label="客户简称" width="140" />
+              <el-table-column prop="orderNoPrefix" label="订单号前缀" width="120" />
+              <el-table-column prop="orderNoSuffix" label="订单号后缀" width="120" />
+              <el-table-column prop="customerType" label="客户类型" width="120">
+                <template slot-scope="scope">
+                  <el-tag :type="scope.row.customerType === '企业客户' ? 'primary' : 'success'" size="small">
+                    {{ scope.row.customerType || '-' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="customerLevel" label="客户等级" width="120">
+                <template slot-scope="scope">
+                  <el-tag :type="getLevelTagType(scope.row.customerLevel)" size="small">
+                    {{ scope.row.customerLevel || '-' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="status" label="状态" width="100">
+                <template slot-scope="scope">
+                  <el-tag :type="getStatusTagType(scope.row.status)" size="small">
+                    {{ scope.row.status || '-' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="industry" label="所属行业" min-width="140" />
+              <el-table-column prop="source" label="客户来源" min-width="140" />
+              <el-table-column prop="createTime" label="创建时间" width="180">
+                <template slot-scope="scope">
+                  {{ scope.row.createTime || '-' }}
+                </template>
+              </el-table-column>
+            </el-table>
           </el-tab-pane>
 
           <!-- 企业信息 -->
           <el-tab-pane label="企业信息" name="enterprise">
-            <el-descriptions :column="2" border>
-              <el-descriptions-item label="统一社会信用代码">{{ detailData.creditCode || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="税号">{{ detailData.taxNumber || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="法定代表人">{{ detailData.legalPerson || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="注册资本">{{ detailData.registeredCapital ? detailData.registeredCapital + '万元' : '-' }}</el-descriptions-item>
-              <el-descriptions-item label="注册地址" :span="2">{{ detailData.registeredAddress || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="经营地址" :span="2">{{ detailData.businessAddress || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="经营范围" :span="2">{{ detailData.businessScope || '-' }}</el-descriptions-item>
-            </el-descriptions>
+            <el-table :data="[detailData]" border size="small" style="width: 100%" empty-text="暂无数据">
+              <el-table-column prop="creditCode" label="统一社会信用代码" min-width="180" />
+              <el-table-column prop="taxNumber" label="税号" min-width="140" />
+              <el-table-column prop="legalPerson" label="法定代表人" width="120" />
+              <el-table-column prop="registeredCapital" label="注册资本(万元)" width="140">
+                <template slot-scope="scope">
+                  {{ scope.row.registeredCapital || '-' }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="registeredAddress" label="注册地址" min-width="200" />
+              <el-table-column prop="businessAddress" label="经营地址" min-width="200" />
+              <el-table-column prop="businessScope" label="经营范围" min-width="200" />
+            </el-table>
           </el-tab-pane>
 
           <!-- 联系信息 -->
           <el-tab-pane label="联系信息" name="contact">
-            <el-descriptions :column="2" border>
-              <el-descriptions-item label="公司电话">{{ detailData.companyPhone || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="公司传真">{{ detailData.companyFax || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="公司邮箱">{{ detailData.companyEmail || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="公司网站">
-                <a v-if="detailData.website" :href="detailData.website" target="_blank" class="link">{{ detailData.website }}</a>
-                <span v-else>-</span>
-              </el-descriptions-item>
-              <el-descriptions-item label="联系地址" :span="2">{{ detailData.contactAddress || '-' }}</el-descriptions-item>
-            </el-descriptions>
+            <el-table :data="[detailData]" border size="small" style="width: 100%" empty-text="暂无数据">
+              <el-table-column prop="companyPhone" label="公司电话" width="140" />
+              <el-table-column prop="companyFax" label="公司传真" width="140" />
+              <el-table-column prop="companyEmail" label="公司邮箱" min-width="180" />
+              <el-table-column prop="website" label="公司网站" min-width="200">
+                <template slot-scope="scope">
+                  <a v-if="scope.row.website" :href="scope.row.website" target="_blank" class="link">{{ scope.row.website }}</a>
+                  <span v-else>-</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="contactAddress" label="联系地址" min-width="220" />
+              <el-table-column prop="receiveAddress" label="收货地址" min-width="220" />
+            </el-table>
           </el-tab-pane>
 
           <!-- 财务信息 -->
           <el-tab-pane label="财务信息" name="finance">
-            <el-descriptions :column="2" border>
-              <el-descriptions-item label="信用额度">
-                <span class="money">¥{{ formatMoney(detailData.creditLimit) }}</span>
-              </el-descriptions-item>
-              <el-descriptions-item label="付款条件">
-                <el-tag type="info" size="small">{{ detailData.paymentTerms || '-' }}</el-tag>
-              </el-descriptions-item>
-              <el-descriptions-item label="税率">{{ detailData.taxRate ? detailData.taxRate + '%' : '-' }}</el-descriptions-item>
-              <el-descriptions-item label="税号">{{ detailData.taxNumber || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="开户银行">{{ detailData.bankName || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="银行账号">{{ detailData.bankAccount || '-' }}</el-descriptions-item>
-            </el-descriptions>
+            <el-table :data="[detailData]" border size="small" style="width: 100%" empty-text="暂无数据">
+              <el-table-column prop="creditLimit" label="信用额度" width="140">
+                <template slot-scope="scope">
+                  <span class="money">¥{{ formatMoney(scope.row.creditLimit) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="paymentTerms" label="付款条件" width="140">
+                <template slot-scope="scope">
+                  <el-tag type="info" size="small">{{ scope.row.paymentTerms || '-' }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="taxRate" label="税率" width="100">
+                <template slot-scope="scope">
+                  {{ scope.row.taxRate ? scope.row.taxRate + '%' : '-' }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="taxNumber" label="税号" min-width="140" />
+              <el-table-column prop="bankName" label="开户银行" min-width="160" />
+              <el-table-column prop="bankAccount" label="银行账号" min-width="180" />
+            </el-table>
           </el-tab-pane>
 
           <!-- 销售信息 -->
           <el-tab-pane label="销售信息" name="sales">
-            <el-descriptions :column="2" border>
-              <el-descriptions-item label="销售">{{ detailData.salesUserName || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="跟单员">{{ detailData.documentationPersonUserName || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="主联系人">{{ detailData.primaryContactName || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="联系电话">{{ detailData.primaryContactMobile || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="联系邮箱" :span="2">{{ detailData.primaryContactEmail || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="备注" :span="2">{{ detailData.remark || '-' }}</el-descriptions-item>
-            </el-descriptions>
+            <el-table :data="[detailData]" border size="small" style="width: 100%" empty-text="暂无数据">
+              <el-table-column prop="salesUserName" label="销售" width="120" />
+              <el-table-column prop="documentationPersonUserName" label="跟单员" width="120" />
+              <el-table-column prop="primaryContactName" label="主联系人" width="120" />
+              <el-table-column prop="primaryContactMobile" label="联系电话" width="140" />
+              <el-table-column prop="primaryContactEmail" label="联系邮箱" min-width="180" />
+              <el-table-column prop="remark" label="备注" min-width="200" />
+            </el-table>
           </el-tab-pane>
 
           <!-- 联系人列表 -->
@@ -474,6 +519,12 @@
               <el-table-column label="决策人" width="80" align="center">
                 <template slot-scope="scope">
                   <el-tag v-if="scope.row.isDecisionMaker === 1" type="warning" size="mini">是</el-tag>
+                  <span v-else class="text-muted">否</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="收货人" width="80" align="center">
+                <template slot-scope="scope">
+                  <el-tag v-if="scope.row.isReceiver === 1" type="primary" size="mini">是</el-tag>
                   <span v-else class="text-muted">否</span>
                 </template>
               </el-table-column>
@@ -551,6 +602,40 @@
         <el-button type="primary" @click="handleEditFromDetail">编 辑</el-button>
       </span>
     </el-dialog>
+
+    <!-- 导入弹窗 -->
+    <el-dialog
+      title="导入客户数据"
+      :visible.sync="importDialogVisible"
+      width="640px"
+      :close-on-click-modal="false"
+    >
+      <div class="import-tip-box">
+        <div>请使用“下载模板”生成的Excel，字段与导出保持一致，重点包含：</div>
+        <div class="import-tip-fields">客户编码、客户简称、客户全称、订单号前后缀、客户来源、销售、跟单员、状态、备注</div>
+      </div>
+
+      <el-upload
+        ref="importUpload"
+        class="upload-block"
+        drag
+        action=""
+        :auto-upload="false"
+        :limit="1"
+        :on-change="handleFileChange"
+        :on-exceed="handleExceed"
+        accept=".xlsx,.xls"
+      >
+        <i class="el-icon-upload" />
+        <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
+        <div slot="tip" class="el-upload__tip">仅支持 .xlsx / .xls，建议单次不超过5000行</div>
+      </el-upload>
+
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="importDialogVisible = false">取 消</el-button>
+        <el-button type="primary" :loading="importLoading" @click="submitImport">开始导入</el-button>
+      </span>
+    </el-dialog>
   </div>
 </template>
 
@@ -574,8 +659,7 @@ export default {
     return {
       // 搜索表单
       searchForm: {
-        customerName: '',
-        customerCode: '',
+        customerKeyword: '',
         customerType: '',
         customerLevel: '', status: ''
       },
@@ -605,11 +689,14 @@ export default {
         customerLevel: 'C级客户',
         industry: '',
         codePrefix: '',
+        orderNoPrefix: '',
+        orderNoSuffix: '',
         companyPhone: '',
         companyEmail: '',
         companyFax: '',
         website: '',
         contactAddress: '',
+        receiveAddress: '',
         creditLimit: 0,
         paymentTerms: '现款现货',
         taxRate: 13,
@@ -639,14 +726,48 @@ export default {
       // 导入相关
       importDialogVisible: false,
       importLoading: false,
-      importFile: null
+      importFile: null,
+      tableLayoutTimer: null,
+      tableLayoutRaf: null
     }
   },
   mounted() {
     this.fetchCustomers()
     this.fetchUsers()
+    window.addEventListener('resize', this.handleTableLayout)
+    this.handleTableLayout()
+  },
+  activated() {
+    this.handleTableLayout()
+  },
+  beforeDestroy() {
+    window.removeEventListener('resize', this.handleTableLayout)
+    if (this.tableLayoutTimer) {
+      clearTimeout(this.tableLayoutTimer)
+      this.tableLayoutTimer = null
+    }
+    if (this.tableLayoutRaf) {
+      cancelAnimationFrame(this.tableLayoutRaf)
+      this.tableLayoutRaf = null
+    }
   },
   methods: {
+    handleTableLayout() {
+      this.$nextTick(() => {
+        if (this.tableLayoutTimer) {
+          clearTimeout(this.tableLayoutTimer)
+        }
+        this.tableLayoutTimer = setTimeout(() => {
+          const table = this.$refs.customerTable
+          if (table && typeof table.doLayout === 'function') {
+            table.doLayout()
+            this.tableLayoutRaf = requestAnimationFrame(() => {
+              table.doLayout()
+            })
+          }
+        }, 60)
+      })
+    },
     // 查询用户列表
     async fetchUsers() {
       try {
@@ -672,7 +793,7 @@ export default {
           ...this.searchForm
         }
         const res = await getCustomerList(params)
-        if (res.code === 20000) {
+        if (res.code === 20000 || res.code === 200) {
           this.customers = res.data.records
           this.pagination.total = Number(res.data.total) || 0
         }
@@ -680,6 +801,7 @@ export default {
         this.$message.error('查询失败：' + error.message)
       } finally {
         this.loading = false
+        this.handleTableLayout()
       }
     },
     // 搜索
@@ -690,8 +812,7 @@ export default {
     // 重置
     handleReset() {
       this.searchForm = {
-        customerName: '',
-        customerCode: '',
+        customerKeyword: '',
         customerType: '',
         customerLevel: '',
         status: ''
@@ -712,10 +833,12 @@ export default {
       this.loading = true
       try {
         const res = await getCustomerDetail(row.id)
-        if (res.code === 20000) {
+        if (res.code === 20000 || res.code === 200) {
           this.formData = { ...res.data }
           if (!this.formData.contacts || this.formData.contacts.length === 0) {
             this.formData.contacts = [this.createEmptyContact()]
+          } else {
+            this.normalizeContacts(this.formData.contacts)
           }
           this.dialogVisible = true
         }
@@ -730,8 +853,11 @@ export default {
       this.loading = true
       try {
         const res = await getCustomerDetail(row.id)
-        if (res.code === 20000) {
+        if (res.code === 20000 || res.code === 200) {
           this.detailData = res.data
+          if (Array.isArray(this.detailData.contacts)) {
+            this.normalizeContacts(this.detailData.contacts)
+          }
           this.detailActiveTab = 'basic'
           this.detailVisible = true
         }
@@ -750,7 +876,7 @@ export default {
       }).then(async() => {
         try {
           const res = await deleteCustomer(row.id)
-          if (res.code === 20000) {
+          if (res.code === 20000 || res.code === 200) {
             this.$message.success('删除成功')
             this.fetchCustomers()
           } else {
@@ -776,7 +902,7 @@ export default {
       }).then(async() => {
         try {
           const res = await updateCustomerStatus(row.id, status)
-          if (res.code === 20000) {
+          if (res.code === 20000 || res.code === 200) {
             this.$message.success('操作成功')
             this.fetchCustomers()
           } else {
@@ -805,6 +931,12 @@ export default {
           this.activeTab = 'contacts'
           return false
         }
+        const hasReceiver = this.formData.contacts.some(c => c.isReceiver === 1)
+        if (!hasReceiver) {
+          this.$message.error('请至少设置一个收货人')
+          this.activeTab = 'contacts'
+          return false
+        }
         // 验证联系人姓名和手机
         for (const contact of this.formData.contacts) {
           if (!contact.contactName) {
@@ -824,7 +956,12 @@ export default {
           const res = this.isEdit
             ? await updateCustomer(this.formData.id, this.formData)
             : await addCustomer(this.formData)
-          if (res.code === 20000) {
+          if (res.code === 20000 || res.code === 200) {
+            if (!this.isEdit) {
+              window.dispatchEvent(new CustomEvent('dashboard:refresh', {
+                detail: { source: 'sales-customers', type: 'created' }
+              }))
+            }
             this.$message.success(this.isEdit ? '更新成功' : '新增成功')
             this.dialogVisible = false
             this.fetchCustomers()
@@ -849,6 +986,7 @@ export default {
         return
       }
       this.formData.contacts.splice(index, 1)
+      this.normalizeContacts(this.formData.contacts)
     },
     // 主联系人变更
     handlePrimaryChange(index) {
@@ -861,16 +999,33 @@ export default {
     },
     // 创建空联系人
     createEmptyContact() {
+      const isFirstContact = !this.formData.contacts || this.formData.contacts.length === 0
       return {
         contactName: '',
         contactPosition: '',
         contactPhone: '',
         contactEmail: '',
         contactWechat: '',
-        isPrimary: 0,
+        isPrimary: isFirstContact ? 1 : 0,
         isDecisionMaker: 0,
+        isReceiver: isFirstContact ? 1 : 0,
         sortOrder: this.formData.contacts.length + 1
       }
+    },
+    normalizeContacts(contacts) {
+      if (!Array.isArray(contacts) || contacts.length === 0) return
+      let hasPrimary = false
+      let hasReceiver = false
+      contacts.forEach((c, idx) => {
+        c.isPrimary = Number(c.isPrimary) === 1 ? 1 : 0
+        c.isDecisionMaker = Number(c.isDecisionMaker) === 1 ? 1 : 0
+        c.isReceiver = Number(c.isReceiver) === 1 ? 1 : 0
+        c.sortOrder = c.sortOrder || idx + 1
+        if (c.isPrimary === 1) hasPrimary = true
+        if (c.isReceiver === 1) hasReceiver = true
+      })
+      if (!hasPrimary) contacts[0].isPrimary = 1
+      if (!hasReceiver) contacts[0].isReceiver = 1
     },
     // 重置表单
     resetForm() {
@@ -883,11 +1038,14 @@ export default {
         customerLevel: 'C级客户',
         industry: '',
         codePrefix: '',
+        orderNoPrefix: '',
+        orderNoSuffix: '',
         companyPhone: '',
         companyEmail: '',
         companyFax: '',
         website: '',
         contactAddress: '',
+        receiveAddress: '',
         creditLimit: 0,
         paymentTerms: '现款现货',
         taxRate: 13,
@@ -953,6 +1111,23 @@ export default {
       const minutes = String(date.getMinutes()).padStart(2, '0')
       const seconds = String(date.getSeconds()).padStart(2, '0')
       return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+    },
+    // 紧凑日期格式：26-03-12
+    formatDateCompact(value) {
+      if (!value) return '-'
+      const date = new Date(value)
+      if (Number.isNaN(date.getTime())) {
+        const text = String(value)
+        const m = text.match(/(\d{4})-(\d{1,2})-(\d{1,2})/)
+        if (m) {
+          return `${String(m[1]).slice(-2)}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`
+        }
+        return text
+      }
+      const yy = String(date.getFullYear()).slice(-2)
+      const mm = String(date.getMonth() + 1).padStart(2, '0')
+      const dd = String(date.getDate()).padStart(2, '0')
+      return `${yy}-${mm}-${dd}`
     },
     // 报价单状态类型
     getQuotationStatusType(status) {
@@ -1053,30 +1228,47 @@ export default {
       this.importLoading = true
       try {
         const res = await importCustomers(this.importFile)
-        if (res.code === 20000) {
+        if (res.code === 20000 || res.code === 200) {
           const data = res.data
           let message = `导入完成：新增${data.insertCount || 0}个客户，更新${data.updateCount || 0}个客户`
-          if (data.errors && data.errors.length > 0) {
-            message += `，${data.errors.length}条错误`
+          const errors = Array.isArray(data.errors) ? data.errors : []
+          if (errors.length > 0) {
+            message += `，${errors.length}条错误`
             // 显示错误详情
             this.$notify({
               title: '导入提示',
-              message: data.errors.slice(0, 5).join('\n') + (data.errors.length > 5 ? '\n...' : ''),
+              message: errors.slice(0, 5).join('\n') + (errors.length > 5 ? '\n...' : ''),
               type: 'warning',
               duration: 10000
             })
+            this.downloadImportErrors(errors)
           }
           this.$message.success(message)
           this.importDialogVisible = false
-          this.fetchCustomers()
+          await this.fetchCustomers()
         } else {
-          this.$message.error(res.message)
+          this.$message.error((res && (res.msg || res.message)) || '导入失败')
         }
       } catch (error) {
-        this.$message.error('导入失败：' + error.message)
+        this.$message.error('导入失败：' + ((error && error.message) || '未知错误'))
       } finally {
         this.importLoading = false
       }
+    },
+
+    // 下载导入错误明细（txt）
+    downloadImportErrors(errors) {
+      if (!Array.isArray(errors) || errors.length === 0) return
+      const now = new Date()
+      const fileTime = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+      const content = [`客户导入错误明细（共${errors.length}条）`, `导出时间：${now.toLocaleString()}`, '', ...errors].join('\r\n')
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `客户导入错误明细_${fileTime}.txt`
+      link.click()
+      window.URL.revokeObjectURL(url)
     },
 
     // 导出数据
@@ -1104,7 +1296,8 @@ export default {
 
 <style scoped>
 .customer-container {
-  padding: 20px;
+  padding: 14px;
+  overflow-x: hidden;
 }
 
 .search-card,
@@ -1119,8 +1312,60 @@ export default {
 }
 
 .el-pagination {
-  margin-top: 20px;
+  margin-top: 12px;
   text-align: right;
+}
+
+.import-tip-box {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e6f7ff;
+  background: #f4faff;
+  border-radius: 6px;
+  color: #606266;
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+.import-tip-fields {
+  margin-top: 4px;
+  color: #409eff;
+}
+
+.upload-block {
+  width: 100%;
+}
+
+.customer-container ::v-deep .search-form .el-form-item {
+  margin-bottom: 10px;
+  margin-right: 10px;
+}
+
+.customer-container ::v-deep .search-form .el-input__inner,
+.customer-container ::v-deep .search-form .el-select .el-input__inner {
+  height: 32px;
+  line-height: 32px;
+}
+
+.customer-container .customer-table ::v-deep .el-table__header,
+.customer-container .customer-table ::v-deep .el-table__body {
+  table-layout: fixed !important;
+  width: 100% !important;
+}
+
+.customer-container .customer-table ::v-deep .el-table__header-wrapper,
+.customer-container .customer-table ::v-deep .el-table__body-wrapper {
+  overflow-x: auto;
+}
+
+.customer-container .customer-table ::v-deep .el-table__header th .cell,
+.customer-container .customer-table ::v-deep .el-table__body td .cell {
+  font-size: 13px;
+  padding: 4px 6px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 详情页面样式 */

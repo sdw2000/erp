@@ -1,0 +1,58 @@
+<view class="container">
+  <view class="card">
+    <view class="title">提交报工</view>
+    <view class="muted">支持按 scheduleId 或 orderDetailId 报工</view>
+
+    <view class="label">工序</view>
+    <picker mode="selector" range="{{processTypeOptions}}" range-key="label" value="{{processTypeIndex}}" bindchange="onProcessTypeChange">
+      <view class="input">{{processTypeOptions[processTypeIndex].label}}</view>
+    </picker>
+
+    <view class="row">
+      <view>
+        <view class="label">排程ID scheduleId</view>
+        <input class="input" value="{{scheduleId}}" type="number" placeholder="可空" bindinput="onScheduleIdInput" />
+      </view>
+      <view>
+        <view class="label">订单明细ID orderDetailId</view>
+        <input class="input" value="{{orderDetailId}}" type="number" placeholder="可空" bindinput="onOrderDetailIdInput" />
+      </view>
+    </view>
+
+    <view class="row">
+      <view>
+        <view class="label">产量 producedQty</view>
+        <input class="input" value="{{producedQty}}" type="digit" placeholder="例如 120" bindinput="onProducedQtyInput" />
+      </view>
+      <view>
+        <view class="label">操作人</view>
+        <input class="input" value="{{operator}}" placeholder="可空，默认当前用户" bindinput="onOperatorInput" />
+      </view>
+    </view>
+
+    <view class="label">开始时间（yyyy-MM-dd HH:mm:ss）</view>
+    <input class="input" value="{{startTime}}" placeholder="可空，默认当前时间" bindinput="onStartTimeInput" />
+
+    <view class="label">结束时间（yyyy-MM-dd HH:mm:ss）</view>
+    <input class="input" value="{{endTime}}" placeholder="可空，默认当前时间" bindinput="onEndTimeInput" />
+
+    <view class="label">备注</view>
+    <input class="input" value="{{remark}}" placeholder="可空" bindinput="onRemarkInput" />
+
+    <label class="label">
+      <switch checked="{{proceedNextProcess}}" bindchange="onProceedNextChange" />
+      报工后推进下道工序
+    </label>
+
+    <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">提交报工</button>
+    <button class="btn-secondary" bindtap="goHistory">查看报工记录</button>
+  </view>
+
+  <view class="card" wx:if="{{lastResult}}">
+    <view class="label">提交结果</view>
+    <view class="tag">success: {{lastResult.success ? 'true' : 'false'}}</view>
+    <view class="muted">scheduleId: {{lastResult.scheduleId || '-'}}</view>
+    <view class="muted">orderDetailId: {{lastResult.orderDetailId || '-'}}</view>
+    <view class="muted">processType: {{lastResult.processType || '-'}}</view>
+  </view>
+</view>

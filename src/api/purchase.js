@@ -39,6 +39,13 @@ export function getPurchaseOrderDetail(orderNo) {
   })
 }
 
+export function generatePurchaseOrderNo() {
+  return request({
+    url: '/purchase/orders/generate-no',
+    method: 'get'
+  })
+}
+
 export function downloadPurchaseTemplate() {
   return request({
     url: '/purchase/orders/template',

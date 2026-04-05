@@ -306,6 +306,8 @@
 <script>
 import { getPendingOrderItems } from '@/api/schedule'
 import { planScheduleTasks, getScheduleTaskPage, updateScheduleTaskStatus, updateScheduleTaskStatusByOrderItem, getAvailableMaterials, lockMaterials, getScheduleEquipments, updateScheduleTaskPlan, getScheduleBatchDetail } from '@/api/scheduleTask'
+import { getCoatingPlanTaskPage, upsertPlan } from '@/api/schedulePlan'
+import { getSpecByMaterialCode } from '@/api/tapeSpec'
 
 export default {
   name: 'ScheduleTask',
@@ -331,7 +333,7 @@ export default {
       taskQuery: {
         pageNum: 1,
         pageSize: 20,
-        processType: '',
+        processType: 'COATING',
         status: '',
         orderNo: ''
       },
@@ -354,7 +356,8 @@ export default {
       batchDetailVisible: false,
       batchDetailLoading: false,
       batchDetail: {},
-      batchDetailOrders: []
+      batchDetailOrders: [],
+      materialNameByCodeCache: {}
     }
   },
   computed: {
@@ -370,6 +373,49 @@ export default {
     this.loadTasks()
   },
   methods: {
+    normalizeMaterialCode(code) {
+      return String(code || '').replace(/\s+/g, '').trim().toUpperCase()
+    },
+    async enrichMaterialNamesFromSpec(rows) {
+      const list = Array.isArray(rows) ? rows : []
+      if (!list.length) return list
+
+      const codes = Array.from(new Set(list
+        .map(r => String((r && (r.material_code || r.materialCode)) || '').trim())
+        .filter(Boolean)))
+
+      const missingCodes = codes.filter(code => {
+        const key = this.normalizeMaterialCode(code)
+        return key && !Object.prototype.hasOwnProperty.call(this.materialNameByCodeCache, key)
+      })
+
+      if (missingCodes.length) {
+        await Promise.all(missingCodes.map(async(code) => {
+          const key = this.normalizeMaterialCode(code)
+          let name = ''
+          try {
+            const res = await getSpecByMaterialCode(code)
+            const spec = (res && (res.code === 200 || res.code === 20000)) ? (res.data || {}) : {}
+            name = String(spec.productName || spec.materialName || spec.name || '').trim()
+          } catch (e) {
+            name = ''
+          }
+          this.$set(this.materialNameByCodeCache, key, name)
+        }))
+      }
+
+      return list.map(row => {
+        const code = String((row && (row.material_code || row.materialCode)) || '').trim()
+        const key = this.normalizeMaterialCode(code)
+        const masterName = String((key && this.materialNameByCodeCache[key]) || '').trim()
+        if (!masterName) return row
+        return {
+          ...row,
+          material_name: masterName,
+          materialName: masterName
+        }
+      })
+    },
     handleTabChange() {
       if (this.activeTab === 'tasks') {
         this.loadTasks()
@@ -528,17 +574,18 @@ export default {
       this.pendingParams = { pageNum: 1, pageSize: 20, customerLevel: '', materialCode: '' }
       this.loadPending()
     },
-    loadPending() {
+    async loadPending() {
       this.pendingLoading = true
       getPendingOrderItems(this.pendingParams)
-        .then(res => {
+        .then(async res => {
           const data = res.data || {}
-          this.pendingList = (data.list || []).map(r => ({
+          const rawRows = (data.list || []).map(r => ({
             ...r,
             schedule_qty: typeof r.schedule_qty === 'number' ? r.schedule_qty : Number(r.pending_qty || 0),
             _pending_remain: Number(r.pending_qty || 0),
             priorityScore: r.priorityScore != null ? Number(r.priorityScore) : (r.priority_score != null ? Number(r.priority_score) : 0)
           }))
+          this.pendingList = await this.enrichMaterialNamesFromSpec(rawRows)
           this.pendingTotal = Number(data.total || 0)
         })
         .finally(() => {
@@ -902,7 +949,32 @@ export default {
       }
     },
     async updatePlan(row) {
-      if (!row || !row.id) return
+      if (!row) return
+
+      // 涂布计划来源任务：直接回写 schedule_plan
+      if (row.sourceType === 'PLAN') {
+        if (!row.planId || !row.orderItemId) return
+        try {
+          await upsertPlan({
+            id: row.planId,
+            orderDetailId: row.orderItemId,
+            orderNo: row.orderNo,
+            materialCode: row.materialCode,
+            materialName: row.materialName,
+            stage: 'COATING',
+            planDate: row.planStartTime,
+            equipment: row.equipmentId != null ? String(row.equipmentId) : '',
+            planArea: row.area,
+            planRolls: row.quantity,
+            status: 'CONFIRMED'
+          })
+        } catch (e) {
+          this.$message.error('涂布计划更新失败')
+        }
+        return
+      }
+
+      if (!row.id) return
       if (!row.equipmentId) return
       try {
         const res = await updateScheduleTaskPlan(row.id, {
@@ -922,12 +994,19 @@ export default {
       }
     },
     resetTasks() {
-      this.taskQuery = { pageNum: 1, pageSize: 20, processType: '', status: '', orderNo: '' }
+      this.taskQuery = { pageNum: 1, pageSize: 20, processType: 'COATING', status: '', orderNo: '' }
       this.loadTasks()
     },
     loadTasks() {
       this.taskLoading = true
-      getScheduleTaskPage(this.taskQuery)
+      const query = { ...this.taskQuery }
+
+      // 涂布任务改为按涂布计划拉取，按计划时间升序展示
+      const request = query.processType === 'COATING'
+        ? getCoatingPlanTaskPage(query)
+        : getScheduleTaskPage(query)
+
+      request
         .then(res => {
           const data = res.data || {}
           this.taskList = data.list || []

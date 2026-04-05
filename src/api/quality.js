@@ -127,7 +127,7 @@ export function deleteDisposition(id) {
 }
 
 export function approveDisposition(id, status, remark) {
-  return request({ url: `/api/quality/disposition/${id}/approve`, method: 'post', params: {status, remark} })
+  return request({ url: `/api/quality/disposition/${id}/approve`, method: 'post', params: { status, remark }})
 }
 
 // ========== 报表统计 ==========

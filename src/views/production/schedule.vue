@@ -1188,6 +1188,7 @@ import {
   getGanttData
 } from '@/api/schedule'
 import { unlockScheduleMaterial } from '@/api/filmStock'
+import { getSpecByMaterialCode } from '@/api/tapeSpec'
 import FilmWidthSelector from '@/components/Production/FilmWidthSelector'
 
 export default {
@@ -1200,6 +1201,7 @@ export default {
       activeTab: 'list',
       loading: false,
       scheduleList: [],
+      materialNameByCodeCache: {},
       total: 0,
       queryParams: {
         pageNum: 1,
@@ -1265,6 +1267,49 @@ export default {
     this.loadPendingOrders()
   },
   methods: {
+    normalizeMaterialCode(code) {
+      return String(code || '').replace(/\s+/g, '').trim().toUpperCase()
+    },
+    async enrichMaterialNamesFromSpec(rows) {
+      const list = Array.isArray(rows) ? rows : []
+      if (!list.length) return list
+
+      const codes = Array.from(new Set(list
+        .map(r => String((r && (r.material_code || r.materialCode)) || '').trim())
+        .filter(Boolean)))
+
+      const missingCodes = codes.filter(code => {
+        const key = this.normalizeMaterialCode(code)
+        return key && !Object.prototype.hasOwnProperty.call(this.materialNameByCodeCache, key)
+      })
+
+      if (missingCodes.length) {
+        await Promise.all(missingCodes.map(async(code) => {
+          const key = this.normalizeMaterialCode(code)
+          let name = ''
+          try {
+            const res = await getSpecByMaterialCode(code)
+            const spec = (res && (res.code === 200 || res.code === 20000)) ? (res.data || {}) : {}
+            name = String(spec.productName || spec.materialName || spec.name || '').trim()
+          } catch (e) {
+            name = ''
+          }
+          this.$set(this.materialNameByCodeCache, key, name)
+        }))
+      }
+
+      return list.map(row => {
+        const code = String((row && (row.material_code || row.materialCode)) || '').trim()
+        const key = this.normalizeMaterialCode(code)
+        const masterName = String((key && this.materialNameByCodeCache[key]) || '').trim()
+        if (!masterName) return row
+        return {
+          ...row,
+          material_name: masterName,
+          materialName: masterName
+        }
+      })
+    },
     async loadScheduleList() {
       this.loading = true
       try {
@@ -1283,7 +1328,8 @@ export default {
         }
         const res = await getScheduleList(params)
         if (res.code === 200) {
-          this.scheduleList = res.data.list || []
+          const rawList = res.data.list || []
+          this.scheduleList = await this.enrichMaterialNamesFromSpec(rawList)
           // 确保total字段为数字类型
           this.total = Number(res.data.total) || 0
           this.queryParams.pageNum = Number(res.data.pageNum) || this.queryParams.pageNum

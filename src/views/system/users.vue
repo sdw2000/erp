@@ -14,7 +14,7 @@
         </div>
       </div>
 
-      <el-table :data="users" stripe border style="width:100%">
+      <el-table ref="usersTable" :data="users" stripe border style="width:100%">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="username" label="用户名" />
         <el-table-column prop="real_name" label="真实姓名" />
@@ -86,9 +86,12 @@
 
 <script>
 import { getUsers, getUser, createUser, updateUser, deleteUser } from '@/api/user'
+import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
 export default {
   name: 'SystemUsers',
+  mixins: [elTableAutoLayout],
+  tableLayoutRefs: ['usersTable'],
   data() {
     return {
       filters: {
@@ -149,6 +152,8 @@ export default {
         }
       }).catch(() => {
         this.$message.error('获取用户列表失败')
+      }).finally(() => {
+        this.scheduleTableLayout()
       })
     },
 

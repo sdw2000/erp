@@ -2,18 +2,28 @@
   <div class="purchase-suppliers">
     <el-card>
       <div slot="header" class="clearfix">
-        <span>供应商管理</span>
-        <div style="float:right">
-          <el-input
-            v-model="keyword"
-            placeholder="名称/编码/简称"
-            size="small"
-            clearable
-            style="width:220px; margin-right:12px"
-            @keyup.enter.native="fetchList"
-            @clear="fetchList"
-          />
-          <el-button type="primary" icon="el-icon-plus" size="small" @click="openCreate">新增供应商</el-button>
+        <div class="header-title-row">
+          <span>采购管理</span>
+        </div>
+        <div class="header-action-row">
+          <div class="header-search-left">
+            <el-input
+              v-model="keyword"
+              placeholder="名称/编码/简称"
+              size="small"
+              clearable
+              style="width:220px"
+              @keyup.enter.native="fetchList"
+              @clear="fetchList"
+            />
+          </div>
+          <div class="header-buttons-right">
+            <el-button type="success" icon="el-icon-download" size="small" @click="handleDownloadTemplate">下载模板</el-button>
+            <el-button type="warning" icon="el-icon-upload2" size="small" @click="triggerImport">导入</el-button>
+            <el-button type="info" icon="el-icon-download" size="small" @click="handleExport">导出</el-button>
+            <el-button type="primary" icon="el-icon-plus" size="small" @click="openCreate">新增供应商</el-button>
+            <input ref="importFile" type="file" accept=".xlsx,.xls" style="display:none" @change="handleImportChange">
+          </div>
         </div>
       </div>
 
@@ -231,6 +241,133 @@ export default {
     this.fetchList()
   },
   methods: {
+    triggerImport() {
+      this.$refs.importFile && this.$refs.importFile.click()
+    },
+    handleDownloadTemplate() {
+      import('@/vendor/Export2Excel').then(excel => {
+        const header = ['供应商编码', '供应商名称', '简称', '联系人', '联系电话', '邮箱', '地址', '税号', '开户行', '账号', '状态(active/inactive)', '备注']
+        const data = [[
+          'SUP-001',
+          '示例供应商有限公司',
+          '示例供应商',
+          '张三',
+          '13800138000',
+          'demo@supplier.com',
+          '广东省深圳市南山区',
+          '91440300XXXXXX',
+          '中国银行深圳分行',
+          '622202***********',
+          'active',
+          ''
+        ]]
+        excel.export_json_to_excel({
+          header,
+          data,
+          filename: '供应商导入模板',
+          bookType: 'xlsx'
+        })
+      })
+    },
+    async handleImportChange(e) {
+      const file = e.target.files && e.target.files[0]
+      if (!file) return
+      try {
+        const XLSX = await import('xlsx')
+        const ab = await file.arrayBuffer()
+        const wb = XLSX.read(ab, { type: 'array' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' })
+
+        if (!rows || !rows.length) {
+          this.$message.warning('导入文件为空')
+          return
+        }
+
+        let success = 0
+        let fail = 0
+
+        for (const row of rows) {
+          const supplierCode = String(row['供应商编码'] || row['supplierCode'] || '').trim()
+          const supplierName = String(row['供应商名称'] || row['supplierName'] || '').trim()
+          if (!supplierCode || !supplierName) {
+            fail++
+            continue
+          }
+
+          const payload = {
+            supplierCode,
+            supplierName,
+            shortName: String(row['简称'] || row['shortName'] || '').trim(),
+            primaryContactName: String(row['联系人'] || row['primaryContactName'] || '').trim(),
+            primaryContactMobile: String(row['联系电话'] || row['primaryContactMobile'] || '').trim(),
+            contactEmail: String(row['邮箱'] || row['contactEmail'] || '').trim(),
+            contactAddress: String(row['地址'] || row['contactAddress'] || '').trim(),
+            taxNo: String(row['税号'] || row['taxNo'] || '').trim(),
+            bankName: String(row['开户行'] || row['bankName'] || '').trim(),
+            bankAccount: String(row['账号'] || row['bankAccount'] || '').trim(),
+            status: String(row['状态(active/inactive)'] || row['status'] || 'active').trim() || 'active',
+            remark: String(row['备注'] || row['remark'] || '').trim(),
+            contacts: []
+          }
+
+          try {
+            const res = await createSupplier(payload)
+            if (res && (res.code === 200 || res.code === 20000)) {
+              success++
+            } else {
+              fail++
+            }
+          } catch (err) {
+            fail++
+          }
+        }
+
+        this.$message.success(`导入完成：成功${success}条，失败${fail}条`)
+        this.fetchList()
+      } catch (err) {
+        this.$message.error('导入失败，请检查模板格式')
+      } finally {
+        if (this.$refs.importFile) this.$refs.importFile.value = ''
+      }
+    },
+    async handleExport() {
+      try {
+        const res = await listSuppliers({ keyword: this.keyword, page: 1, size: 100000 })
+        if (!(res && (res.code === 200 || res.code === 20000))) {
+          this.$message.error('导出失败')
+          return
+        }
+
+        const data = res.data && res.data.records ? res.data.records : (Array.isArray(res.data) ? res.data : (res.data && res.data.list ? res.data.list : []))
+
+        import('@/vendor/Export2Excel').then(excel => {
+          const header = ['供应商编码', '供应商名称', '简称', '联系人', '联系电话', '邮箱', '地址', '税号', '开户行', '账号', '状态', '备注']
+          const rows = (data || []).map(item => [
+            item.supplierCode || '',
+            item.supplierName || '',
+            item.shortName || '',
+            item.primaryContactName || '',
+            item.primaryContactMobile || '',
+            item.contactEmail || '',
+            item.contactAddress || '',
+            item.taxNo || '',
+            item.bankName || '',
+            item.bankAccount || '',
+            item.status || 'active',
+            item.remark || ''
+          ])
+          excel.export_json_to_excel({
+            header,
+            data: rows,
+            filename: `供应商数据_${new Date().toLocaleDateString().replace(/\//g, '-')}`,
+            bookType: 'xlsx'
+          })
+        })
+      } catch (e) {
+        this.$message.error('导出失败')
+      }
+    },
     emptyForm() {
       return {
         id: null,
@@ -411,6 +548,29 @@ export default {
 </script>
 
 <style scoped>
+.header-title-row {
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.header-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.header-search-left {
+  display: flex;
+  align-items: center;
+}
+
+.header-buttons-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .pager {
   margin-top: 12px;
   text-align: right;

@@ -23,6 +23,15 @@ export function logout() {
   })
 }
 
+// 修改当前用户密码
+export function changePassword(data) {
+  return request({
+    url: '/api/users/change-password',
+    method: 'post',
+    data
+  })
+}
+
 // ---- User management CRUD APIs ----
 // List users with pagination and optional search
 export function getUsers(params) {

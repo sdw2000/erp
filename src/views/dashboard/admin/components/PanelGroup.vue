@@ -13,12 +13,13 @@
     </el-col>
     <el-col :xs="12" :sm="12" :lg="6" class="card-panel-col">
       <div class="card-panel">
-        <div class="card-panel-icon-wrapper icon-money">
+        <div class="card-panel-icon-wrapper icon-money is-clickable" @click="handleTodayClick">
           <svg-icon icon-class="money" class-name="card-panel-icon" />
         </div>
         <div class="card-panel-description">
-          <div class="card-panel-text">今日下单金额</div>
-          <count-to :start-val="0" :end-val="summary.todayAmount" :duration="1200" :decimals="2" class="card-panel-num" />
+          <div class="card-panel-text">今日下单金额(万元)</div>
+          <count-to :start-val="0" :end-val="toWan(summary.todayAmount)" :duration="1200" :decimals="2" class="card-panel-num" />
+          <div class="card-panel-sub">下单面积：{{ formatWanArea(summary.todayArea) }} 万㎡</div>
         </div>
       </div>
     </el-col>
@@ -28,8 +29,9 @@
           <svg-icon icon-class="message" class-name="card-panel-icon" />
         </div>
         <div class="card-panel-description">
-          <div class="card-panel-text">当月下单金额</div>
-          <count-to :start-val="0" :end-val="summary.monthAmount" :duration="1200" :decimals="2" class="card-panel-num" />
+          <div class="card-panel-text">当月下单金额(万元)</div>
+          <count-to :start-val="0" :end-val="toWan(summary.monthAmount)" :duration="1200" :decimals="2" class="card-panel-num" />
+          <div class="card-panel-sub">下单面积：{{ formatWanArea(summary.monthArea) }} 万㎡</div>
         </div>
       </div>
     </el-col>
@@ -39,8 +41,9 @@
           <svg-icon icon-class="shopping" class-name="card-panel-icon" />
         </div>
         <div class="card-panel-description">
-          <div class="card-panel-text">当年下单金额</div>
-          <count-to :start-val="0" :end-val="summary.yearAmount" :duration="1200" :decimals="2" class="card-panel-num" />
+          <div class="card-panel-text">当年下单金额(万元)</div>
+          <count-to :start-val="0" :end-val="toWan(summary.yearAmount)" :duration="1200" :decimals="2" class="card-panel-num" />
+          <div class="card-panel-sub">下单面积：{{ formatWanArea(summary.yearArea) }} 万㎡</div>
         </div>
       </div>
     </el-col>
@@ -51,28 +54,44 @@
 import CountTo from 'vue-count-to'
 
 export default {
+  components: {
+    CountTo
+  },
   props: {
     summary: {
       type: Object,
-      default: () => ({ customerTotal: 0, todayAmount: 0, monthAmount: 0, yearAmount: 0 })
+      default: () => ({ customerTotal: 0, todayAmount: 0, monthAmount: 0, yearAmount: 0, todayArea: 0, monthArea: 0, yearArea: 0 })
     }
   },
-  components: {
-    CountTo
+  methods: {
+    handleTodayClick() {
+      this.$emit('today-click')
+    },
+    toWan(value) {
+      const n = Number(value || 0)
+      return n / 10000
+    },
+    formatWanArea(value) {
+      const n = Number(value || 0) / 10000
+      return n.toLocaleString('zh-CN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })
+    }
   }
 }
 </script>
 
 <style lang="scss" scoped>
 .panel-group {
-  margin-top: 18px;
+  margin-top: 6px;
 
   .card-panel-col {
-    margin-bottom: 32px;
+    margin-bottom: 8px;
   }
 
   .card-panel {
-    height: 108px;
+    height: 92px;
     cursor: pointer;
     font-size: 12px;
     position: relative;
@@ -122,32 +141,47 @@ export default {
 
     .card-panel-icon-wrapper {
       float: left;
-      margin: 14px 0 0 14px;
-      padding: 16px;
+      margin: 24px 0 0 8px;
+      padding: 8px;
       transition: all 0.38s ease-out;
       border-radius: 6px;
+      &.is-clickable {
+        cursor: pointer;
+      }
     }
 
     .card-panel-icon {
       float: left;
-      font-size: 48px;
+      font-size: 28px;
     }
 
     .card-panel-description {
       float: right;
       font-weight: bold;
-      margin: 26px;
+      margin: 10px 12px;
       margin-left: 0px;
+      width: calc(100% - 70px);
+      text-align: right;
 
       .card-panel-text {
-        line-height: 18px;
+        line-height: 14px;
         color: rgba(0, 0, 0, 0.45);
-        font-size: 16px;
-        margin-bottom: 12px;
+        font-size: 12px;
+        margin-bottom: 3px;
       }
 
       .card-panel-num {
-        font-size: 20px;
+        display: block;
+        font-size: 25px;
+        line-height: 1.1;
+        color: #303133;
+        margin-bottom: 2px;
+      }
+
+      .card-panel-sub {
+        color: #909399;
+        font-size: 12px;
+        line-height: 1.2;
       }
     }
   }

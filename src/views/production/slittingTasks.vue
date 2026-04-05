@@ -1,12 +1,12 @@
 <template>
-  <slitting-tasks-new />
+  <production-tasks fixed-type="slitting" />
 </template>
 <script>
-import SlittingTasksNew from './components/SlittingTasksNew.vue'
+import ProductionTasks from './components/ProductionTasks.vue'
 export default {
   name: 'SlittingTasks',
   components: {
-    SlittingTasksNew
+    ProductionTasks
   }
 }
 </script>

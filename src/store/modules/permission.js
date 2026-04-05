@@ -62,16 +62,6 @@ const actions = {
         accessedRoutes = filterAsyncRoutes(asyncRoutes, roles)
       }
 
-      // debug logs only during local development
-      if (process.env.NODE_ENV === 'development') {
-        try {
-          console.log('[permission] generateRoutes roles:', roles)
-          console.log('[permission] accessedRoutes paths:', (accessedRoutes || []).map(r => r.path))
-        } catch (e) {
-          // ignore logging errors
-        }
-      }
-
       commit('SET_ROUTES', accessedRoutes)
       resolve(accessedRoutes)
     })

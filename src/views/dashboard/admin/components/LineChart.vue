@@ -29,6 +29,10 @@ export default {
     chartData: {
       type: Object,
       required: true
+    },
+    unitLabel: {
+      type: String,
+      default: '万元'
     }
   },
   data() {
@@ -57,6 +61,10 @@ export default {
     this.chart = null
   },
   methods: {
+    formatWan(value) {
+      const num = Number(value) || 0
+      return (num / 10000).toFixed(2)
+    },
     initChart() {
       this.chart = echarts.init(this.$el, 'macarons')
       this.setOptions(this.chartData)
@@ -67,30 +75,46 @@ export default {
         xAxis: {
           data: xAxis,
           boundaryGap: false,
+          axisLabel: {
+            margin: 10
+          },
           axisTick: {
             show: false
           }
         },
         grid: {
-          left: 10,
-          right: 10,
-          bottom: 20,
-          top: 30,
-          containLabel: true
+          left: 56,
+          right: 24,
+          bottom: 64,
+          top: 36,
+          containLabel: false
         },
         tooltip: {
           trigger: 'axis',
           axisPointer: {
             type: 'cross'
           },
-          padding: [5, 10]
+          padding: [5, 10],
+          formatter: (params) => {
+            const items = Array.isArray(params) ? params : [params]
+            if (!items.length) return ''
+            const title = items[0].axisValueLabel || items[0].name || ''
+            const lines = items.map(item => `${item.marker}${item.seriesName}: ${this.formatWan(item.value)} ${this.unitLabel}`)
+            return [title, ...lines].join('<br/>')
+          }
         },
         yAxis: {
+          type: 'value',
+          name: this.unitLabel,
+          axisLabel: {
+            formatter: (value) => this.formatWan(value)
+          },
           axisTick: {
             show: false
           }
         },
         legend: {
+          top: 2,
           data: names
         },
         series: series.map((s, idx) => ({

@@ -110,7 +110,7 @@
           <el-input v-model="form.inspectorName" />
         </el-form-item>
         <el-form-item label="备注">
-          <el-input type="textarea" v-model="form.remark" />
+          <el-input v-model="form.remark" type="textarea" />
         </el-form-item>
       </el-form>
       <span slot="footer" class="dialog-footer">
@@ -168,10 +168,10 @@ export default {
   },
   methods: {
     async loadDefectTypes() {
-        const res = await getDefectTypeList()
-        if (res && (res.code === 200 || res.code === 20000)) {
-          this.defectTypes = res.data || []
-        }
+      const res = await getDefectTypeList()
+      if (res && (res.code === 200 || res.code === 20000)) {
+        this.defectTypes = res.data || []
+      }
     },
     async loadData() {
       this.loading = true

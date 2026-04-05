@@ -1,10 +1,11 @@
 <template>
   <div class="navbar">
+    <hamburger id="hamburger-container" :is-active="sidebar.opened" class="hamburger-container" @toggleClick="toggleSideBar" />
     <breadcrumb id="breadcrumb-container" class="breadcrumb-container" />
     <div class="right-menu">
       <el-dropdown class="avatar-container right-menu-item hover-effect" trigger="click">
         <div class="avatar-wrapper">
-          <img :src="avatar+'?imageView2/1/w/80/h/80'" class="user-avatar">
+          <span class="login-user-name">{{ displayName }}</span>
           <i class="el-icon-caret-bottom" />
         </div>
         <el-dropdown-menu slot="dropdown">
@@ -23,17 +24,27 @@
 <script>
 import { mapGetters } from 'vuex'
 import Breadcrumb from '@/components/Breadcrumb'
+import Hamburger from '@/components/Hamburger'
 
 export default {
   components: {
-    Breadcrumb
+    Breadcrumb,
+    Hamburger
   },
   computed: {
     ...mapGetters([
-      'avatar'
-    ])
+      'sidebar',
+      'name',
+      'realName'
+    ]),
+    displayName() {
+      return this.realName || this.name || '当前用户'
+    }
   },
   methods: {
+    toggleSideBar() {
+      this.$store.dispatch('app/toggleSideBar')
+    },
     async logout() {
       await this.$store.dispatch('user/logout')
       this.$router.push(`/login?redirect=${this.$route.fullPath}`)
@@ -49,6 +60,19 @@ export default {
   position: relative;
   background: #fff;
   box-shadow: 0 1px 4px rgba(0,21,41,.08);
+
+  .hamburger-container {
+    line-height: 46px;
+    height: 100%;
+    float: left;
+    cursor: pointer;
+    transition: background .3s;
+    -webkit-tap-highlight-color:transparent;
+
+    &:hover {
+      background: rgba(0, 0, 0, .025)
+    }
+  }
 
   .breadcrumb-container {
     float: left;
@@ -85,21 +109,23 @@ export default {
       margin-right: 30px;
 
       .avatar-wrapper {
-        margin-top: 5px;
+        margin-top: 0;
         position: relative;
 
-        .user-avatar {
+        .login-user-name {
           cursor: pointer;
-          width: 40px;
-          height: 40px;
-          border-radius: 10px;
+          font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+          font-size: 18px;
+          font-weight: 700;
+          color: #303133;
+          line-height: 50px;
         }
 
         .el-icon-caret-bottom {
           cursor: pointer;
           position: absolute;
-          right: -20px;
-          top: 25px;
+          right: -18px;
+          top: 18px;
           font-size: 12px;
         }
       }

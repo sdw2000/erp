@@ -17,8 +17,10 @@ export default {
       'roles'
     ]),
     currentRole() {
-      // if roles include admin show admin dashboard
-      if (this.roles && this.roles.includes('admin')) {
+      // 销售相关角色统一复用同一套看板页面
+      const dashboardRoles = ['admin', 'sales', 'documentation', 'finance']
+      const hasDashboardRole = Array.isArray(this.roles) && this.roles.some(role => dashboardRoles.includes(role))
+      if (hasDashboardRole) {
         return adminDashboard
       }
       // fallback to editor dashboard

@@ -3,23 +3,80 @@ import { MessageBox, Message } from 'element-ui'
 import store from '@/store'
 import { getToken } from '@/utils/auth'
 
+function resolveBaseURL() {
+  const envBase = process.env.VUE_APP_BASE_API
+  if (process.env.NODE_ENV === 'development') {
+    return ''
+  }
+  return envBase
+}
+
 // create an axios instance
 const service = axios.create({
-  baseURL: process.env.VUE_APP_BASE_API, // url = base url + request url
+  baseURL: resolveBaseURL(), // url = base url + request url
   // withCredentials: true, // send cookies when cross-domain requests
-  timeout: 10000 // request timeout
+  timeout: 60000 // request timeout
 })
+
+const SPACE_REGEXP = /[\s\u00A0\u3000]+/g
+const CODE_FIELD_NAMES = new Set(['materialCode', 'customerCode'])
+
+function removeAllSpaces(text) {
+  if (text === null || text === undefined) return text
+  return String(text).replace(SPACE_REGEXP, '')
+}
+
+function sanitizeCodeFields(payload) {
+  if (payload === null || payload === undefined) return payload
+  if (Array.isArray(payload)) {
+    return payload.map(item => sanitizeCodeFields(item))
+  }
+  if (typeof FormData !== 'undefined' && payload instanceof FormData) {
+    return payload
+  }
+  if (typeof payload !== 'object') {
+    return payload
+  }
+
+  Object.keys(payload).forEach(key => {
+    const value = payload[key]
+    if (CODE_FIELD_NAMES.has(key) && typeof value === 'string') {
+      payload[key] = removeAllSpaces(value)
+      return
+    }
+    if (value && typeof value === 'object') {
+      sanitizeCodeFields(value)
+    }
+  })
+  return payload
+}
 
 // request interceptor
 service.interceptors.request.use(
   config => {
     // do something before request is sent
+    if (process.env.NODE_ENV === 'development') {
+      const rawUrl = String(config.url || '')
+      const isAbsolute = /^https?:\/\//i.test(rawUrl)
+      if (!isAbsolute && rawUrl.startsWith('/') && !rawUrl.startsWith('/api-proxy/')) {
+        config.url = `/api-proxy${rawUrl}`
+      }
+    }
 
     if (store.getters.token) {
       // let each request carry token
       // ['X-Token'] is a custom headers key
       // please modify it according to the actual situation
-      config.headers['X-Token'] = getToken()
+      const tk = getToken()
+      config.headers['X-Token'] = tk
+      config.headers['token'] = tk
+    }
+
+    if (config && config.params) {
+      sanitizeCodeFields(config.params)
+    }
+    if (config && config.data) {
+      sanitizeCodeFields(config.data)
     }
     return config
   },

@@ -1,0 +1,18 @@
+{
+  "description": "MES 企业微信报工小程序",
+  "packOptions": {
+    "ignore": []
+  },
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true
+  },
+  "appid": "wx企业微信小程序AppID",
+  "compileType": "miniprogram",
+  "libVersion": "2.33.0",
+  "projectname": "mes-wecom-report",
+  "condition": {}
+}

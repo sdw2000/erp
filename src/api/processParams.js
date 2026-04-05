@@ -14,11 +14,11 @@ export function getProcessParamsList(params) {
 /**
  * 根据料号和工序类型获取参数
  */
-export function getProcessParams(materialCode, processType) {
+export function getProcessParams(materialCode, processType, equipmentCode) {
   return request({
     url: '/production/process-params/get',
     method: 'get',
-    params: { materialCode, processType }
+    params: { materialCode, processType, equipmentCode }
   })
 }
 

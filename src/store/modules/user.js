@@ -5,6 +5,9 @@ import router, { resetRouter } from '@/router'
 const state = {
   token: getToken(),
   name: '',
+  realName: '',
+  workGroup: '',
+  profile: {},
   avatar: '',
   introduction: '',
   roles: []
@@ -19,6 +22,15 @@ const mutations = {
   },
   SET_NAME: (state, name) => {
     state.name = name
+  },
+  SET_REAL_NAME: (state, realName) => {
+    state.realName = realName
+  },
+  SET_WORK_GROUP: (state, workGroup) => {
+    state.workGroup = workGroup
+  },
+  SET_PROFILE: (state, profile) => {
+    state.profile = profile || {}
   },
   SET_AVATAR: (state, avatar) => {
     state.avatar = avatar
@@ -54,7 +66,8 @@ const actions = {
           reject('Verification failed, please Login again.')
         }
 
-        const { roles, name, avatar, introduction } = data
+        const { roles, name, realName, avatar, introduction } = data
+        const workGroup = data.workGroup || data.groupName || data.teamName || data.classGroup || data.shiftGroup || data.deptName || ''
 
         // roles must be a non-empty array
         if (!roles || roles.length <= 0) {
@@ -63,6 +76,9 @@ const actions = {
 
         commit('SET_ROLES', roles)
         commit('SET_NAME', name)
+        commit('SET_REAL_NAME', realName || '')
+        commit('SET_WORK_GROUP', workGroup || '')
+        commit('SET_PROFILE', data)
         commit('SET_AVATAR', avatar)
         commit('SET_INTRODUCTION', introduction)
         resolve(data)
@@ -79,9 +95,9 @@ const actions = {
       logout(state.token).catch(() => {
         // ignore server logout errors
       }).finally(() => {
+        removeToken() // remove cookie first
         commit('SET_TOKEN', '')
         commit('SET_ROLES', [])
-        removeToken()
         resetRouter()
 
         // reset visited views and cached views
@@ -98,6 +114,8 @@ const actions = {
     return new Promise(resolve => {
       commit('SET_TOKEN', '')
       commit('SET_ROLES', [])
+      commit('SET_WORK_GROUP', '')
+      commit('SET_PROFILE', {})
       removeToken()
       resolve()
     })

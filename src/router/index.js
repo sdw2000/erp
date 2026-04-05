@@ -68,31 +68,43 @@ export const asyncRoutes = [
     path: '/sales',
     component: Layout,
     name: 'Sales',
-    meta: { title: '销售管理', icon: 'shopping', roles: ['sales', 'admin'] },
+    meta: { title: '销售管理', icon: 'shopping', roles: ['sales', 'admin', 'finance'] },
     children: [
       {
         path: 'orders',
         component: () => import('@/views/sales/orders'),
         name: 'SalesOrders',
-        meta: { title: '销售订单', icon: 'list', roles: ['sales', 'admin'] }
+        meta: { title: '销售订单', icon: 'list', roles: ['sales', 'admin', 'finance'] }
+      },
+      {
+        path: 'returns',
+        component: () => import('@/views/sales/returns'),
+        name: 'SalesReturns',
+        meta: { title: '销售退货', icon: 'el-icon-refresh-left', roles: ['sales', 'admin', 'finance'] }
+      },
+      {
+        path: 'reconciliation',
+        component: () => import('@/views/sales/reconciliation'),
+        name: 'SalesReconciliation',
+        meta: { title: '销售对账单', icon: 'el-icon-document', roles: ['sales', 'admin', 'finance'] }
       },
       {
         path: 'quotations',
         component: () => import('@/views/sales/quotations'),
         name: 'SalesQuotations',
-        meta: { title: '报价管理', icon: 'clipboard', roles: ['sales', 'admin'] }
+        meta: { title: '报价管理', icon: 'clipboard', roles: ['sales', 'admin', 'finance'] }
       },
       {
         path: 'samples',
         component: () => import('@/views/sales/samples'),
         name: 'SalesSamples',
-        meta: { title: '样品记录', icon: 'table', roles: ['sales', 'admin'] }
+        meta: { title: '样品记录', icon: 'table', roles: ['sales', 'admin', 'finance'] }
       },
       {
         path: 'customers',
         component: () => import('@/views/sales/customers'),
         name: 'SalesCustomers',
-        meta: { title: '客户管理', icon: 'user', roles: ['sales', 'admin'] }
+        meta: { title: '客户管理', icon: 'user', roles: ['sales', 'admin', 'finance'] }
       },
       {
         path: 'delivery',
@@ -101,10 +113,22 @@ export const asyncRoutes = [
         meta: { title: '发货通知', icon: 'guide', roles: ['sales', 'warehouse', 'admin'] }
       },
       {
+        path: 'logistics-companies',
+        component: () => import('@/views/sales/logisticsCompanies'),
+        name: 'LogisticsCompanies',
+        meta: { title: '物流公司', icon: 'el-icon-truck', roles: ['sales', 'warehouse', 'admin'] }
+      },
+      {
         path: 'customer-priority',
         component: () => import('@/views/sales/customerPriority'),
         name: 'CustomerPriority',
         meta: { title: '客户优先级', icon: 'star', roles: ['sales', 'production', 'admin'] }
+      },
+      {
+        path: 'customer-material-mapping',
+        component: () => import('@/views/sales/customerMaterialMapping'),
+        name: 'CustomerMaterialMapping',
+        meta: { title: '客户物料映射', icon: 'el-icon-connection', roles: ['sales', 'admin', 'finance'] }
       }
     ]
   },
@@ -156,13 +180,13 @@ export const asyncRoutes = [
     path: '/stock',
     component: Layout,
     name: 'Stock',
-    meta: { title: '库存管理', icon: 'component', roles: ['warehouse', 'admin', 'sales', 'production'] },
+    meta: { title: '库存管理', icon: 'component', roles: ['warehouse', 'admin', 'sales', 'production', 'finance', 'quality'] },
     children: [
       {
         path: 'index',
         component: () => import('@/views/stock/index'),
         name: 'StockList',
-        meta: { title: '库存查询', icon: 'table', roles: ['warehouse', 'admin', 'sales', 'production'] }
+        meta: { title: '库存查询', icon: 'table', roles: ['warehouse', 'admin', 'sales', 'production', 'finance', 'quality'] }
       },
       {
         path: 'inbound',
@@ -195,6 +219,12 @@ export const asyncRoutes = [
         meta: { title: '化工仓库', icon: 'el-icon-goods', roles: ['warehouse', 'admin', 'production'] }
       },
       {
+        path: 'chemical-requisition',
+        component: () => import('@/views/stock/chemical-requisition'),
+        name: 'ChemicalRequisition',
+        meta: { title: '化工请购', icon: 'el-icon-document-checked', roles: ['warehouse', 'admin', 'production'] }
+      },
+      {
         path: 'tape-safety-stock',
         component: () => import('@/views/production/safetyStock'),
         name: 'TapeSafetyStock',
@@ -218,7 +248,19 @@ export const asyncRoutes = [
         path: 'formula',
         component: () => import('@/views/rd/formula'),
         name: 'TapeFormula',
-        meta: { title: '配胶标准单', icon: 'documentation', roles: ['rd', 'admin', 'production'] }
+        meta: { title: '配胶标准', icon: 'documentation', roles: ['rd', 'admin', 'production'] }
+      },
+      {
+        path: 'raw-material',
+        component: () => import('@/views/rd/rawMaterial'),
+        name: 'TapeRawMaterial',
+        meta: { title: '原材料表', icon: 'table', roles: ['rd', 'admin'] }
+      },
+      {
+        path: 'carton-spec',
+        component: () => import('@/views/rd/cartonSpec'),
+        name: 'CartonSpec',
+        meta: { title: '全局纸箱规格维护', icon: 'el-icon-box', roles: ['rd', 'admin'] }
       }
     ]
   },
@@ -226,76 +268,181 @@ export const asyncRoutes = [
     path: '/production',
     component: Layout,
     name: 'Production',
-    meta: { title: '计划管理', icon: 'tree-table', roles: ['production', 'admin'] },
+    redirect: '/production/manual-schedule',
+    meta: { title: '计划管理', icon: 'tree-table', roles: ['production', 'admin', 'plan', 'scheduler'] },
     children: [
-      {
-        path: 'order-material-lock',
-        component: () => import('@/views/production/orderPreprocessing'),
-        name: 'OrderPreprocessing',
-        meta: { title: '计划列表', icon: 'document-copy', roles: ['production', 'admin'] }
-      },
-      {
-        path: 'pending-coating-pool',
-        component: () => import('@/views/production/pendingCoatingPool'),
-        name: 'PendingCoatingPool',
-        meta: { title: '待排程池', icon: 'time', roles: ['production', 'admin'] }
-      },
-      {
-        path: 'schedule-task',
-        component: () => import('@/views/production/scheduleTask'),
-        name: 'ScheduleTask',
-        meta: { title: '单表排程', icon: 'document', roles: ['production', 'admin'] }
-      },
+      // {
+      //   path: 'order-material-lock',
+      //   component: () => import('@/views/production/orderPreprocessing'),
+      //   name: 'OrderPreprocessing',
+      //   meta: { title: '计划列表', icon: 'document-copy', roles: ['production', 'admin'] }
+      // },
+      // {
+      //   path: 'pending-coating-pool',
+      //   component: () => import('@/views/production/pendingCoatingPool'),
+      //   name: 'PendingCoatingPool',
+      //   meta: { title: '待排程池', icon: 'time', roles: ['production', 'admin'] }
+      // },
+      // {
+      //   path: 'schedule-task',
+      //   component: () => import('@/views/production/scheduleTask'),
+      //   name: 'ScheduleTask',
+      //   meta: { title: '单表排程', icon: 'document', roles: ['production', 'admin'] }
+      // },
       {
         path: 'manual-schedule',
         component: () => import('@/views/production/manualSchedule'),
         name: 'ManualSchedule',
-        meta: { title: '手动排程', icon: 'edit', roles: ['production', 'admin'] }
+        meta: { title: '手动排程', icon: 'edit', roles: ['production', 'admin', 'plan', 'scheduler'] }
       },
       {
-        path: 'coating-schedule-board',
-        component: () => import('@/views/production/coatingScheduleBoard'),
-        name: 'CoatingScheduleBoard',
-        meta: { title: '排程看板', icon: 'dashboard', roles: ['production', 'admin'] }
+        path: 'personnel-schedule',
+        component: () => import('@/views/production/personnelSchedule'),
+        name: 'PersonnelSchedule',
+        meta: { title: '设备人员排单', icon: 'peoples', roles: ['production', 'admin', 'plan', 'scheduler'] }
       },
+      // {
+      //   path: 'coating-schedule-board',
+      //   component: () => import('@/views/production/coatingScheduleBoard'),
+      //   name: 'CoatingScheduleBoard',
+      //   meta: { title: '排程看板', icon: 'dashboard', roles: ['production', 'admin'] }
+      // },
+      // {
+      //   path: 'schedule-plan-board',
+      //   component: () => import('@/views/production/schedulePlanBoard'),
+      //   name: 'SchedulePlanBoard',
+      //   meta: { title: '日排程看板', icon: 'calendar', roles: ['production', 'admin'] }
+      // },
       {
         path: 'basic-info',
         component: () => import('@/components/ParentView'),
         name: 'BasicInfo',
         redirect: '/production/basic-info/equipment',
-        meta: { title: '基础信息', icon: 'setting', roles: ['production', 'admin'] },
+        meta: { title: '基础信息', icon: 'component', roles: ['production', 'admin', 'plan'] },
         children: [
           {
             path: 'equipment',
             component: () => import('@/views/production/equipment'),
             name: 'EquipmentManagement',
-            meta: { title: '设备管理', icon: 'component', roles: ['production', 'admin'] }
+            meta: { title: '设备管理', icon: 'component', roles: ['production', 'admin', 'plan'] }
+          },
+          {
+            path: 'equipment-schedule-config',
+            component: () => import('@/views/production/equipmentScheduleConfig'),
+            name: 'EquipmentScheduleConfig',
+            meta: { title: '设备排程状态', icon: 'calendar', roles: ['production', 'admin', 'plan'] }
+          },
+          {
+            path: 'equipment-daily-planning',
+            component: () => import('@/views/production/equipmentDailyPlanning'),
+            name: 'EquipmentDailyPlanning',
+            meta: { title: '设备日历排班', icon: 'date', roles: ['production', 'admin', 'plan'] }
+          },
+          {
+            path: 'urgent-preempt-config',
+            component: () => import('@/views/production/urgentPreemptConfig'),
+            name: 'UrgentPreemptConfig',
+            meta: { title: '急单抢占参数', icon: 'setting', roles: ['production', 'admin', 'plan'] }
           },
           {
             path: 'staff',
-            component: () => import('@/views/production/staff'),
-            name: 'StaffManagement',
-            meta: { title: '人员管理', icon: 'peoples', roles: ['production', 'admin'] }
+            redirect: '/administration/personnel',
+            name: 'ProductionStaffRedirect',
+            hidden: true,
+            meta: { title: '人员管理', icon: 'peoples', roles: ['production', 'admin', 'plan'] }
+          },
+          {
+            path: 'coating-process-params',
+            component: () => import('@/views/production/coatingProcessParams'),
+            name: 'CoatingProcessParams',
+            meta: { title: '涂布工艺参数', icon: 'edit', roles: ['production', 'admin', 'plan'] }
           },
           {
             path: 'process-params',
-            component: () => import('@/views/production/processParams'),
-            name: 'ProcessParams',
-            meta: { title: '工艺参数', icon: 'edit', roles: ['production', 'admin'] }
+            redirect: '/production/basic-info/coating-process-params',
+            hidden: true,
+            meta: { title: '工艺参数(旧版已下线)', roles: ['production', 'admin', 'plan'] }
+          },
+          {
+            path: 'rewinding-process-params',
+            component: () => import('@/views/production/rewindingProcessParams'),
+            name: 'RewindingProcessParams',
+            meta: { title: '复卷工艺参数', icon: 'edit', roles: ['production', 'admin', 'plan'] }
+          },
+          {
+            path: 'slitting-process-params',
+            component: () => import('@/views/production/slittingProcessParams'),
+            name: 'SlittingProcessParams',
+            meta: { title: '分切工艺参数', icon: 'edit', roles: ['production', 'admin', 'plan'] }
           },
           {
             path: 'safety-stock',
             component: () => import('@/views/production/safetyStock'),
             name: 'SafetyStock',
-            meta: { title: '安全库存', icon: 'chart', roles: ['production', 'admin', 'warehouse'] }
+            meta: { title: '安全库存', icon: 'chart', roles: ['production', 'admin', 'warehouse', 'plan'] }
+          },
+          {
+            path: 'print-config',
+            redirect: '/basic-data/print-config',
+            name: 'ProductionPrintConfigRedirect',
+            hidden: true,
+            meta: { title: '打印配置', icon: 'el-icon-printer', roles: ['production', 'admin', 'plan'] }
           }
         ]
+      }
+      // ,{
+      //   path: 'cost-tracking',
+      //   component: () => import('@/views/production/costTracking'),
+      //   name: 'CostTracking',
+      //   meta: { title: '成本追溯', icon: 'money', roles: ['production', 'admin', 'finance'] }
+      // }
+    ]
+  },
+  {
+    path: '/basic-data',
+    component: Layout,
+    name: 'BasicData',
+    redirect: '/basic-data/company-config',
+    meta: { title: '基本资料', icon: 'documentation', roles: ['production', 'admin'] },
+    children: [
+      {
+        path: 'company-config',
+        component: () => import('@/views/production/companyConfig'),
+        name: 'CompanyConfig',
+        meta: { title: '公司信息配置', icon: 'el-icon-office-building', roles: ['production', 'admin'] }
       },
       {
-        path: 'cost-tracking',
-        component: () => import('@/views/production/costTracking'),
-        name: 'CostTracking',
-        meta: { title: '成本追溯', icon: 'money', roles: ['production', 'admin', 'finance'] }
+        path: 'print-config',
+        component: () => import('@/views/production/printConfig'),
+        name: 'PrintConfig',
+        meta: { title: '打印配置', icon: 'el-icon-printer', roles: ['production', 'admin'] }
+      }
+    ]
+  },
+  {
+    path: '/administration',
+    component: Layout,
+    name: 'Administration',
+    redirect: '/administration/personnel',
+    meta: { title: '行政模块', icon: 'el-icon-office-building', roles: ['production', 'admin'] },
+    children: [
+      {
+        path: 'personnel',
+        component: () => import('@/views/production/staff'),
+        name: 'AdministrationPersonnel',
+        meta: { title: '人员管理', icon: 'peoples', roles: ['production', 'admin'] }
+      },
+      {
+        path: 'leave-management',
+        component: () => import('@/views/production/staff'),
+        name: 'AdministrationLeaveManagement',
+        meta: { title: '请假管理', icon: 'el-icon-date', roles: ['production', 'admin'] }
+      },
+      {
+        path: 'overtime-management',
+        component: () => import('@/views/production/staff'),
+        name: 'AdministrationOvertimeManagement',
+        meta: { title: '加班管理', icon: 'el-icon-time', roles: ['production', 'admin'] }
       }
     ]
   },
@@ -304,7 +451,7 @@ export const asyncRoutes = [
     component: Layout,
     name: 'ProductionManagementRoot',
     redirect: '/production-management/coating',
-    meta: { title: '生产管理', icon: 'el-icon-s-operation', roles: ['production', 'admin'] },
+    meta: { title: '生产管理', icon: 'el-icon-s-operation', roles: ['production', 'admin', 'packaging', 'packing'] },
     children: [
       {
         path: 'coating',
@@ -316,13 +463,19 @@ export const asyncRoutes = [
         path: 'rewinding',
         component: () => import('@/views/production/rewindingTasks'),
         name: 'ProductionManagementRewinding',
-        meta: { title: '复卷任务', icon: 'list', roles: ['production', 'admin'] }
+        meta: { title: '复卷任务', icon: 'list', roles: ['production', 'admin', 'packaging', 'packing'] }
       },
       {
         path: 'slitting',
         component: () => import('@/views/production/slittingTasks'),
         name: 'ProductionManagementSlitting',
-        meta: { title: '分切任务', icon: 'list', roles: ['production', 'admin'] }
+        meta: { title: '分切任务', icon: 'list', roles: ['production', 'admin', 'packaging', 'packing'] }
+      },
+      {
+        path: 'material-history',
+        component: () => import('@/views/production/materialIssueHistory'),
+        name: 'ProductionMaterialHistory',
+        meta: { title: '锁定/领退料追溯', icon: 'el-icon-document', roles: ['production', 'admin'] }
       }
     ]
   },
@@ -336,19 +489,19 @@ export const asyncRoutes = [
         path: 'incoming',
         component: () => import('@/views/quality/incoming'),
         name: 'IncomingInspection',
-        meta: { title: '来料检测', icon: 'el-icon-truck', roles: ['quality', 'admin', 'production'] }
+        meta: { title: '来料检验', icon: 'el-icon-truck', roles: ['quality', 'admin', 'production'] }
       },
       {
         path: 'process',
         component: () => import('@/views/quality/process'),
         name: 'ProcessInspection',
-        meta: { title: '过程检测', icon: 'el-icon-setting', roles: ['quality', 'admin', 'production'] }
+        meta: { title: '过程检验', icon: 'el-icon-setting', roles: ['quality', 'admin', 'production'] }
       },
       {
         path: 'outbound',
         component: () => import('@/views/quality/outbound'),
         name: 'OutboundInspection',
-        meta: { title: '出货检测', icon: 'el-icon-sell', roles: ['quality', 'admin', 'production'] }
+        meta: { title: '出货检验', icon: 'el-icon-sell', roles: ['quality', 'admin', 'production'] }
       },
       {
         path: 'report',

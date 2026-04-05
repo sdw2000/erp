@@ -23,7 +23,7 @@ router.beforeEach(async(to, from, next) => {
   if (hasToken) {
     if (to.path === '/login') {
       // if is logged in, redirect to the home page
-      next({ path: '/' })
+      next({ path: '/dashboard' })
       NProgress.done() // hack: https://github.com/PanJiaChen/vue-element-admin/pull/2939
     } else {
       // determine whether the user has obtained his permission roles through getInfo
@@ -51,7 +51,7 @@ router.beforeEach(async(to, from, next) => {
           // ensure we pass a plain string to Message.error to avoid Vue proxy warnings
           const errMsg = (error && error.message) || String(error) || 'Has Error'
           Message.error(errMsg)
-          next(`/login?redirect=${to.path}`)
+          next('/login')
           NProgress.done()
         }
       }
@@ -64,7 +64,7 @@ router.beforeEach(async(to, from, next) => {
       next()
     } else {
       // other pages that do not have permission to access are redirected to the login page.
-      next(`/login?redirect=${to.path}`)
+      next('/login')
       NProgress.done()
     }
   }
