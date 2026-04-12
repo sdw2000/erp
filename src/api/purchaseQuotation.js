@@ -37,3 +37,12 @@ export function deletePurchaseQuotation(id) {
     method: 'delete'
   })
 }
+
+export function initializePurchaseQuotationFromPriceSheet(data) {
+  return request({
+    url: '/purchase/quotations/initialize-from-price-sheet',
+    method: 'post',
+    data,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}

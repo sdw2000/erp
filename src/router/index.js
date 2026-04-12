@@ -136,43 +136,43 @@ export const asyncRoutes = [
     path: '/purchase',
     component: Layout,
     name: 'Purchase',
-    meta: { title: '采购管理', icon: 'el-icon-s-goods', roles: ['admin'] },
+    meta: { title: '采购管理', icon: 'el-icon-s-goods', roles: ['admin', 'purchase'] },
     children: [
       {
         path: 'orders',
         component: () => import('@/views/purchase/orders'),
         name: 'PurchaseOrders',
-        meta: { title: '采购订单', icon: 'list', roles: ['admin'] }
+        meta: { title: '采购订单', icon: 'list', roles: ['admin', 'purchase'] }
       },
       {
         path: 'suppliers',
         component: () => import('@/views/purchase/suppliers'),
         name: 'PurchaseSuppliers',
-        meta: { title: '供应商管理', icon: 'user', roles: ['admin'] }
+        meta: { title: '供应商管理', icon: 'user', roles: ['admin', 'purchase'] }
       },
       {
         path: 'supplier-priority',
         component: () => import('@/views/purchase/supplierPriority'),
         name: 'PurchaseSupplierPriority',
-        meta: { title: '供应商优先级', icon: 'star', roles: ['admin'] }
+        meta: { title: '供应商优先级', icon: 'star', roles: ['admin', 'purchase'] }
       },
       {
         path: 'quotations',
         component: () => import('@/views/purchase/quotations'),
         name: 'PurchaseQuotations',
-        meta: { title: '采购报价', icon: 'clipboard', roles: ['admin'] }
+        meta: { title: '采购报价', icon: 'clipboard', roles: ['admin', 'purchase'] }
       },
       {
         path: 'samples',
         component: () => import('@/views/purchase/samples'),
         name: 'PurchaseSamples',
-        meta: { title: '送样记录', icon: 'guide', roles: ['admin'] }
+        meta: { title: '送样记录', icon: 'guide', roles: ['admin', 'purchase'] }
       },
       {
         path: 'receipts',
         component: () => import('@/views/purchase/receipts'),
         name: 'PurchaseReceipts',
-        meta: { title: '收货通知', icon: 'el-icon-s-claim', roles: ['admin'] }
+        meta: { title: '收货通知', icon: 'el-icon-s-claim', roles: ['admin', 'purchase'] }
       }
     ]
   },
@@ -180,8 +180,15 @@ export const asyncRoutes = [
     path: '/stock',
     component: Layout,
     name: 'Stock',
+    redirect: '/stock/raw-material-hub',
     meta: { title: '库存管理', icon: 'component', roles: ['warehouse', 'admin', 'sales', 'production', 'finance', 'quality'] },
     children: [
+      {
+        path: 'raw-material-hub',
+        component: () => import('@/views/stock/raw-material-hub'),
+        name: 'RawMaterialHub',
+        meta: { title: '原材料总仓', icon: 'el-icon-box', roles: ['warehouse', 'admin', 'production', 'finance', 'quality'] }
+      },
       {
         path: 'index',
         component: () => import('@/views/stock/index'),
@@ -210,19 +217,19 @@ export const asyncRoutes = [
         path: 'film-stock',
         component: () => import('@/views/stock/film-stock'),
         name: 'FilmStock',
-        meta: { title: '薄膜仓库', icon: 'el-icon-files', roles: ['warehouse', 'admin', 'production'] }
+        meta: { title: '薄膜仓库', icon: 'el-icon-files', roles: ['admin'] }
       },
       {
         path: 'chemical-stock',
         component: () => import('@/views/stock/chemical-stock'),
         name: 'ChemicalStock',
-        meta: { title: '化工仓库', icon: 'el-icon-goods', roles: ['warehouse', 'admin', 'production'] }
+        meta: { title: '化工仓库', icon: 'el-icon-goods', roles: ['admin'] }
       },
       {
         path: 'chemical-requisition',
         component: () => import('@/views/stock/chemical-requisition'),
         name: 'ChemicalRequisition',
-        meta: { title: '化工请购', icon: 'el-icon-document-checked', roles: ['warehouse', 'admin', 'production'] }
+        meta: { title: '化工请购', icon: 'el-icon-document-checked', roles: ['admin'] }
       },
       {
         path: 'tape-safety-stock',
@@ -451,13 +458,13 @@ export const asyncRoutes = [
     component: Layout,
     name: 'ProductionManagementRoot',
     redirect: '/production-management/coating',
-    meta: { title: '生产管理', icon: 'el-icon-s-operation', roles: ['production', 'admin', 'packaging', 'packing'] },
+    meta: { title: '生产管理', icon: 'el-icon-s-operation', roles: ['production', 'admin', 'packaging', 'packing', 'coating'] },
     children: [
       {
         path: 'coating',
         component: () => import('@/views/production/coatingTasks'),
         name: 'ProductionManagementCoating',
-        meta: { title: '涂布任务', icon: 'list', roles: ['production', 'admin'] }
+        meta: { title: '涂布任务', icon: 'list', roles: ['production', 'admin', 'coating'] }
       },
       {
         path: 'rewinding',

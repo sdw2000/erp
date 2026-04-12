@@ -176,7 +176,7 @@
             </el-row>
             <el-row :gutter="20">
               <el-col :span="12">
-                <el-form-item label="销售">
+                <el-form-item label="销售" prop="salesUserId">
                   <el-select v-model="formData.salesUserId" placeholder="请选择销售" clearable filterable style="width: 100%">
                     <el-option v-for="user in users" :key="user.id" :label="user.realName || user.username" :value="user.id" />
                   </el-select>
@@ -184,7 +184,7 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="跟单员">
+                <el-form-item label="跟单员" prop="documentationPersonUserId">
                   <el-select v-model="formData.documentationPersonUserId" placeholder="请选择跟单员" clearable filterable style="width: 100%">
                     <el-option v-for="user in users" :key="user.id" :label="user.realName || user.username" :value="user.id" />
                   </el-select>
@@ -259,6 +259,22 @@
                 <el-form-item label="税率">
                   <el-input-number v-model="formData.taxRate" :min="0" :max="100" :precision="2" style="width: 100%" />
                   <span class="form-tip">单位：%</span>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="默认对账日期">
+                  <el-input-number v-model="formData.defaultReconciliationDay" :min="1" :max="31" :precision="0" style="width: 100%" />
+                  <span class="form-tip">单位：日（例如 25 表示按每月25日对账）</span>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="对账依据">
+                  <el-select v-model="formData.reconciliationBasis" placeholder="请选择" style="width: 100%">
+                    <el-option label="按已发货对账" value="SHIPPED" />
+                    <el-option label="按已收货对账" value="RECEIVED" />
+                  </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="12">
@@ -484,6 +500,11 @@
                   {{ scope.row.taxRate ? scope.row.taxRate + '%' : '-' }}
                 </template>
               </el-table-column>
+              <el-table-column prop="reconciliationBasis" label="对账依据" width="140">
+                <template slot-scope="scope">
+                  {{ scope.row.reconciliationBasis === 'RECEIVED' ? '按已收货' : '按已发货' }}
+                </template>
+              </el-table-column>
               <el-table-column prop="taxNumber" label="税号" min-width="140" />
               <el-table-column prop="bankName" label="开户银行" min-width="160" />
               <el-table-column prop="bankAccount" label="银行账号" min-width="180" />
@@ -700,6 +721,8 @@ export default {
         creditLimit: 0,
         paymentTerms: '现款现货',
         taxRate: 13,
+        defaultReconciliationDay: 25,
+        reconciliationBasis: 'SHIPPED',
         taxNumber: '',
         bankName: '',
         bankAccount: '',
@@ -717,7 +740,9 @@ export default {
           { pattern: /^[A-Z]{2,5}$/, message: '请输入2-5个大写字母', trigger: 'blur' }
         ],
         customerType: [{ required: true, message: '请选择客户类型', trigger: 'change' }],
-        customerLevel: [{ required: true, message: '请选择客户等级', trigger: 'change' }]
+        customerLevel: [{ required: true, message: '请选择客户等级', trigger: 'change' }],
+        salesUserId: [{ required: true, message: '请选择业务人员', trigger: 'change' }],
+        documentationPersonUserId: [{ required: true, message: '请选择跟单员', trigger: 'change' }]
       },
       detailData: {
         contacts: []
@@ -835,6 +860,7 @@ export default {
         const res = await getCustomerDetail(row.id)
         if (res.code === 20000 || res.code === 200) {
           this.formData = { ...res.data }
+          this.formData.reconciliationBasis = this.normalizeReconciliationBasis(this.formData.reconciliationBasis)
           if (!this.formData.contacts || this.formData.contacts.length === 0) {
             this.formData.contacts = [this.createEmptyContact()]
           } else {
@@ -1027,6 +1053,10 @@ export default {
       if (!hasPrimary) contacts[0].isPrimary = 1
       if (!hasReceiver) contacts[0].isReceiver = 1
     },
+    normalizeReconciliationBasis(value) {
+      const basis = String(value || '').trim().toUpperCase()
+      return basis === 'RECEIVED' ? 'RECEIVED' : 'SHIPPED'
+    },
     // 重置表单
     resetForm() {
       this.formData = {
@@ -1049,6 +1079,8 @@ export default {
         creditLimit: 0,
         paymentTerms: '现款现货',
         taxRate: 13,
+        defaultReconciliationDay: 25,
+        reconciliationBasis: 'SHIPPED',
         taxNumber: '',
         bankName: '',
         bankAccount: '',
@@ -1345,17 +1377,6 @@ export default {
 .customer-container ::v-deep .search-form .el-select .el-input__inner {
   height: 32px;
   line-height: 32px;
-}
-
-.customer-container .customer-table ::v-deep .el-table__header,
-.customer-container .customer-table ::v-deep .el-table__body {
-  table-layout: fixed !important;
-  width: 100% !important;
-}
-
-.customer-container .customer-table ::v-deep .el-table__header-wrapper,
-.customer-container .customer-table ::v-deep .el-table__body-wrapper {
-  overflow-x: auto;
 }
 
 .customer-container .customer-table ::v-deep .el-table__header th .cell,

@@ -249,21 +249,6 @@ aside {
   line-height: 1.25;
 }
 
-.el-table__header,
-.el-table__body {
-  table-layout: auto;
-}
-
-.el-table .el-table__body-wrapper,
-.el-table .el-table__header-wrapper,
-.el-table .el-table__fixed-body-wrapper {
-  overflow-x: hidden;
-}
-
-.el-table .el-table__body-wrapper {
-  overflow-x: auto;
-}
-
 /* 操作列按钮紧凑化（全局） */
 .el-table td .el-button--mini,
 .el-table td .el-button--small {

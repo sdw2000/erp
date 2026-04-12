@@ -1,5 +1,17 @@
 import request from '@/utils/request'
 
+// 原材料字典列表（兼容旧页面调用）
+export function getRawMaterialList(params = {}) {
+  return request({
+    url: '/api/tape-formula/raw-materials',
+    method: 'get',
+    params
+  })
+}
+
+// 别名：部分页面使用 listRawMaterials 命名
+export const listRawMaterials = getRawMaterialList
+
 // 原材料分页查询
 export function getRawMaterialPage(params) {
   return request({
@@ -73,5 +85,12 @@ export function importRawMaterials(file) {
     headers: {
       'Content-Type': 'multipart/form-data'
     }
+  })
+}
+
+export function initializeRawMaterials() {
+  return request({
+    url: '/api/tape-formula/raw-material/initialize',
+    method: 'post'
   })
 }

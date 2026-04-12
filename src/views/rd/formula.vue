@@ -157,10 +157,42 @@
 
         <!-- 原料配比 -->
         <el-divider content-position="left">原料配比</el-divider>
+        <el-row :gutter="20" style="margin-bottom: 10px;">
+          <el-col :span="8">
+            <el-form-item label="原料类别">
+              <el-select v-model="rawMaterialCategory" style="width:100%" placeholder="请选择">
+                <el-option label="化工物料" value="chemical" />
+                <el-option label="薄膜" value="film" />
+                <el-option label="全部" value="" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="16">
+            <div style="line-height: 32px; color: #909399;">原料列表会按类别过滤，胶水配方建议选择“化工物料”。</div>
+          </el-col>
+        </el-row>
         <el-table :data="form.items" border size="small" style="margin-bottom: 10px">
           <el-table-column label="物料代码" width="150">
             <template slot-scope="scope">
-              <el-input v-model="scope.row.materialCode" size="small" placeholder="物料代码" />
+              <el-select
+                v-model="scope.row.materialCode"
+                filterable
+                allow-create
+                placeholder="选择或输入"
+                size="small"
+                style="width:100%"
+                @change="onRawMaterialChange(scope.row, $event)"
+              >
+                <el-option
+                  v-for="item in filteredRawMaterialOptions()"
+                  :key="item.id"
+                  :label="item.materialCode"
+                  :value="item.materialCode"
+                >
+                  <span style="float:left">{{ item.materialCode }}</span>
+                  <span style="float:right; color:#8492a6; font-size:12px">{{ item.materialName }} / {{ formatMaterialCategory(item.materialCategory) }}</span>
+                </el-option>
+              </el-select>
             </template>
           </el-table-column>
           <el-table-column label="物料名称" width="120">
@@ -320,6 +352,7 @@ import {
   getFormulaList, getFormulaById, createFormula, updateFormula, deleteFormula, exportFormula,
   downloadTemplate, importFormula, exportAllFormula
 } from '@/api/tapeFormula'
+import { getRawMaterialList } from '@/api/tapeRawMaterial'
 
 export default {
   name: 'TapeFormulaManagement',
@@ -330,6 +363,8 @@ export default {
         productName: '',
         glueModel: ''
       },
+      rawMaterials: [],
+      rawMaterialCategory: 'chemical',
       list: [],
       loading: false,
       pagination: { page: 1, size: 20, total: 0 },
@@ -351,6 +386,7 @@ export default {
   },
   created() {
     this.fetchData()
+    this.fetchRawMaterials()
   },
   methods: {
     $canEdit() {
@@ -359,6 +395,25 @@ export default {
     },
     indexMethod(index) {
       return (this.pagination.page - 1) * this.pagination.size + index + 1
+    },
+    async fetchRawMaterials() {
+      try {
+        const res = await getRawMaterialList()
+        if (res.code === 20000) {
+          this.rawMaterials = res.data || []
+        }
+      } catch (e) {
+        console.error('获取原料字典失败', e)
+      }
+    },
+    formatMaterialCategory(category) {
+      const map = { film: '薄膜', chemical: '化工物料' }
+      return map[category] || category || '-'
+    },
+    filteredRawMaterialOptions() {
+      const list = this.rawMaterials || []
+      if (!this.rawMaterialCategory) return list
+      return list.filter(item => item.materialCategory === this.rawMaterialCategory)
     },
     getEmptyForm() {
       return {
@@ -382,6 +437,15 @@ export default {
         status: 1,
         items: []
       }
+    },
+    inferRawMaterialCategory(form) {
+      const text = [form && form.materialCode, form && form.productName, form && form.glueModel, form && form.formulaNo]
+        .filter(Boolean)
+        .join(' ')
+      if (/薄膜|film|PET|BOPP|CPP|离型膜|基材|卷材/i.test(text)) {
+        return 'film'
+      }
+      return 'chemical'
     },
     async fetchData() {
       this.loading = true
@@ -421,6 +485,7 @@ export default {
     handleAdd() {
       this.dialogTitle = '新增配方'
       this.form = this.getEmptyForm()
+      this.rawMaterialCategory = this.inferRawMaterialCategory(this.form)
       this.dialogVisible = true
       this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
     },
@@ -432,6 +497,7 @@ export default {
         if (res.code === 20000) {
           this.form = { ...res.data }
           if (!this.form.items) this.form.items = []
+          this.rawMaterialCategory = this.inferRawMaterialCategory(this.form)
           this.dialogVisible = true
         }
       } catch (e) {
@@ -519,6 +585,12 @@ export default {
         ratio: null,
         remark: ''
       })
+    },
+    onRawMaterialChange(row, code) {
+      const matched = (this.rawMaterials || []).find(item => item.materialCode === code)
+      if (matched) {
+        row.materialName = matched.materialName || row.materialName
+      }
     },
     removeItem(index) {
       this.form.items.splice(index, 1)

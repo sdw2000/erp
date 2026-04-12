@@ -37,3 +37,31 @@ export function getSupplierDetail(id) {
     method: 'get'
   })
 }
+
+export function downloadSupplierTemplate() {
+  return request({
+    url: '/purchase/suppliers/template',
+    method: 'get',
+    responseType: 'blob'
+  })
+}
+
+export function importSuppliers(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: '/purchase/suppliers/import',
+    method: 'post',
+    data: formData,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
+export function exportSuppliers(params) {
+  return request({
+    url: '/purchase/suppliers/export',
+    method: 'get',
+    params,
+    responseType: 'blob'
+  })
+}

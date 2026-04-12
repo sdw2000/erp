@@ -68,13 +68,16 @@ const actions = {
 
         const { roles, name, realName, avatar, introduction } = data
         const workGroup = data.workGroup || data.groupName || data.teamName || data.classGroup || data.shiftGroup || data.deptName || ''
+        const normalizedRoles = (roles || [])
+          .map(role => String(role || '').trim().toLowerCase())
+          .filter(Boolean)
 
         // roles must be a non-empty array
-        if (!roles || roles.length <= 0) {
+        if (!normalizedRoles || normalizedRoles.length <= 0) {
           reject('getInfo: roles must be a non-null array!')
         }
 
-        commit('SET_ROLES', roles)
+        commit('SET_ROLES', normalizedRoles)
         commit('SET_NAME', name)
         commit('SET_REAL_NAME', realName || '')
         commit('SET_WORK_GROUP', workGroup || '')

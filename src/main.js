@@ -22,6 +22,7 @@ import './utils/error-log' // error log
 
 import * as filters from './filters' // global filters
 import permissionMixin from './mixins/permission' // 权限检查混入
+import globalElTableLayoutMixin from './mixins/globalElTableLayout' // 全局表格自动重排
 
 /**
  * If you don't want to use mock-server
@@ -57,6 +58,8 @@ Object.keys(filters).forEach(key => {
 
 // 全局注册权限检查混入
 Vue.mixin(permissionMixin)
+// 全局注册 el-table 自动重排（统一修复表头/表体错位）
+Vue.mixin(globalElTableLayoutMixin)
 
 // 屏蔽 ResizeObserver 的无害告警（开发态常见噪声）
 const isResizeObserverNoise = msg => {

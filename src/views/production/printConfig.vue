@@ -303,6 +303,7 @@
             <span>测试打印</span>
             <div>
               <el-button size="mini" :loading="lastPrintLoading" @click="loadLastPrintRequest">查看最近请求</el-button>
+              <el-button size="mini" :loading="previewLoading" @click="handleTemplatePreview">模板预览</el-button>
               <el-button size="mini" type="primary" :loading="testPrinting" @click="handleTestPrint">发送测试打印</el-button>
             </div>
           </div>
@@ -311,7 +312,7 @@
             <el-row :gutter="16">
               <el-col :span="8">
                 <el-form-item label="模板键">
-                  <el-select v-model="testForm.template" filterable allow-create default-first-option placeholder="选择模板键" style="width: 100%;">
+                  <el-select v-model="testForm.template" filterable allow-create default-first-option placeholder="选择模板键" style="width: 100%;" @change="handleTestTemplateChange">
                     <el-option v-for="item in gatewayTemplates" :key="item.templateKey" :label="item.templateKey" :value="item.templateKey" />
                   </el-select>
                 </el-form-item>
@@ -343,16 +344,68 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <el-row :gutter="16" style="margin-bottom: 24px;">
+      <el-col :span="24">
+        <el-card shadow="never">
+          <div slot="header" class="card-header">
+            <span>模板预览示例数据</span>
+            <div>
+              <el-button size="mini" @click="resetTemplatePreviewConfig">恢复默认示例</el-button>
+              <el-button size="mini" type="primary" @click="saveTemplatePreviewConfig">保存示例配置</el-button>
+            </div>
+          </div>
+
+          <el-alert
+            title="这里保存的是模板预览/测试打印使用的示例数据，按模板键维护即可。预览时会优先使用这里的配置。"
+            type="info"
+            :closable="false"
+            style="margin-bottom: 12px;"
+          />
+
+          <el-input
+            v-model="previewDataText"
+            type="textarea"
+            :rows="14"
+            placeholder='例如：{ "COATING_ROLL_LABEL": { "materialCode": "..." } }'
+          />
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-dialog :visible.sync="previewDialogVisible" :title="previewDialogTitle" width="80%" top="4vh">
+      <div v-if="previewPages.length" style="max-height: 70vh; overflow: auto;">
+        <div v-for="page in previewPages" :key="page.fileName" style="margin-bottom: 24px;">
+          <div style="margin-bottom: 8px; color: #606266;">第 {{ page.pageNumber }} 页：{{ page.fileName }}</div>
+          <el-image
+            :src="page.dataUrl"
+            fit="contain"
+            style="width: 100%; min-height: 320px; border: 1px solid #ebeef5; background: #fafafa;"
+            :preview-src-list="previewPages.map(item => item.dataUrl)"
+          />
+        </div>
+      </div>
+      <div v-else style="color: #909399; text-align: center; padding: 24px 0;">暂无预览图片</div>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="previewDialogVisible = false">关闭</el-button>
+      </span>
+    </el-dialog>
   </div>
 </template>
 
 <script>
-import { batchSaveLabelPrintConfigs, getLabelPrintConfigList } from '@/api/labelPrintConfig'
+import {
+  batchSaveLabelPrintConfigs,
+  getLabelPrintConfigList,
+  getTemplatePreviewSamples,
+  saveTemplatePreviewSamples
+} from '@/api/labelPrintConfig'
 import {
   fetchGatewayConfig,
   fetchGatewayDashboard,
   fetchGatewayLastRequest,
   fetchGatewayPrinters,
+  fetchGatewayPreview,
   getBarTenderConfig,
   getTemplateRules,
   LABEL_PRINT_DEFAULT_BIZ_TYPE,
@@ -502,6 +555,79 @@ const DEFAULT_TEMPLATE_PATH_HINT = {
   SLITTING_PALLET_LABEL: 'D:\\MES\\BarTender\\Templates\\rolling.btw'
 }
 
+const TEMPLATE_PREVIEW_DATA_STORAGE_KEY = 'MES_PRINT_TEMPLATE_PREVIEW_DATA'
+
+const TEMPLATE_PREVIEW_DATA_MAP = {
+  COATING_ROLL_LABEL: {
+    materialCode: 'COAT-TEST-001',
+    materialName: '涂布标签示例',
+    productName: '涂布卷标签',
+    customerName: '示例客户A',
+    batchNo: 'BAT-20260408-A',
+    width: 1000,
+    length: 500,
+    rollNo: 'COAT-R001',
+    spec: '100*500*1000'
+  },
+  COATING_INBOUND_SHEET: {
+    materialCode: 'COAT-IN-001',
+    materialName: '涂布入库单',
+    productName: '涂布入库标签',
+    customerName: '示例客户A',
+    batchNo: 'IN-20260408-A',
+    rollNo: 'IN-R001',
+    spec: '入库/待检',
+    warehouse: '成品仓'
+  },
+  REWINDING_ROLL_LABEL: {
+    materialCode: 'REW-TEST-001',
+    materialName: '复卷标签示例',
+    productName: '复卷卷标签',
+    batchNo: 'RW-20260408-A',
+    rollCount: 8,
+    innerDiameter: 76,
+    outerDiameter: 508,
+    rollNo: 'RW-R001',
+    spec: '76/508'
+  },
+  SLITTING_CORE_LABEL: {
+    materialCode: 'SLIT-CORE-001',
+    materialName: '分切芯标签',
+    cartonSpec: '430×320×300',
+    cartonNo: 'CT-CORE-001',
+    slittingQty: 18,
+    palletNo: 'PLT-CORE-001',
+    spec: '芯卷'
+  },
+  SLITTING_INNER_LABEL: {
+    materialCode: 'SLIT-INNER-001',
+    materialName: '分切内标签',
+    cartonSpec: '500×380×350',
+    cartonNo: 'CT-INNER-001',
+    slittingQty: 12,
+    palletNo: 'PLT-INNER-001',
+    spec: '内标签'
+  },
+  SLITTING_OUTER_LABEL: {
+    materialCode: 'SLIT-OUTER-001',
+    materialName: '分切外标签',
+    cartonSpec: '600×400×400',
+    cartonNo: 'CT-OUTER-001',
+    slittingQty: 10,
+    palletNo: 'PLT-OUTER-001',
+    spec: '外标签'
+  },
+  SLITTING_PALLET_LABEL: {
+    materialCode: 'SLIT-PLT-001',
+    materialName: '分切托盘标签',
+    cartonSpec: '600×400×400',
+    cartonNo: 'CT-PLT-001',
+    slittingQty: 1,
+    palletNo: 'PLT-001',
+    spec: '托盘'
+  }
+}
+
 export default {
   name: 'PrintConfig',
   data() {
@@ -534,6 +660,11 @@ export default {
       autoSaveAfterImport: false,
       printerLoading: false,
       testPrinting: false,
+      previewLoading: false,
+      previewDialogVisible: false,
+      previewDialogTitle: '模板打印预览',
+      previewPages: [],
+      previewDataText: JSON.stringify(TEMPLATE_PREVIEW_DATA_MAP, null, 2),
       lastPrintLoading: false,
       lastPrintText: '',
       testForm: {
@@ -588,9 +719,72 @@ export default {
   },
   created() {
     this.applyRouteSceneContext()
+    this.loadTemplatePreviewConfig()
     this.loadInitialData()
   },
   methods: {
+    async loadTemplatePreviewConfig() {
+      try {
+        const res = await getTemplatePreviewSamples()
+        const payload = res && res.data && typeof res.data === 'object' ? res.data : {}
+        if (payload && Object.keys(payload).length) {
+          this.previewDataText = JSON.stringify(payload, null, 2)
+          window.localStorage.setItem(TEMPLATE_PREVIEW_DATA_STORAGE_KEY, JSON.stringify(payload))
+          return
+        }
+      } catch (error) {
+        // fallback below
+      }
+      try {
+        const raw = window.localStorage.getItem(TEMPLATE_PREVIEW_DATA_STORAGE_KEY)
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          this.previewDataText = JSON.stringify(parsed, null, 2)
+          try {
+            await saveTemplatePreviewSamples(parsed || {})
+          } catch (syncError) {
+            // keep local cache only
+          }
+          return
+        }
+      } catch (error) {
+        // fallback to default below
+      }
+      this.previewDataText = JSON.stringify(TEMPLATE_PREVIEW_DATA_MAP, null, 2)
+    },
+    async saveTemplatePreviewConfig() {
+      try {
+        const parsed = this.previewDataText ? JSON.parse(this.previewDataText) : {}
+        try {
+          await saveTemplatePreviewSamples(parsed || {})
+        } catch (syncError) {
+          this.$message.warning('已保存本地示例配置，但同步到服务器失败')
+        }
+        window.localStorage.setItem(TEMPLATE_PREVIEW_DATA_STORAGE_KEY, JSON.stringify(parsed || {}))
+        this.previewDataText = JSON.stringify(parsed || {}, null, 2)
+        this.$message.success('模板预览示例数据已保存')
+      } catch (error) {
+        this.$message.error('示例配置不是合法 JSON')
+      }
+    },
+    async resetTemplatePreviewConfig() {
+      this.previewDataText = JSON.stringify(TEMPLATE_PREVIEW_DATA_MAP, null, 2)
+      try {
+        await saveTemplatePreviewSamples(TEMPLATE_PREVIEW_DATA_MAP)
+      } catch (error) {
+        this.$message.warning('已恢复默认示例配置，但同步到服务器失败')
+      }
+      window.localStorage.removeItem(TEMPLATE_PREVIEW_DATA_STORAGE_KEY)
+      this.$message.success('已恢复默认示例配置')
+    },
+    getTemplatePreviewOverrides() {
+      try {
+        const parsed = this.previewDataText ? JSON.parse(this.previewDataText) : {}
+        return parsed && typeof parsed === 'object' ? parsed : {}
+      } catch (error) {
+        return {}
+      }
+    },
     async downloadClientDeploy(fileName) {
       const name = String(fileName || '').trim()
       if (!name) return
@@ -740,7 +934,7 @@ export default {
     async loadRuleConfig() {
       this.ruleLoading = true
       try {
-        const res = await getLabelPrintConfigList({ isActive: 1 })
+        const res = await getLabelPrintConfigList({ isActive: 1, scope: 'label-rule' })
         const list = Array.isArray(res && res.data) ? res.data : []
         const normalized = normalizeRulesFromRecords(list)
 
@@ -1172,7 +1366,7 @@ export default {
 
       this.ruleSaving = true
       try {
-        await batchSaveLabelPrintConfigs(payload.records)
+        await batchSaveLabelPrintConfigs(payload.records, { scope: 'label-rule' })
         saveTemplateRules({ byBizType: payload.byBizType, byCustomer: payload.byCustomer })
         await loadTemplateRules(true)
         this.$message.success('标签打印规则已保存到数据库')
@@ -1264,6 +1458,73 @@ export default {
       this.customerBizRuleRows.splice(index, 1)
       if (!this.customerBizRuleRows.length) this.customerBizRuleRows.push(createCustomerBizRuleRow())
     },
+    buildPreviewDataForTemplate(template, baseData = {}) {
+      const code = String(template || '').trim().toUpperCase()
+      const defaultData = {
+        materialCode: 'TEST-001',
+        materialName: '测试标签',
+        spec: '100*500*1000',
+        rollNo: 'ROLL-TEST-001'
+      }
+
+      const previewOverrides = this.getTemplatePreviewOverrides()
+      if (previewOverrides[code]) {
+        return {
+          ...defaultData,
+          ...TEMPLATE_PREVIEW_DATA_MAP[code],
+          ...previewOverrides[code],
+          ...baseData
+        }
+      }
+
+      if (TEMPLATE_PREVIEW_DATA_MAP[code]) {
+        return {
+          ...defaultData,
+          ...TEMPLATE_PREVIEW_DATA_MAP[code],
+          ...baseData
+        }
+      }
+
+      if (code.startsWith('COATING_')) {
+        return {
+          ...defaultData,
+          productName: '涂布标签示例',
+          customerName: '示例客户',
+          width: 1000,
+          length: 500,
+          batchNo: 'BAT-20260408',
+          ...baseData
+        }
+      }
+
+      if (code.startsWith('REWINDING_')) {
+        return {
+          ...defaultData,
+          productName: '复卷标签示例',
+          rollCount: 8,
+          innerDiameter: 76,
+          outerDiameter: 508,
+          batchNo: 'RW-20260408',
+          ...baseData
+        }
+      }
+
+      if (code.startsWith('SLITTING_')) {
+        return {
+          ...defaultData,
+          cartonSpec: '430×320×300',
+          cartonNo: 'CT-20260408',
+          slittingQty: 18,
+          palletNo: 'PLT-001',
+          ...baseData
+        }
+      }
+
+      return {
+        ...defaultData,
+        ...baseData
+      }
+    },
     async handleTestPrint() {
       const template = String(this.testForm.template || '').trim()
       if (!template) {
@@ -1281,6 +1542,7 @@ export default {
 
       this.testPrinting = true
       try {
+        data = this.buildPreviewDataForTemplate(template, data)
         await printByTemplate(template, data, {
           copies: Number(this.testForm.copies || 1),
           jobName: this.testForm.jobName || `${template}_${Date.now()}`
@@ -1291,6 +1553,59 @@ export default {
       } finally {
         this.testPrinting = false
       }
+    },
+    async handleTemplatePreview() {
+      const template = String(this.testForm.template || '').trim()
+      if (!template) {
+        this.$message.warning('请先选择模板键')
+        return
+      }
+
+      let data = {}
+      try {
+        data = this.testForm.dataText ? JSON.parse(this.testForm.dataText) : {}
+      } catch (error) {
+        this.$message.error('测试数据不是合法 JSON')
+        return
+      }
+
+      this.previewLoading = true
+      try {
+        data = this.buildPreviewDataForTemplate(template, data)
+        const res = await fetchGatewayPreview({
+          template,
+          data,
+          copies: Number(this.testForm.copies || 1),
+          jobName: this.testForm.jobName || `${template}_${Date.now()}`
+        }, this.localConfig)
+
+        const pages = Array.isArray(res.pages) ? res.pages : []
+        if (!pages.length) {
+          this.$message.warning('未生成预览图片')
+          return
+        }
+
+        this.previewPages = pages
+        this.previewDialogTitle = `模板打印预览 - ${template}`
+        this.previewDialogVisible = true
+      } catch (error) {
+        this.$message.error(error.message || '模板预览失败')
+      } finally {
+        this.previewLoading = false
+      }
+    },
+    handleTestTemplateChange(template) {
+      const normalized = String(template || '').trim()
+      if (!normalized) return
+      const currentData = this.testForm.dataText ? (() => {
+        try {
+          return JSON.parse(this.testForm.dataText)
+        } catch (error) {
+          return {}
+        }
+      })() : {}
+      const nextData = this.buildPreviewDataForTemplate(normalized, currentData)
+      this.testForm.dataText = JSON.stringify(nextData, null, 2)
     },
     async loadLastPrintRequest() {
       this.lastPrintLoading = true

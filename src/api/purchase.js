@@ -39,6 +39,13 @@ export function getPurchaseOrderDetail(orderNo) {
   })
 }
 
+export function getPurchaseOrderReconciliation(orderNo) {
+  return request({
+    url: `/purchase/orders/${orderNo}/reconciliation`,
+    method: 'get'
+  })
+}
+
 export function generatePurchaseOrderNo() {
   return request({
     url: '/purchase/orders/generate-no',

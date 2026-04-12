@@ -12,6 +12,17 @@ export function getPendingOrders(params) {
 }
 
 /**
+ * 获取待排程欠料总平米数
+ */
+export function getPendingOrdersOweArea(params) {
+  return request({
+    url: '/schedule/manual/pending-orders/owe-area',
+    method: 'get',
+    params
+  })
+}
+
+/**
  * 获取待排程订单列表（不分页）
  */
 export function getPendingOrdersAll(params) {

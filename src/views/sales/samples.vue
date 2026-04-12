@@ -162,14 +162,15 @@
               <el-select
                 v-model="editForm.customerId"
                 filterable
+                :filter-method="handleCustomerFilter"
                 placeholder="选择客户"
                 style="width: 100%"
                 @change="onCustomerChange"
               >
                 <el-option
-                  v-for="customer in customers"
+                  v-for="customer in filteredCustomers"
                   :key="customer.id"
-                  :label="customer.name"
+                  :label="formatCustomerOptionLabel(customer)"
                   :value="customer.id"
                 />
               </el-select>
@@ -248,6 +249,7 @@
                 <el-select
                   v-model="scope.row.materialCode"
                   filterable
+                  :filter-method="handleMaterialFilter"
                   allow-create
                   size="small"
                   placeholder="选择或输入"
@@ -256,7 +258,7 @@
                   @change="onMaterialCodeChange(scope.row, $event)"
                 >
                   <el-option
-                    v-for="spec in specs"
+                    v-for="spec in filteredSpecs"
                     :key="spec.materialCode"
                     :label="spec.materialCode"
                     :value="spec.materialCode"
@@ -496,6 +498,8 @@ export default {
       customers: [],
       customerContacts: [],
       specs: [],
+      customerSearchKeyword: '',
+      materialSearchKeyword: '',
       queryParams: {
         customerName: '',
         status: '',
@@ -550,7 +554,79 @@ export default {
     this.fetchCustomers()
     this.fetchSpecs()
   },
+  computed: {
+    filteredCustomers() {
+      const keyword = this.customerSearchKeyword
+      if (!keyword) return this.customers
+      return (this.customers || []).filter(item => this.matchCustomerOption(item, keyword))
+    },
+    filteredSpecs() {
+      const keyword = this.materialSearchKeyword
+      if (!keyword) return this.specs
+      return (this.specs || []).filter(item => this.matchSpecOption(item, keyword))
+    }
+  },
   methods: {
+    normalizeSearchText(value) {
+      if (value === null || value === undefined) return ''
+      return String(value)
+        .replace(/\u00A0/g, ' ')
+        .replace(/\u3000/g, ' ')
+        .trim()
+        .toLowerCase()
+    },
+    normalizeMaterialCode(value) {
+      if (value === null || value === undefined) return ''
+      return String(value)
+        .replace(/\u00A0/g, ' ')
+        .replace(/\u3000/g, ' ')
+        .replace(/\s+/g, '')
+        .replace(/[^0-9A-Za-z\u4e00-\u9fa5_-]/g, '')
+        .toUpperCase()
+        .trim()
+    },
+    handleCustomerFilter(query) {
+      this.customerSearchKeyword = this.normalizeSearchText(query)
+    },
+    handleMaterialFilter(query) {
+      this.materialSearchKeyword = this.normalizeSearchText(query)
+    },
+    formatCustomerOptionLabel(customer) {
+      if (!customer) return ''
+      const shortName = customer.shortName || customer.name || customer.customerName || '-'
+      const code = customer.customerCode || '-'
+      return `${shortName} / ${code}`
+    },
+    matchCustomerOption(customer, keyword) {
+      if (!customer) return false
+      const key = this.normalizeSearchText(keyword)
+      if (!key) return true
+
+      const shortName = this.normalizeSearchText(customer.shortName || customer.name || customer.customerName)
+      const name = this.normalizeSearchText(customer.customerName || customer.name)
+      const codeRaw = this.normalizeSearchText(customer.customerCode)
+      const codeNormalized = this.normalizeMaterialCode(customer.customerCode).toLowerCase()
+      const keywordCodeNormalized = this.normalizeMaterialCode(keyword).toLowerCase()
+
+      return shortName.includes(key) ||
+        name.includes(key) ||
+        codeRaw.includes(key) ||
+        (!!keywordCodeNormalized && codeNormalized.includes(keywordCodeNormalized))
+    },
+    matchSpecOption(spec, keyword) {
+      if (!spec) return false
+      const key = this.normalizeSearchText(keyword)
+      if (!key) return true
+
+      const codeRaw = this.normalizeSearchText(spec.materialCode)
+      const codeNormalized = this.normalizeMaterialCode(spec.materialCode).toLowerCase()
+      const keywordCodeNormalized = this.normalizeMaterialCode(keyword).toLowerCase()
+      const productName = this.normalizeSearchText(spec.productName || spec.materialName)
+
+      return codeRaw.includes(key) ||
+        productName.includes(key) ||
+        (!!keywordCodeNormalized && codeNormalized.includes(keywordCodeNormalized))
+    },
     // 获取当前日期，格式 yyyy-MM-dd
     getCurrentDate() {
       const now = new Date()
@@ -817,35 +893,35 @@ export default {
     },
     async fetchCustomers() {
       try {
-        // 获取客户列表
-        const res = await getCustomerList({})
+        // 获取客户列表（明确指定大分页，避免只拿到默认首页导致搜索不全）
+        const res = await getCustomerList({ current: 1, size: 5000, pageNum: 1, pageSize: 5000 })
         if (res && (res.code === 20000 || res.code === 200)) {
           // 处理分页数据或直接数组
           const data = res.data
+          const normalizeCustomer = (c) => ({
+            id: c.id,
+            name: c.customerName,
+            customerName: c.customerName,
+            shortName: c.shortName || c.customerShortName || '',
+            customerCode: c.customerCode || '',
+            salesUserName: c.salesUserName || '',
+            contact: c.primaryContactName,
+            phone: this.resolveCustomerPhone(c),
+            address: c.contactAddress
+          })
+          const dedupeByIdOrCode = (list) => {
+            const map = new Map()
+            ;(list || []).forEach(item => {
+              const key = `${item.id || ''}::${item.customerCode || ''}`
+              if (!map.has(key)) map.set(key, item)
+            })
+            return Array.from(map.values())
+          }
+
           if (data && data.records) {
-            this.customers = data.records.map(c => ({
-              id: c.id,
-              name: c.customerName,
-              customerName: c.customerName,
-              shortName: c.shortName || c.customerShortName || '',
-              customerCode: c.customerCode || '',
-              salesUserName: c.salesUserName || '',
-              contact: c.primaryContactName,
-              phone: this.resolveCustomerPhone(c),
-              address: c.contactAddress
-            }))
+            this.customers = dedupeByIdOrCode(data.records.map(normalizeCustomer))
           } else if (Array.isArray(data)) {
-            this.customers = data.map(c => ({
-              id: c.id,
-              name: c.customerName,
-              customerName: c.customerName,
-              shortName: c.shortName || c.customerShortName || '',
-              customerCode: c.customerCode || '',
-              salesUserName: c.salesUserName || '',
-              contact: c.primaryContactName,
-              phone: this.resolveCustomerPhone(c),
-              address: c.contactAddress
-            }))
+            this.customers = dedupeByIdOrCode(data.map(normalizeCustomer))
           }
         }
       } catch (e) {
@@ -1047,7 +1123,8 @@ export default {
         return
       }
       try {
-        let spec = this.specs.find(s => s.materialCode === code)
+        const normalizedCode = this.normalizeMaterialCode(code)
+        let spec = this.specs.find(s => this.normalizeMaterialCode(s.materialCode) === normalizedCode)
         if (!spec) {
           const res = await getSpecByMaterialCode(code)
           if (res && (res.code === 20000 || res.code === 200)) {
@@ -1338,10 +1415,6 @@ export default {
 .sales-samples {
   padding: 20px;
   overflow-x: hidden;
-}
-
-.sample-list-table /deep/ .el-table__body-wrapper {
-  overflow-x: hidden !important;
 }
 
 .sample-op-btns {

@@ -268,6 +268,9 @@
             format="yyyy-MM-dd HH:mm"
           />
         </el-form-item>
+        <el-form-item v-if="!isLabelPrintMode" label="跨班分段">
+          <el-switch v-model="reportForm.enableSegment" active-text="开启" inactive-text="关闭" />
+        </el-form-item>
         <el-form-item v-if="reportForm.processType === 'COATING'" label="计划数量(㎡)">
           <el-input :value="formatAreaNum(reportForm.planQty)" size="small" style="width: 140px" disabled />
         </el-form-item>
@@ -292,6 +295,9 @@
           <el-input v-model="reportForm.operator" size="small" placeholder="系统自动带出" style="width: 200px" :disabled="true" />
         </el-form-item>
       </el-form>
+      <div v-if="!isLabelPrintMode && reportForm.enableSegment && reportSegmentCount > 1" style="margin: -6px 0 8px 110px; color: #E6A23C; font-size: 12px;">
+        将按班次窗口自动拆分为 {{ reportSegmentCount }} 段报工（跨班次自动分段）
+      </div>
       <el-form :model="reportForm" label-width="90px">
         <el-form-item label="备注">
           <el-input v-model="reportForm.remark" type="textarea" :rows="2" placeholder="选填" />
@@ -786,6 +792,7 @@ export default {
         slittingOuterPrintCount: 0,
         startTime: '',
         endTime: '',
+        enableSegment: true,
         planQty: null,
         producedQty: null,
         producedRolls: [],
@@ -896,6 +903,13 @@ export default {
       const raw = fromGetter || profile.workGroup || profile.groupName || profile.teamName || profile.classGroup || profile.shiftGroup || profile.deptName || 'A'
       const normalized = String(raw).trim().toUpperCase().replace(/班$/g, '').replace(/[^A-Z0-9]/g, '')
       return normalized || 'A'
+    },
+    reportSegmentCount() {
+      if (!this.reportForm || !this.reportForm.enableSegment) return 1
+      const start = this.parseDateTimeValue(this.reportForm.startTime)
+      const end = this.parseDateTimeValue(this.reportForm.endTime)
+      if (!start || !end || end.getTime() <= start.getTime()) return 1
+      return this.splitByShiftWindows(start, end).length || 1
     },
     pickDisabled() {
       if (this.isCoating) return true
@@ -1661,6 +1675,85 @@ export default {
       if (!d || Number.isNaN(d.getTime())) return ''
       const pad = n => String(n).padStart(2, '0')
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+    },
+    parseDateTimeValue(value) {
+      if (!value) return null
+      const text = String(value).trim()
+      if (!text) return null
+      const d = new Date(text.replace(' ', 'T'))
+      if (!Number.isNaN(d.getTime())) return d
+      const d2 = new Date(text)
+      return Number.isNaN(d2.getTime()) ? null : d2
+    },
+    inferShiftCodeByTime(dateObj) {
+      const d = dateObj instanceof Date ? dateObj : this.parseDateTimeValue(dateObj)
+      if (!d) return String(this.currentWorkGroup || 'A').toUpperCase()
+      const h = d.getHours()
+      // 08:00~19:59 记为A班，其他时段记为B班
+      return (h >= 8 && h < 20) ? 'A' : 'B'
+    },
+    buildSegmentOperator(dateObj) {
+      const raw = String(this.reportForm.operator || this.currentOperatorName || '').trim() || 'unknown'
+      const base = raw.replace(/-[A-Z0-9]+班$/i, '')
+      const shiftCode = this.inferShiftCodeByTime(dateObj)
+      return `${base}-${shiftCode}班`
+    },
+    getNextShiftBoundary(dateObj) {
+      const d = new Date(dateObj.getTime())
+      const y = d.getFullYear()
+      const m = d.getMonth()
+      const day = d.getDate()
+      const h = d.getHours()
+      if (h < 8) return new Date(y, m, day, 8, 0, 0, 0)
+      if (h < 20) return new Date(y, m, day, 20, 0, 0, 0)
+      return new Date(y, m, day + 1, 8, 0, 0, 0)
+    },
+    splitByShiftWindows(startDate, endDate) {
+      const start = new Date(startDate.getTime())
+      const end = new Date(endDate.getTime())
+      if (!(end.getTime() > start.getTime())) return []
+      const segments = []
+      let cursor = start
+      while (cursor.getTime() < end.getTime()) {
+        const boundary = this.getNextShiftBoundary(cursor)
+        const next = boundary.getTime() < end.getTime() ? boundary : end
+        segments.push({
+          start: new Date(cursor.getTime()),
+          end: new Date(next.getTime()),
+          minutes: Math.max(1, Math.round((next.getTime() - cursor.getTime()) / 60000))
+        })
+        cursor = new Date(next.getTime())
+      }
+      return segments
+    },
+    allocateSegmentQtys(totalQty, segments, isIntegerQty) {
+      const qty = Number(totalQty || 0)
+      if (!(qty > 0) || !Array.isArray(segments) || !segments.length) return []
+      const totalMinutes = segments.reduce((s, x) => s + Number(x.minutes || 0), 0)
+      if (!(totalMinutes > 0)) {
+        return segments.map((_, i) => (i === segments.length - 1 ? qty : 0))
+      }
+      if (isIntegerQty) {
+        const raw = segments.map(x => qty * Number(x.minutes || 0) / totalMinutes)
+        const floors = raw.map(v => Math.floor(v))
+        let remain = Math.max(0, Math.round(qty - floors.reduce((s, x) => s + x, 0)))
+        const idxOrder = raw
+          .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+          .sort((a, b) => b.frac - a.frac)
+        idxOrder.forEach(item => {
+          if (remain > 0) {
+            floors[item.i] += 1
+            remain -= 1
+          }
+        })
+        return floors
+      }
+      const raw = segments.map(x => qty * Number(x.minutes || 0) / totalMinutes)
+      const rounded = raw.map(v => Number(v.toFixed(2)))
+      const sumRounded = rounded.reduce((s, x) => s + x, 0)
+      const diff = Number((qty - sumRounded).toFixed(2))
+      rounded[rounded.length - 1] = Number((rounded[rounded.length - 1] + diff).toFixed(2))
+      return rounded
     },
     calcRollArea(widthMm, lengthM) {
       const w = Number(widthMm || 0)
@@ -2847,6 +2940,7 @@ export default {
           slittingOuterPrintCount: defaultInnerPrintCount,
           startTime: now,
           endTime: now,
+          enableSegment: true,
           planQty: Number.isFinite(planQty) && planQty > 0 ? planQty : 0,
           producedQty: defaultQty,
           producedRolls,
@@ -3364,6 +3458,12 @@ export default {
         this.$message.warning('请填写开始/结束时间')
         return
       }
+      const startObj = this.parseDateTimeValue(this.reportForm.startTime)
+      const endObj = this.parseDateTimeValue(this.reportForm.endTime)
+      if (!startObj || !endObj || endObj.getTime() < startObj.getTime()) {
+        this.$message.warning('结束时间不能早于开始时间')
+        return
+      }
       const qty = this.reportForm.processType === 'COATING'
         ? Number(this.calcProducedRollsArea() || 0)
         : Number(this.reportForm.producedQty || 0)
@@ -3398,7 +3498,7 @@ export default {
         .filter(x => x && (x.materialCode || x.rollCode) && (Number(x.actualArea || 0) > 0 || Number(x.planArea || 0) > 0 || Number(x.lossArea || 0) > 0))
       this.reportSubmitting = true
       try {
-        const payload = {
+        const basePayload = {
           scheduleId: this.reportForm.scheduleId,
           orderDetailId: this.reportForm.orderDetailId,
           processType: this.reportForm.processType,
@@ -3410,15 +3510,52 @@ export default {
           operator: this.reportForm.operator,
           remark: this.reportForm.remark
         }
-        const res = this.reportEditingId
-          ? await updateReportWork({ ...payload, reportId: this.reportEditingId })
-          : await reportWork(payload)
+
+        let res
+        let createdSegments = 1
+        const enableSegment = !this.reportEditingId && !!this.reportForm.enableSegment
+        const segments = enableSegment ? this.splitByShiftWindows(startObj, endObj) : []
+        if (enableSegment && segments.length > 1) {
+          const qtyList = this.allocateSegmentQtys(qty, segments, this.reportForm.processType === 'SLITTING')
+          createdSegments = segments.length
+          for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i]
+            const segQty = Number(qtyList[i] || 0)
+            if (!(segQty > 0)) {
+              continue
+            }
+            const isLast = i === segments.length - 1
+            const payload = {
+              ...basePayload,
+              startTime: this.toDateTimeString(seg.start),
+              endTime: this.toDateTimeString(seg.end),
+              producedQty: segQty,
+              operator: this.buildSegmentOperator(seg.start),
+              producedRolls: isLast ? producedRolls : [],
+              materialIssues: isLast ? materialIssues : []
+            }
+            res = await reportWork(payload)
+            if (!(res.code === 200 || res.code === 20000)) {
+              break
+            }
+          }
+        } else {
+          res = this.reportEditingId
+            ? await updateReportWork({ ...basePayload, reportId: this.reportEditingId })
+            : await reportWork(basePayload)
+        }
         if (res.code === 200 || res.code === 20000) {
           const returnedScheduleId = Number((res.data && res.data.scheduleId) || this.reportForm.scheduleId || 0)
           if (returnedScheduleId > 0) {
             this.reportForm.scheduleId = returnedScheduleId
           }
-          this.$message.success(this.reportEditingId ? '报工修改成功' : '报工提交成功')
+          if (this.reportEditingId) {
+            this.$message.success('报工修改成功')
+          } else if (createdSegments > 1) {
+            this.$message.success(`报工提交成功，已按班次分段生成${createdSegments}条记录`)
+          } else {
+            this.$message.success('报工提交成功')
+          }
           await this.loadReportList()
           this.reportDialogVisible = false
           this.loadTasks()
@@ -3471,6 +3608,7 @@ export default {
         slittingOuterPrintCount: 0,
         startTime: '',
         endTime: '',
+        enableSegment: true,
         planQty: null,
         producedQty: null,
         producedRolls: [],

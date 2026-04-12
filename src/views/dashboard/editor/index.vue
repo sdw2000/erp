@@ -197,11 +197,20 @@ export default {
       }
     },
     normalizeTodayReports(data = []) {
-      return (Array.isArray(data) ? data : []).map(item => ({
+      const rows = (Array.isArray(data) ? data : []).map(item => ({
         ...item,
+        reportTime: this.formatReportTimeToMinute(item.reportTime),
         outputQty: this.formatNumber(item.outputQty, 0),
         outputSqm: this.formatNumber(item.outputSqm, 2)
       }))
+      rows.sort((a, b) => String(b.reportTime || '').localeCompare(String(a.reportTime || '')))
+      return rows
+    },
+    formatReportTimeToMinute(value) {
+      if (!value) return ''
+      const text = String(value).trim().replace('T', ' ')
+      if (text.length >= 16) return text.slice(0, 16)
+      return text
     },
     useFallbackData() {
       this.summary = {

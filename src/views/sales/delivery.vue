@@ -23,6 +23,7 @@
           <el-col :span="6">
             <el-button type="primary" icon="el-icon-search" size="small" @click="fetchNotices">搜索</el-button>
             <el-button type="success" icon="el-icon-search" size="small" @click="searchUnshippedOrders">搜索未发货订单</el-button>
+            <el-button type="warning" icon="el-icon-refresh" size="small" @click="syncDeliveredToReceived">同步已签收状态</el-button>
             <el-button icon="el-icon-refresh" size="small" @click="resetSearch">重置</el-button>
           </el-col>
         </el-row>
@@ -33,21 +34,21 @@
         ref="deliveryTable"
         v-loading="loading"
         :data="tableData"
-        :fit="false"
         class="delivery-table"
+        fit
         style="width: 100%;"
         stripe
         @sort-change="handleSortChange"
       >
         <el-table-column type="index" label="序号" width="60" align="center" />
-        <el-table-column prop="customerShortName" label="客户名称" width="80" show-overflow-tooltip sortable="custom" column-key="customer">
+        <el-table-column prop="customerShortName" label="客户名称" min-width="110" show-overflow-tooltip sortable="custom" column-key="customer">
           <template slot-scope="scope">
             <span>{{ scope.row.customerShortName || scope.row.customer || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="noticeNo" label="发货单号" width="135" show-overflow-tooltip sortable="custom" column-key="noticeNo" />
-        <el-table-column prop="orderNo" label="销售订单号" min-width="140" show-overflow-tooltip sortable="custom" column-key="orderNo" />
-        <el-table-column label="明细(规格)" width="143" show-overflow-tooltip sortable="custom" column-key="specText">
+        <el-table-column prop="noticeNo" label="发货单号" min-width="160" show-overflow-tooltip sortable="custom" column-key="noticeNo" />
+        <el-table-column prop="orderNo" label="销售订单号" min-width="180" show-overflow-tooltip sortable="custom" column-key="orderNo" />
+        <el-table-column label="明细(规格)" min-width="206" show-overflow-tooltip sortable="custom" column-key="specText">
           <template slot-scope="scope">
             <div v-if="scope.row.items && scope.row.items.length">
               <div v-for="(it, idx) in scope.row.items" :key="idx" class="item-multi-line">
@@ -57,7 +58,7 @@
             <div v-else>-</div>
           </template>
         </el-table-column>
-        <el-table-column label="数量/卷" width="87" align="right" sortable="custom" column-key="totalQty">
+        <el-table-column label="数量/卷" min-width="105" align="right" sortable="custom" column-key="totalQty">
           <template slot-scope="scope">
             <div v-if="scope.row.items && scope.row.items.length">
               <div v-for="(it, idx) in scope.row.items" :key="idx" class="item-multi-line">
@@ -67,16 +68,16 @@
             <div v-else>-</div>
           </template>
         </el-table-column>
-        <el-table-column label="发货日期" width="97" sortable="custom" column-key="deliveryDate">
+        <el-table-column label="发货日期" min-width="116" sortable="custom" column-key="deliveryDate">
           <template slot-scope="scope">{{ formatShortDate(scope.row.deliveryDate) }}</template>
         </el-table-column>
-        <el-table-column label="状态/确认人" width="95" sortable="custom" column-key="status">
+        <el-table-column label="状态/确认人" min-width="120" sortable="custom" column-key="status">
           <template slot-scope="scope">
             <el-tag :type="getStatusType(scope.row.status)" size="small">{{ scope.row.status || '无状态' }}</el-tag>
             <div class="confirm-user">{{ getConfirmOperator(scope.row) }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="185" align="left">
+        <el-table-column label="操作" min-width="210" align="left">
           <template slot-scope="scope">
             <div class="op-btns">
               <el-button size="mini" type="text" @click="viewDetail(scope.row)">详情</el-button>
@@ -238,7 +239,7 @@
               <span v-else>{{ scope.row.materialName }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="规格" width="150">
+          <el-table-column label="规格" width="180">
             <template slot-scope="scope">
               <el-input v-if="!scope.row.orderItemId" v-model="scope.row.spec" size="small" placeholder="输入规格" />
               <span v-else>{{ formatSpecDisplay(scope.row) }}</span>
@@ -374,6 +375,21 @@
     </el-dialog>
 
     <el-dialog title="搜索未发货订单" :visible.sync="unshippedDialogVisible" width="760px">
+      <el-row :gutter="10" style="margin-bottom: 10px;">
+        <el-col :span="18">
+          <el-input
+            v-model.trim="unshippedQuery.customer"
+            placeholder="请输入客户名/简称/代码"
+            clearable
+            @keyup.enter.native="handleUnshippedSearch"
+          />
+        </el-col>
+        <el-col :span="6" style="text-align: right;">
+          <el-button type="primary" size="small" @click="handleUnshippedSearch">搜索</el-button>
+          <el-button size="small" @click="handleUnshippedReset">重置</el-button>
+        </el-col>
+      </el-row>
+
       <el-table v-loading="unshippedOrderLoading" :data="unshippedOrders" stripe style="width: 100%">
         <el-table-column label="客户简称" min-width="200" show-overflow-tooltip>
           <template slot-scope="scope">
@@ -388,6 +404,17 @@
         </el-table-column>
       </el-table>
       <el-empty v-if="!unshippedOrderLoading && unshippedOrders.length === 0" description="未找到未发货订单" :image-size="90" />
+      <div style="margin-top: 10px; text-align: right;">
+        <el-pagination
+          :current-page="unshippedPage.current"
+          :page-size="unshippedPage.size"
+          :page-sizes="[10, 20, 50]"
+          layout="total, sizes, prev, pager, next"
+          :total="unshippedPage.total"
+          @size-change="handleUnshippedSizeChange"
+          @current-change="handleUnshippedCurrentChange"
+        />
+      </div>
       <span slot="footer" class="dialog-footer">
         <el-button @click="unshippedDialogVisible = false">关闭</el-button>
       </span>
@@ -436,8 +463,8 @@
             <tr>
               <td class="label">收货地址：</td>
               <td :class="['value', 'address-value', getPrintDeliveryAddressClass()]">{{ currentPrint.deliveryAddress }}</td>
-              <td class="label">客户/订单号：</td>
-              <td class="value">{{ currentPrint.customerOrderNo || currentPrint.orderNo }}</td>
+              <td class="label order-no-label">订单号：</td>
+              <td class="value order-no-value">{{ formatCustomerOrderNoWithOrderNo(currentPrint) }}</td>
             </tr>
             <tr>
               <td class="label">收货人/电话：</td>
@@ -454,31 +481,34 @@
           </table>
 
           <!-- 明细表格 -->
-          <table class="items-table">
+          <table :class="['items-table', { 'items-table-mapped': shouldUseMappedPrintData(selectedPrintTemplateKey), 'items-table-no-material-code': !shouldShowMaterialCode(selectedPrintTemplateKey) }]">
             <thead>
               <tr>
-                <th>产品代码</th>
+                <th v-if="shouldShowMaterialCode(selectedPrintTemplateKey)">产品代码</th>
                 <th>产品名称</th>
                 <th>产品规格<br>(厚度*宽度*长度)</th>
                 <th>数量<br>(卷)</th>
+                <th v-if="shouldShowMappedMaterialNo(selectedPrintTemplateKey)" class="col-material-no">物料编号</th>
                 <th v-if="currentPrintTemplateConfig.showItemArea">平方<br>(m²)</th>
                 <th v-if="currentPrintTemplateConfig.showItemBox">箱数</th>
-                <th v-if="currentPrintTemplateConfig.showItemRemark">备注</th>
+                <th v-if="currentPrintTemplateConfig.showItemRemark" class="col-remark">{{ shouldUseOrderNoRemark(selectedPrintTemplateKey) ? '备注（订单号）' : '备注' }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(item, index) in currentPrint.items" :key="index">
-                <td>{{ item.materialCode }}</td>
+                <td v-if="shouldShowMaterialCode(selectedPrintTemplateKey)">{{ item.materialCode }}</td>
                 <td>{{ item.materialName }}</td>
                 <td>{{ formatSpecDisplay(item) }}</td>
                 <td>{{ item.quantity }}</td>
+                <td v-if="shouldShowMappedMaterialNo(selectedPrintTemplateKey)" class="col-material-no">{{ item.customerMaterialNo || item._mappedMaterialNo || '-' }}</td>
                 <td v-if="currentPrintTemplateConfig.showItemArea">{{ item.areaSize }}</td>
                 <td v-if="currentPrintTemplateConfig.showItemBox">{{ item.boxCount }}</td>
-                <td v-if="currentPrintTemplateConfig.showItemRemark">{{ item.remark || '-' }}</td>
+                <td v-if="currentPrintTemplateConfig.showItemRemark" class="col-remark">{{ shouldUseOrderNoRemark(selectedPrintTemplateKey) ? (currentPrint.customerOrderNo || currentPrint.orderNo || '-') : (item.remark || '-') }}</td>
               </tr>
               <tr class="total-row">
-                <td colspan="3" style="text-align: right; padding-right: 10px;">合计：</td>
+                <td :colspan="shouldShowMaterialCode(selectedPrintTemplateKey) ? 3 : 2" style="text-align: right; padding-right: 10px;">合计：</td>
                 <td>{{ sumQuantity }}</td>
+                <td v-if="shouldShowMappedMaterialNo(selectedPrintTemplateKey)" />
                 <td v-if="currentPrintTemplateConfig.showItemArea">{{ sumArea }}</td>
                 <td v-if="currentPrintTemplateConfig.showItemBox">{{ sumBox }}</td>
                 <td v-if="currentPrintTemplateConfig.showItemRemark" />
@@ -503,7 +533,7 @@
       <div slot="footer" class="dialog-footer">
         <div class="print-template-toolbar">
           <span class="print-template-label">打印模板：</span>
-          <el-select v-model="selectedPrintTemplateKey" size="small" placeholder="请选择模板" style="width: 260px; margin-right: 8px;">
+          <el-select v-model="selectedPrintTemplateKey" size="small" placeholder="请选择模板" style="width: 260px; margin-right: 8px;" @change="onPrintTemplateChange">
             <el-option
               v-for="item in printTemplateOptions"
               :key="item.value"
@@ -618,7 +648,8 @@ import {
   saveDeliveryNoticeCustomerDefaultTemplate,
   getAllDeliveryNoticeTemplates,
   saveDeliveryNoticeTemplate,
-  deleteDeliveryNoticeTemplate
+  deleteDeliveryNoticeTemplate,
+  getDeliveryPrintTemplateData
 } from '@/api/labelPrintConfig'
 import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
@@ -652,6 +683,7 @@ export default {
       carrierOptions: [],
       customerMap: {},
       customerContactsCache: {},
+      customerMaterialMappingCache: {},
 
       // Create/Edit
       dialogVisible: false,
@@ -668,6 +700,14 @@ export default {
       unshippedDialogVisible: false,
       unshippedOrderLoading: false,
       unshippedOrders: [],
+      unshippedQuery: {
+        customer: ''
+      },
+      unshippedPage: {
+        current: 1,
+        size: 10,
+        total: 0
+      },
       receiveConfirmForm: {
         id: null,
         carrierName: '',
@@ -1111,6 +1151,11 @@ export default {
     async fetchNotices() {
       this.loading = true
       try {
+        const searchParams = {
+          noticeNo: this.normalizeSearchKeyword(this.searchQuery.noticeNo),
+          orderNo: this.normalizeSearchKeyword(this.searchQuery.orderNo),
+          customer: this.normalizeSearchKeyword(this.searchQuery.customer)
+        }
         const res = await request({
           url: '/delivery/list',
           method: 'get',
@@ -1119,7 +1164,7 @@ export default {
             pageSize: this.page.size,
             sortProp: this.sortState.prop || undefined,
             sortOrder: this.sortState.order || undefined,
-            ...this.searchQuery
+            ...searchParams
           }
         })
         if (res.code === 200 || res.code === 20000) {
@@ -1218,6 +1263,42 @@ export default {
         this.scheduleTableLayout()
       }
     },
+
+    async syncDeliveredToReceived() {
+      try {
+        await this.$confirm('将批量检查“已发货”单据，物流已送达/签收会自动改为“已收货”，是否继续？', '提示', {
+          type: 'warning',
+          confirmButtonText: '开始同步',
+          cancelButtonText: '取消'
+        })
+      } catch (e) {
+        return
+      }
+
+      this.loading = true
+      try {
+        const res = await request({
+          url: '/delivery/receive/auto-sync-delivered',
+          method: 'post'
+        })
+        if (res && (res.code === 200 || res.code === 20000)) {
+          const data = res.data || {}
+          const scanned = Number(data.scanned || 0)
+          const changed = Number(data.changed || 0)
+          const skipped = Number(data.skipped || 0)
+          this.$message.success(`同步完成：检查${scanned}条，更新${changed}条，跳过${skipped}条`)
+          await this.fetchNotices()
+        } else {
+          this.$message.error((res && (res.msg || res.message)) || '同步失败')
+        }
+      } catch (e) {
+        console.error(e)
+        this.$message.error('同步失败')
+      } finally {
+        this.loading = false
+      }
+    },
+
     resetSearch() {
       this.searchQuery = {
         noticeNo: '',
@@ -1227,6 +1308,11 @@ export default {
       this.page.current = 1
       this.fetchNotices()
     },
+
+    normalizeSearchKeyword(value) {
+      return String(value || '').replace(/\s+/g, '').trim()
+    },
+
     handleSizeChange(val) {
       this.page.size = val
       this.fetchNotices()
@@ -1298,11 +1384,12 @@ export default {
     async searchOrders(query) {
       this.orderSearchLoading = true
       try {
+        const keyword = this.normalizeSearchKeyword(query)
         const res = await request({
           url: '/sales/orders/search',
           method: 'get',
           params: {
-            keyword: query || ''
+            keyword: keyword || ''
           }
         })
         if (res.code === 200 || res.code === 20000) {
@@ -1317,21 +1404,33 @@ export default {
 
     async searchUnshippedOrders() {
       this.unshippedDialogVisible = true
+      this.unshippedQuery.customer = this.normalizeSearchKeyword(this.searchQuery.customer)
+      this.unshippedPage.current = 1
+      await this.fetchUnshippedOrders()
+    },
+
+    async fetchUnshippedOrders() {
       this.unshippedOrderLoading = true
       this.unshippedOrders = []
       try {
-        const orderNoKeyword = String(this.searchQuery.orderNo || '').trim()
-        const customerKeyword = String(this.searchQuery.customer || '').trim()
+        const customerKeyword = this.normalizeSearchKeyword(this.unshippedQuery.customer)
         const res = await request({
-          url: '/sales/orders/search',
+          url: '/sales/orders',
           method: 'get',
           params: {
-            keyword: orderNoKeyword || undefined,
-            customer: customerKeyword || undefined
+            pageNum: this.unshippedPage.current,
+            pageSize: this.unshippedPage.size,
+            customer: customerKeyword || undefined,
+            showCompleted: false
           }
         })
         if (res && (res.code === 200 || res.code === 20000)) {
-          this.unshippedOrders = Array.isArray(res.data) ? res.data : []
+          const page = res.data || {}
+          const records = Array.isArray(page.records)
+            ? page.records
+            : (Array.isArray(page.list) ? page.list : [])
+          this.unshippedOrders = records.filter(order => this.hasUnshippedQty(order))
+          this.unshippedPage.total = Number(page.total || this.unshippedOrders.length || 0)
         } else {
           this.$message.error((res && res.msg) || '查询未发货订单失败')
         }
@@ -1343,9 +1442,52 @@ export default {
       }
     },
 
+    async handleUnshippedSearch() {
+      this.unshippedPage.current = 1
+      await this.fetchUnshippedOrders()
+    },
+
+    async handleUnshippedReset() {
+      this.unshippedQuery.customer = ''
+      this.unshippedPage.current = 1
+      await this.fetchUnshippedOrders()
+    },
+
+    async handleUnshippedSizeChange(size) {
+      this.unshippedPage.size = Number(size) || 10
+      this.unshippedPage.current = 1
+      await this.fetchUnshippedOrders()
+    },
+
+    async handleUnshippedCurrentChange(current) {
+      this.unshippedPage.current = Number(current) || 1
+      await this.fetchUnshippedOrders()
+    },
+
     formatOrderCustomerDisplay(order) {
       if (!order) return '-'
       return order.customerShortName || order.shortName || order.customerName || order.customer || '-'
+    },
+    hasUnshippedQty(order) {
+      if (!order) return false
+      const remainingRolls = Number(order.remainingRolls)
+      if (Number.isFinite(remainingRolls)) {
+        return remainingRolls > 0
+      }
+      const items = Array.isArray(order.items) ? order.items : []
+      if (items.length > 0) {
+        return items.some(it => {
+          const remain = Number(it.remainingQty)
+          if (Number.isFinite(remain)) return remain > 0
+          const orderQty = Number(it.quantity)
+          const shippedQty = Number(it.shippedQty)
+          if (Number.isFinite(orderQty) && Number.isFinite(shippedQty)) {
+            return (orderQty - shippedQty) > 0
+          }
+          return false
+        })
+      }
+      return true
     },
 
     async goDeliveryByOrder(order) {
@@ -1377,29 +1519,24 @@ export default {
       if (!this.carrierOptions || this.carrierOptions.length === 0) {
         await this.fetchCarriers()
       }
-      // Create a copy
-      this.currentNotice = JSON.parse(JSON.stringify(row))
+      // 编辑时始终拉取最新详情，确保客户订单号等最近修改已回填
+      const detail = await this.viewDetail(row, false)
+      this.currentNotice = detail ? JSON.parse(JSON.stringify(detail)) : JSON.parse(JSON.stringify(row))
       this.currentNotice.deliveryDate = this.normalizeNoticeDeliveryDate(this.currentNotice.deliveryDate)
       this.currentNotice.carrierNo = this.currentNotice.carrierNo || ''
       this.fillCarrierPhoneFromCompany(this.currentNotice)
-      // Fetch detailed items if not present
-      if (!this.currentNotice.items || this.currentNotice.items.length === 0) {
-        const detail = await this.viewDetail(row, false)
-        if (detail) {
-          this.currentNotice = detail
-          this.currentNotice.deliveryDate = this.normalizeNoticeDeliveryDate(this.currentNotice.deliveryDate)
-          this.fillCarrierPhoneFromCompany(this.currentNotice)
+      const receiverPatch = await this.fillNoticeReceiverFromCustomer(this.currentNotice)
+      if (receiverPatch) {
+        this.currentNotice = {
+          ...this.currentNotice,
+          ...receiverPatch
         }
-        await this.fillNoticeReceiverFromCustomer(this.currentNotice)
-        this.dialogVisible = true
-      } else {
-        await this.fillNoticeReceiverFromCustomer(this.currentNotice)
-        this.dialogVisible = true
       }
+      this.dialogVisible = true
     },
 
     async fillNoticeReceiverFromCustomer(notice) {
-      if (!notice) return
+      if (!notice) return null
       const customer = await this.resolveCustomerByOrderContext(notice)
       let contacts = customer && Array.isArray(customer.contacts) ? customer.contacts : []
       if ((!contacts || !contacts.length) && customer) {
@@ -1407,9 +1544,11 @@ export default {
         contacts = await this.fetchCustomerContactsById(cid)
       }
       const receiver = this.pickMarkedReceiverContact(contacts)
-      notice.deliveryAddress = this.resolveCustomerDeliveryAddress(customer) || ''
-      notice.contactPerson = this.resolveContactNameValue(receiver) || ''
-      notice.contactPhone = this.resolveContactPhoneValue(receiver) || ''
+      return {
+        deliveryAddress: this.resolveCustomerDeliveryAddress(customer) || '',
+        contactPerson: this.resolveContactNameValue(receiver) || '',
+        contactPhone: this.resolveContactPhoneValue(receiver) || ''
+      }
     },
 
     async fetchOrderDetails() {
@@ -1658,6 +1797,176 @@ export default {
       return raw
     },
 
+    parseSpecDimensions(specText) {
+      const text = String(specText || '').trim()
+      if (!text) return { thickness: null, width: null, length: null }
+      const nums = text.match(/\d+(?:\.\d+)?/g) || []
+      if (nums.length < 3) return { thickness: null, width: null, length: null }
+      return {
+        thickness: Number(nums[0]),
+        width: Number(nums[1]),
+        length: Number(nums[2])
+      }
+    },
+
+    buildSpecText(thickness, width, length, fallbackSpec) {
+      const t = Number(thickness)
+      const w = Number(width)
+      const l = Number(length)
+      if (Number.isFinite(t) && Number.isFinite(w) && Number.isFinite(l) && t > 0 && w > 0 && l > 0) {
+        return `${t}μm*${w}mm*${l}m`
+      }
+      return fallbackSpec || ''
+    },
+
+    normalizeMaterialCodeForMatch(code) {
+      return String(code || '')
+        .trim()
+        .toUpperCase()
+        .replace(/[\s\-_]/g, '')
+    },
+
+    toNumberOrNull(v) {
+      const n = Number(v)
+      return Number.isFinite(n) ? n : null
+    },
+
+    numberEqual(a, b) {
+      const x = this.toNumberOrNull(a)
+      const y = this.toNumberOrNull(b)
+      if (x === null || y === null) return false
+      return Math.abs(x - y) < 0.0001
+    },
+
+    async fetchCustomerMaterialMappingsForPrint(customerCode) {
+      const key = String(customerCode || '').trim()
+      if (!key) return []
+      if (Object.prototype.hasOwnProperty.call(this.customerMaterialMappingCache, key)) {
+        const cached = this.customerMaterialMappingCache[key]
+        return Array.isArray(cached) ? cached : []
+      }
+      try {
+        const res = await request({
+          url: '/sales/customer-material-mapping/page',
+          method: 'get',
+          params: {
+            pageNum: 1,
+            pageSize: 500,
+            customerCode: key,
+            isActive: 1
+          }
+        })
+        const ok = res && (res.code === 200 || res.code === 20000)
+        const data = ok ? (res.data || {}) : {}
+        const rows = Array.isArray(data.records)
+          ? data.records
+          : (Array.isArray(data.list) ? data.list : (Array.isArray(data) ? data : []))
+        this.$set(this.customerMaterialMappingCache, key, rows)
+        return rows
+      } catch (e) {
+        this.$set(this.customerMaterialMappingCache, key, [])
+        return []
+      }
+    },
+
+    findBestPrintMapping(mappings, item) {
+      const rows = Array.isArray(mappings) ? mappings : []
+      if (!rows.length) return null
+
+      const remarkCode = String(item && item.remark ? item.remark : '').trim()
+      const materialCode = String(item && item.materialCode ? item.materialCode : '').trim()
+      const normalizedMaterial = this.normalizeMaterialCodeForMatch(materialCode)
+
+      const dimFromSpec = this.parseSpecDimensions(item && item.spec)
+      const thickness = item && item._orderThickness != null ? item._orderThickness : (item && item.thickness != null ? item.thickness : dimFromSpec.thickness)
+      const width = item && item._orderWidth != null ? item._orderWidth : (item && item.width != null ? item.width : dimFromSpec.width)
+      const length = item && item._orderLength != null ? item._orderLength : (item && item.length != null ? item.length : dimFromSpec.length)
+
+      let best = null
+      let bestScore = -1
+      rows.forEach((m) => {
+        if (!m) return
+        let score = 0
+        const mapCode = String(m.materialCode || '').trim()
+        const mapCodeNorm = this.normalizeMaterialCodeForMatch(mapCode)
+        const mapCustomerCode = String(m.customerMaterialCode || '').trim()
+
+        if (materialCode && mapCode && materialCode === mapCode) score += 100
+        if (normalizedMaterial && mapCodeNorm && normalizedMaterial === mapCodeNorm) score += 90
+        if (remarkCode && mapCustomerCode && remarkCode === mapCustomerCode) score += 120
+
+        if (this.numberEqual(thickness, m.thickness)) score += 15
+        if (this.numberEqual(width, m.width)) score += 15
+        if (this.numberEqual(length, m.length)) score += 15
+
+        if (this.numberEqual(thickness, m.customerThickness)) score += 8
+        if (this.numberEqual(width, m.customerWidth)) score += 8
+        if (this.numberEqual(length, m.customerLength)) score += 8
+
+        if (score > bestScore) {
+          bestScore = score
+          best = m
+        }
+      })
+
+      return bestScore > 0 ? best : null
+    },
+
+    async applyPrintCustomerMaterialMapping(printData) {
+      const source = printData ? { ...printData } : {}
+      const items = Array.isArray(source.items) ? source.items.map(it => ({ ...it })) : []
+      let customerCode = String(source.customerCode || '').trim()
+      if (!customerCode) {
+        const customer = await this.resolveCustomerByOrderContext(source)
+        customerCode = String((customer && customer.customerCode) || source.customer || '').trim()
+      }
+      if (!customerCode || items.length === 0) {
+        source.items = items
+        return source
+      }
+
+      const mappings = await this.fetchCustomerMaterialMappingsForPrint(customerCode)
+      if (!mappings.length) {
+        source.items = items
+        return source
+      }
+
+      const mappedItems = items.map((item) => {
+        const m = this.findBestPrintMapping(mappings, item)
+        if (!m) return item
+
+        const dimFromSpec = this.parseSpecDimensions(item && item.spec)
+        const thickness = item && item._orderThickness != null ? item._orderThickness : (item && item.thickness != null ? item.thickness : dimFromSpec.thickness)
+        const width = item && item._orderWidth != null ? item._orderWidth : (item && item.width != null ? item.width : dimFromSpec.width)
+        const length = item && item._orderLength != null ? item._orderLength : (item && item.length != null ? item.length : dimFromSpec.length)
+
+        const mappedThickness = m.customerThickness != null ? m.customerThickness : thickness
+        const mappedWidth = m.customerWidth != null ? m.customerWidth : width
+        const mappedLength = m.customerLength != null ? m.customerLength : length
+
+        return {
+          ...item,
+          // 需求：物料代码栏显示我司料号
+          materialCode: m.materialCode || item.materialCode,
+          // 需求：产品名称显示客户名称
+          materialName: m.customerMaterialName || item.materialName,
+          // 物料编号：客户物料编号
+          customerMaterialNo: m.customerMaterialCode || item.customerMaterialNo || '',
+          _mappedMaterialNo: m.customerMaterialCode || item._mappedMaterialNo || '',
+          // 需求：规格栏显示客户规格
+          spec: this.buildSpecText(mappedThickness, mappedWidth, mappedLength, item.spec),
+          _orderThickness: mappedThickness,
+          _orderWidth: mappedWidth,
+          _orderLength: mappedLength,
+          // 备注优先订单明细备注；为空时回退客户产品代码
+          remark: (item.remark && String(item.remark).trim()) || m.customerMaterialCode || ''
+        }
+      })
+
+      source.items = mappedItems
+      return source
+    },
+
     updateAreaSizeByQuantity(item) {
       const qty = Number(item.quantity || 0)
       const unit = Number(item.unitArea || 0)
@@ -1669,7 +1978,8 @@ export default {
     },
 
     keepOnlyAlphaNumeric(value) {
-      return String(value || '').replace(/[^0-9a-zA-Z]/g, '')
+      // 保持与新增订单录入一致：不做字符过滤，仅去除首尾空白
+      return String(value == null ? '' : value).trim()
     },
 
     handleCustomerOrderNoInput(value) {
@@ -1843,13 +2153,13 @@ export default {
           if (hasTrace) {
             this.$message.success('物流查询成功')
           } else {
-            this.$message.warning(res.msg || res.message || '查询无结果，请隔段时间再查')
+            this.$message.warning((res.data && res.data.message) || res.msg || res.message || '查询无结果，请隔段时间再查')
           }
-          // 如果物流显示已送达，提示可直接确认收货
-          if (status === '已送达' || status === '已签收') {
-            this.$message.info('物流显示已送达，可直接点击“保存并确认收货”')
+          // 物流已送达/签收：自动确认收货
+          const autoDone = await this.tryAutoConfirmReceivedByLogistics(this.receiveConfirmNotice, res.data)
+          if (!autoDone) {
+            this.fetchNotices()
           }
-          this.fetchNotices()
         } else {
           this.$message.error((res && (res.msg || res.message)) || '物流查询失败')
         }
@@ -1893,8 +2203,11 @@ export default {
           if (hasTrace) {
             this.$message.success('物流查询成功')
           } else {
-            this.$message.warning((res && (res.msg || res.message)) || '暂无物流轨迹')
+            this.$message.warning((res && ((res.data && res.data.message) || res.msg || res.message)) || '暂无物流轨迹')
           }
+
+          // 物流已送达/签收：自动确认收货
+          await this.tryAutoConfirmReceivedByLogistics(row, res.data)
         } else {
           this.$message.error((res && (res.msg || res.message)) || '物流查询失败')
         }
@@ -1960,6 +2273,48 @@ export default {
       }
     },
 
+    isDeliveredLogisticsInfo(info) {
+      if (!info) return false
+      const statusText = String(info.status || '').trim()
+      if (/已送达|已签收|签收|妥投|delivered|signed/i.test(statusText)) {
+        return true
+      }
+      const traces = Array.isArray(info.traces) ? info.traces : []
+      return traces.some(t => /已送达|已签收|签收|妥投|delivered|signed/i.test(String((t && t.context) || '')))
+    },
+
+    async tryAutoConfirmReceivedByLogistics(row, logisticsInfo) {
+      if (!row || !row.id) return false
+      const currentStatus = String(row.status || '').trim().toLowerCase()
+      if (currentStatus === '已收货' || currentStatus === 'received') return false
+      if (!this.isDeliveredLogisticsInfo(logisticsInfo)) return false
+
+      try {
+        const receiveRes = await request({
+          url: `/delivery/receive/${row.id}`,
+          method: 'post'
+        })
+        if (receiveRes && (receiveRes.code === 200 || receiveRes.code === 20000)) {
+          const idx = (this.tableData || []).findIndex(r => Number(r.id) === Number(row.id))
+          if (idx > -1) {
+            const oldRow = this.tableData[idx] || {}
+            this.$set(this.tableData, idx, { ...oldRow, status: '已收货' })
+          }
+          if (this.trackingInfo) {
+            this.trackingInfo = { ...this.trackingInfo, status: '已收货' }
+          }
+          this.$message.success('物流已送达，系统已自动确认收货')
+          this.receiveConfirmVisible = false
+          this.receiveConfirmNotice = null
+          this.fetchNotices()
+          return true
+        }
+      } catch (e) {
+        console.error('自动确认收货失败', e)
+      }
+      return false
+    },
+
     // --- Details & Print ---
     async viewDetail(row, openDialog = true) {
       try {
@@ -1968,6 +2323,19 @@ export default {
           method: 'get'
         })
         if (res.code === 200 || res.code === 20000) {
+          if (res.data && res.data.orderNo) {
+            try {
+              const orderRes = await request({ url: `/sales/orders/${res.data.orderNo}`, method: 'get' })
+              if ((orderRes.code === 200 || orderRes.code === 20000) && orderRes.data) {
+                const latestCustomerOrderNo = String(orderRes.data.customerOrderNo || '').trim()
+                if (latestCustomerOrderNo) {
+                  res.data.customerOrderNo = latestCustomerOrderNo
+                }
+              }
+            } catch (e) {
+              // ignore: 保持发货单现有值
+            }
+          }
           if (openDialog) {
             this.currentNotice = res.data
             // Make sure details dialog exists if separate, or use create dialog in readonly?
@@ -2038,6 +2406,13 @@ export default {
       if (this.currentPrint && this.currentPrint.deliveryDate) return this.currentPrint.deliveryDate
       if (this.currentPrint && this.currentPrint.createdAt) return this.extractDateFromDateTime(this.currentPrint.createdAt)
       return this.extractDateFromDateTime(new Date().toISOString())
+    },
+
+    formatCustomerOrderNoWithOrderNo(row) {
+      const customerOrderNo = row && row.customerOrderNo ? String(row.customerOrderNo).trim() : ''
+      const orderNo = row && row.orderNo ? String(row.orderNo).trim() : ''
+      if (customerOrderNo && orderNo) return `${customerOrderNo}\n${orderNo}`
+      return customerOrderNo || orderNo || '-'
     },
 
     getPrintDeliveryAddressClass() {
@@ -2185,32 +2560,181 @@ export default {
       // 按客户默认模板自动选择（未配置时走当前默认模板，不影响现有行为）
       await this.loadDeliveryCustomerDefaultTemplate(this.currentPrint.customerCode || this.currentPrint.customer)
 
+      // 按“每个模板独立接口”拉取打印数据（后端已做 客户+料号+三规格 匹配）
+      await this.reloadCurrentPrintByTemplate()
+
       // 打开打印预览弹窗，由用户点击“打印单据 / 导出PDF”后再触发系统打印
       this.printVisible = true
+    },
+
+    async fillLatestCustomerOrderNo(data) {
+      if (!data) return data
+      const nextData = { ...data }
+      const orderNo = String(data.orderNo || '').trim()
+      if (!orderNo) return nextData
+      try {
+        const orderRes = await request({ url: `/sales/orders/${orderNo}`, method: 'get' })
+        if ((orderRes.code === 200 || orderRes.code === 20000) && orderRes.data) {
+          const latestCustomerOrderNo = String(orderRes.data.customerOrderNo || '').trim()
+          if (latestCustomerOrderNo) {
+            nextData.customerOrderNo = latestCustomerOrderNo
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+      return nextData
+    },
+
+    async onPrintTemplateChange() {
+      await this.reloadCurrentPrintByTemplate()
+    },
+
+    shouldUseMappedPrintData(templateKey) {
+      const key = String(templateKey || '').trim().toLowerCase()
+      const current = (this.printTemplateOptions || []).find(t => t.value === templateKey)
+      const label = String((current && current.label) || '').trim().toLowerCase()
+      const text = `${key} ${label}`
+
+      // 明确客户模板：走映射（如万宝、力源）
+      if (
+        text.includes('万宝') || text.includes('wanbao') ||
+        text.includes('力源') || text.includes('liyuan')
+      ) return true
+
+      // 通用/标准/简版：不走映射，保持原始发货单展示
+      if (
+        text.includes('通用') ||
+        text.includes('标准') ||
+        text.includes('简版') ||
+        text.includes('general') ||
+        text.includes('standard') ||
+        text.includes('simple')
+      ) {
+        return false
+      }
+
+      // 其他自定义模板默认走映射
+      return true
+    },
+
+    isLiyuanTemplate(templateKey) {
+      const key = String(templateKey || '').trim().toLowerCase()
+      const current = (this.printTemplateOptions || []).find(t => t.value === templateKey)
+      const label = String((current && current.label) || '').trim().toLowerCase()
+      const text = `${key} ${label}`
+      return text.includes('力源') || text.includes('liyuan')
+    },
+
+    isWanbaoCustomer() {
+      const raw = this.currentPrint || {}
+      const code = String(raw.customerCode || '').trim()
+      const customerRaw = String(raw.customer || '').trim()
+      const mapped = (this.customerMap && (this.customerMap[code] || this.customerMap[customerRaw])) || {}
+      const name = String(mapped.customerName || mapped.shortName || '').trim()
+      const text = `${code} ${customerRaw} ${name} ${this.getPrintCustomerFullName()}`.toLowerCase()
+      return text.includes('万宝') || text.includes('wanbao') || text.includes('wangbao')
+    },
+
+    isLiyuanCustomer() {
+      const text = `${this.currentPrint && this.currentPrint.customerCode ? this.currentPrint.customerCode : ''} ${this.currentPrint && this.currentPrint.customer ? this.currentPrint.customer : ''}`.toLowerCase()
+      return text.includes('力源') || text.includes('liyuan')
+    },
+
+    shouldShowMappedMaterialNo(templateKey) {
+      const key = String(templateKey || '').trim().toLowerCase()
+      const current = (this.printTemplateOptions || []).find(t => t.value === templateKey)
+      const label = String((current && current.label) || '').trim().toLowerCase()
+      const text = `${key} ${label}`
+      const hideForTemplate =
+        this.isLiyuanTemplate(templateKey) ||
+        text.includes('万宝') || text.includes('wanbao') || text.includes('wangbao')
+      const hideForCustomer = this.isWanbaoCustomer() || this.isLiyuanCustomer()
+      return this.shouldUseMappedPrintData(templateKey) && !hideForTemplate && !hideForCustomer
+    },
+
+    shouldShowMaterialCode(templateKey) {
+      return true
+    },
+
+    // 仅亿纬集能模板使用“备注（订单号）”
+    shouldUseOrderNoRemark(templateKey) {
+      const key = String(templateKey || '').trim().toLowerCase()
+      const current = (this.printTemplateOptions || []).find(t => t.value === templateKey)
+      const label = String((current && current.label) || '').trim().toLowerCase()
+      const text = `${key} ${label}`
+      return text.includes('亿纬') || text.includes('yiwei')
+    },
+
+    async reloadCurrentPrintByTemplate() {
+      try {
+        const templateKey = String(this.selectedPrintTemplateKey || '').trim()
+        const noticeId = this.currentPrint && this.currentPrint.id
+        if (!templateKey || !noticeId) {
+          return
+        }
+
+        // 通用模板使用原始发货单，客户专属模板使用映射数据
+        if (!this.shouldUseMappedPrintData(templateKey)) {
+          const rawRes = await request({
+            url: `/delivery/${noticeId}`,
+            method: 'get'
+          })
+          if (rawRes && (rawRes.code === 200 || rawRes.code === 20000) && rawRes.data) {
+            this.currentPrint = await this.ensurePrintReceiverContact(rawRes.data)
+            this.currentPrint = await this.fillLatestCustomerOrderNo(this.currentPrint)
+            return
+          }
+        }
+
+        const res = await getDeliveryPrintTemplateData(templateKey, noticeId)
+        if (res && (res.code === 200 || res.code === 20000) && res.data && res.data.data) {
+          this.currentPrint = await this.ensurePrintReceiverContact(res.data.data)
+          this.currentPrint = await this.fillLatestCustomerOrderNo(this.currentPrint)
+          return
+        }
+      } catch (e) {
+        // ignore and keep fallback
+      }
+      // 兜底：若模板接口失败，仍走前端映射逻辑，保证可打印
+      this.currentPrint = await this.applyPrintCustomerMaterialMapping(this.currentPrint)
+      this.currentPrint = await this.fillLatestCustomerOrderNo(this.currentPrint)
     },
 
     buildPrintContentHtml() {
       const templateConfig = this.getPrintTemplateConfig()
       const compactFooter = templateConfig && templateConfig.compact
+      const useMappedPrintTemplate = this.shouldUseMappedPrintData(this.selectedPrintTemplateKey)
+      const showMaterialCode = this.shouldShowMaterialCode(this.selectedPrintTemplateKey)
+      const showMappedMaterialNo = this.shouldShowMappedMaterialNo(this.selectedPrintTemplateKey)
+      const useOrderNoRemark = this.shouldUseOrderNoRemark(this.selectedPrintTemplateKey)
       const showCustomerOrderNo = templateConfig.showCustomerOrderNo !== false
       const showCarrierPhone = templateConfig.showCarrierPhone !== false
       const showItemArea = templateConfig.showItemArea !== false
       const showItemBox = templateConfig.showItemBox !== false
       const showItemRemark = templateConfig.showItemRemark !== false
       const showFooterNotes = templateConfig.showFooterNotes !== false
+      const orderNoRemark = this.currentPrint.customerOrderNo || this.currentPrint.orderNo || '-'
 
       const items = Array.isArray(this.currentPrint.items) ? this.currentPrint.items : []
       const rowsHtml = items.map((item) => `
         <tr>
-          <td>${item.materialCode || '-'}</td>
+          ${showMaterialCode ? `<td>${item.materialCode || '-'}</td>` : ''}
           <td>${item.materialName || '-'}</td>
           <td>${this.formatSpecDisplay(item) || '-'}</td>
           <td>${item.quantity != null ? item.quantity : '-'}</td>
+          ${showMappedMaterialNo ? `<td class="col-material-no">${item.customerMaterialNo || item._mappedMaterialNo || '-'}</td>` : ''}
           ${showItemArea ? `<td>${item.areaSize != null ? item.areaSize : '-'}</td>` : ''}
           ${showItemBox ? `<td>${item.boxCount != null ? item.boxCount : '-'}</td>` : ''}
-          ${showItemRemark ? `<td>${item.remark || '-'}</td>` : ''}
+          ${showItemRemark ? `<td class="col-remark">${useOrderNoRemark ? orderNoRemark : (item.remark || '-')}</td>` : ''}
         </tr>
       `).join('')
+      const itemsTableClass = [
+        'items-table',
+        useMappedPrintTemplate ? 'items-table-mapped' : '',
+        !showMaterialCode ? 'items-table-no-material-code' : ''
+      ].filter(Boolean).join(' ')
+
       return `
         <div id="printArea" class="print-content" style="${this.objectToInlineStyle(this.printAreaInlineStyle)}">
           <div class="copy-label-vertical" style="${compactFooter ? 'display:none;' : ''}">
@@ -2246,8 +2770,8 @@ export default {
               <tr>
                 <td class="label">收货地址：</td>
                 <td class="value address-value ${this.getPrintDeliveryAddressClass()}">${this.currentPrint.deliveryAddress || '-'}</td>
-                <td class="label">客户/订单号：</td>
-                <td class="value">${showCustomerOrderNo ? (this.currentPrint.customerOrderNo || this.currentPrint.orderNo || '-') : '-'}</td>
+                <td class="label order-no-label">订单号：</td>
+                <td class="value order-no-value">${showCustomerOrderNo ? this.formatCustomerOrderNoWithOrderNo(this.currentPrint) : '-'}</td>
               </tr>
               <tr>
                 <td class="label">收货人/电话：</td>
@@ -2263,23 +2787,25 @@ export default {
               </tr>
             </table>
 
-            <table class="items-table">
+            <table class="${itemsTableClass}">
               <thead>
                 <tr>
-                  <th>产品代码</th>
+                  ${showMaterialCode ? '<th>产品代码</th>' : ''}
                   <th>产品名称</th>
                   <th>产品规格<br>(厚度*宽度*长度)</th>
                   <th>数量<br>(卷)</th>
+                  ${showMappedMaterialNo ? '<th class="col-material-no">物料编号</th>' : ''}
                   ${showItemArea ? '<th>平方<br>(m²)</th>' : ''}
                   ${showItemBox ? '<th>箱数</th>' : ''}
-                  ${showItemRemark ? '<th>备注</th>' : ''}
+                  ${showItemRemark ? `<th class="col-remark">${useOrderNoRemark ? '备注（订单号）' : '备注'}</th>` : ''}
                 </tr>
               </thead>
               <tbody>
                 ${rowsHtml}
                 <tr class="total-row">
-                  <td colspan="3" style="text-align: right; padding-right: 10px;">合计：</td>
+                  <td colspan="${showMaterialCode ? 3 : 2}" style="text-align: right; padding-right: 10px;">合计：</td>
                   <td>${this.sumQuantity}</td>
+                  ${showMappedMaterialNo ? '<td></td>' : ''}
                   ${showItemArea ? `<td>${this.sumArea}</td>` : ''}
                   ${showItemBox ? `<td>${this.sumBox}</td>` : ''}
                   ${showItemRemark ? '<td></td>' : ''}
@@ -2309,7 +2835,12 @@ export default {
     },
 
     handlePrintBrowser() {
-      const printContent = this.buildPrintContentHtml()
+      const printAreaEl = document.getElementById('printArea')
+      const printContent = (printAreaEl && printAreaEl.outerHTML) || this.buildPrintContentHtml()
+      if (!printContent) {
+        this.$message.warning('暂无可打印内容')
+        return
+      }
       const p = this.printLayout || {}
       const top = Number(p.top || 0)
       const right = Number(p.right || 0)
@@ -2391,6 +2922,18 @@ export default {
               .header-table .value.address-value.addr-very-long { font-size: 13pt; line-height: 1.22; }
               .header-table .value.address-value.addr-super-long { font-size: 13pt; line-height: 1.16; }
               .header-table td:nth-child(4).value { width: 200px; max-width: 200px; padding-left: 6px; }
+              .header-table td.order-no-label { width: 40px; }
+              .header-table td.order-no-value {
+                width: 248px;
+                max-width: 248px;
+                white-space: pre-line;
+                overflow: visible;
+                text-overflow: clip;
+                word-break: break-all;
+                overflow-wrap: anywhere;
+                line-height: 1.25;
+                font-size: 13pt;
+              }
               .header-table td.carrier-phone-value { position: relative; left: 0; transform: translateX(15px); }
               
               .items-table { border: 1px solid #333; margin-bottom: 10px; width: calc(100% + 65px); margin-right: 0; table-layout: fixed; font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; }
@@ -2402,6 +2945,48 @@ export default {
               .items-table th:nth-child(5), .items-table td:nth-child(5) { width: 80px; min-width: 80px; max-width: 80px; white-space: nowrap; }
               .items-table th:nth-child(6), .items-table td:nth-child(6) { width: 50px; min-width: 50px; max-width: 50px; white-space: nowrap; }
               .items-table th:nth-child(7), .items-table td:nth-child(7) { width: 118px; min-width: 118px; max-width: 118px; }
+              /* 客户映射模板（含物料编号、备注订单号）专用列宽：
+                 产品代码/产品名称各缩20%，增量均分给物料编号和备注列 */
+              .items-table.items-table-mapped th:nth-child(1),
+              .items-table.items-table-mapped td:nth-child(1) {
+                width: calc((100% - 425px) / 2 - 52px);
+                min-width: calc((100% - 425px) / 2 - 52px);
+                max-width: calc((100% - 425px) / 2 - 52px);
+              }
+              .items-table.items-table-mapped th:nth-child(2),
+              .items-table.items-table-mapped td:nth-child(2) {
+                width: calc((100% - 425px) / 2 + 34px);
+                min-width: calc((100% - 425px) / 2 + 34px);
+                max-width: calc((100% - 425px) / 2 + 34px);
+              }
+              .items-table.items-table-mapped th:nth-child(5),
+              .items-table.items-table-mapped td:nth-child(5) {
+                width: 95px;
+                min-width: 95px;
+                max-width: 95px;
+                white-space: nowrap;
+              }
+              .items-table.items-table-mapped th:nth-child(8),
+              .items-table.items-table-mapped td:nth-child(8) {
+                width: 133px;
+                min-width: 133px;
+                max-width: 133px;
+                white-space: nowrap;
+              }
+              .items-table.items-table-mapped th.col-material-no,
+              .items-table.items-table-mapped td.col-material-no {
+                width: 95px !important;
+                min-width: 95px !important;
+                max-width: 95px !important;
+                white-space: nowrap;
+              }
+              .items-table.items-table-mapped th.col-remark,
+              .items-table.items-table-mapped td.col-remark {
+                width: 170px !important;
+                min-width: 170px !important;
+                max-width: 170px !important;
+                white-space: nowrap;
+              }
               .items-table tr > th:first-child, .items-table tr > td:first-child { border-left: 1px solid #333 !important; }
               .items-table { border-left: 1px solid #333 !important; }
               .items-table th { background: #eee; font-weight: 700; }
@@ -2776,6 +3361,18 @@ export default {
     .value.address-value.addr-very-long { font-size: 13pt; line-height: 1.22; }
     .value.address-value.addr-super-long { font-size: 13pt; line-height: 1.16; }
     td:nth-child(4).value { width: 200px; max-width: 200px; padding-left: 6px; }
+    td.order-no-label { width: 40px; }
+    td.order-no-value {
+      width: 248px;
+      max-width: 248px;
+      white-space: pre-line;
+      overflow: visible;
+      text-overflow: clip;
+      word-break: break-all;
+      overflow-wrap: anywhere;
+      line-height: 1.25;
+      font-size: 13pt;
+    }
     td.carrier-phone-value { position: relative; left: 0; transform: translateX(15px); }
   }
 
@@ -2793,6 +3390,15 @@ export default {
     th:nth-child(5), td:nth-child(5) { width: 80px; min-width: 80px; max-width: 80px; white-space: nowrap; }
     th:nth-child(6), td:nth-child(6) { width: 50px; min-width: 50px; max-width: 50px; white-space: nowrap; }
     th:nth-child(7), td:nth-child(7) { width: 118px; min-width: 118px; max-width: 118px; }
+    /* 客户映射模板（含物料编号、备注订单号）专用列宽 */
+    &.items-table-mapped {
+      th:nth-child(1), td:nth-child(1) { width: calc((100% - 425px) / 2 - 52px); min-width: calc((100% - 425px) / 2 - 52px); max-width: calc((100% - 425px) / 2 - 52px); }
+      th:nth-child(2), td:nth-child(2) { width: calc((100% - 425px) / 2 + 34px); min-width: calc((100% - 425px) / 2 + 34px); max-width: calc((100% - 425px) / 2 + 34px); }
+      th:nth-child(5), td:nth-child(5) { width: 95px; min-width: 95px; max-width: 95px; white-space: nowrap; }
+      th:nth-child(8), td:nth-child(8) { width: 133px; min-width: 133px; max-width: 133px; white-space: nowrap; }
+      th.col-material-no, td.col-material-no { width: 95px !important; min-width: 95px !important; max-width: 95px !important; white-space: nowrap; }
+      th.col-remark, td.col-remark { width: 170px !important; min-width: 170px !important; max-width: 170px !important; white-space: nowrap; }
+    }
     tr > th:first-child, tr > td:first-child { border-left: 1px solid #333 !important; }
     border-left: 1px solid #333 !important;
     th { background: #eee; font-weight: 700; }

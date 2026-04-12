@@ -74,6 +74,41 @@ export function getColorDict() {
   })
 }
 
+// 颜色字典管理列表
+export function getColorDictList(params) {
+  return request({
+    url: '/api/tape-spec/dict/color/list',
+    method: 'get',
+    params
+  })
+}
+
+// 新增颜色字典
+export function createColorDict(data) {
+  return request({
+    url: '/api/tape-spec/dict/color',
+    method: 'post',
+    data
+  })
+}
+
+// 更新颜色字典
+export function updateColorDict(data) {
+  return request({
+    url: '/api/tape-spec/dict/color',
+    method: 'put',
+    data
+  })
+}
+
+// 删除颜色字典
+export function deleteColorDict(id) {
+  return request({
+    url: `/api/tape-spec/dict/color/${id}`,
+    method: 'delete'
+  })
+}
+
 // 获取基材材质字典
 export function getBaseMaterialDict() {
   return request({

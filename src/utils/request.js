@@ -51,6 +51,16 @@ function sanitizeCodeFields(payload) {
   return payload
 }
 
+function shouldSilenceBusinessError(config, serverMsg) {
+  const url = String((config && config.url) || '')
+  const msg = String(serverMsg || '')
+  // 涂布机台可用性预估：未输入料号属于编辑过程中的中间态，不弹全局错误
+  if (url.includes('/schedule/manual/coating-availability') && /手工涂布排程请先输入料号|请先输入料号/.test(msg)) {
+    return true
+  }
+  return false
+}
+
 // request interceptor
 service.interceptors.request.use(
   config => {
@@ -112,11 +122,14 @@ service.interceptors.response.use(
 
     // if the custom code is not 20000 or 200, it is judged as an error.
     if (res.code !== 20000 && res.code !== 200) {
-      Message({
-        message: serverMsg || 'Error',
-        type: 'error',
-        duration: 5 * 1000
-      })
+      const silent = shouldSilenceBusinessError(response.config, serverMsg)
+      if (!silent) {
+        Message({
+          message: serverMsg || 'Error',
+          type: 'error',
+          duration: 5 * 1000
+        })
+      }
 
       // 50008: Illegal token; 50012: Other clients logged in; 50014: Token expired;
       if (res.code === 50008 || res.code === 50012 || res.code === 50014) {
@@ -142,6 +155,7 @@ service.interceptors.response.use(
   error => {
     console.log('err' + error) // for debug
     let message = error.message
+    const silent = shouldSilenceBusinessError(error && error.config, message)
     if (error.response) {
       // Server returned an error response
       const { status, data } = error.response
@@ -161,11 +175,13 @@ service.interceptors.response.use(
     } else if (error.message.includes('timeout')) {
       message = '请求超时'
     }
-    Message({
-      message: message,
-      type: 'error',
-      duration: 5 * 1000
-    })
+    if (!silent) {
+      Message({
+        message: message,
+        type: 'error',
+        duration: 5 * 1000
+      })
+    }
     return Promise.reject(error)
   }
 )

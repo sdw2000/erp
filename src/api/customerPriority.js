@@ -49,7 +49,8 @@ export function getPriorityDetail(orderId) {
 export function recalculateAllPriorities() {
   return request({
     url: '/api/production/customer-priority/recalculate-all',
-    method: 'post'
+    method: 'post',
+    timeout: 300000
   })
 }
 

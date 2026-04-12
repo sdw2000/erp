@@ -1,7 +1,10 @@
 <template>
   <div class="app-container">
     <el-card>
-      <div slot="header">化工请购管理</div>
+      <div slot="header" class="clearfix">
+        <span>化工请购管理</span>
+        <el-button size="small" style="float: right" @click="goHub">返回原材料总仓</el-button>
+      </div>
       <el-form :inline="true" size="small">
         <el-form-item label="计划日期">
           <el-date-picker v-model="query.planDate" type="date" value-format="yyyy-MM-dd" placeholder="选择日期" />
@@ -174,6 +177,10 @@ export default {
     this.fetchPage()
   },
   methods: {
+    goHub() {
+      this.$router.push({ path: '/stock/raw-material-hub' })
+    },
+
     formatStatus(status) {
       const map = {
         DRAFT: '草稿',

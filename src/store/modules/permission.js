@@ -7,13 +7,14 @@ import { asyncRoutes, constantRoutes } from '@/router'
  */
 function hasPermission(roles, route) {
   // normalize roles
-  roles = roles || []
+  roles = (roles || []).map(role => String(role || '').trim().toLowerCase()).filter(Boolean)
   // super admin bypasses all permission checks
   if (roles.includes('admin')) {
     return true
   }
   if (route.meta && route.meta.roles) {
-    return roles.some(role => route.meta.roles.includes(role))
+    const routeRoles = route.meta.roles.map(role => String(role || '').trim().toLowerCase()).filter(Boolean)
+    return roles.some(role => routeRoles.includes(role))
   } else {
     return true
   }
@@ -56,10 +57,11 @@ const actions = {
   generateRoutes({ commit }, roles) {
     return new Promise(resolve => {
       let accessedRoutes
-      if (roles.includes('admin')) {
+      const normalizedRoles = (roles || []).map(role => String(role || '').trim().toLowerCase()).filter(Boolean)
+      if (normalizedRoles.includes('admin')) {
         accessedRoutes = asyncRoutes || []
       } else {
-        accessedRoutes = filterAsyncRoutes(asyncRoutes, roles)
+        accessedRoutes = filterAsyncRoutes(asyncRoutes, normalizedRoles)
       }
 
       commit('SET_ROUTES', accessedRoutes)

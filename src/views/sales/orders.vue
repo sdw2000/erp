@@ -38,10 +38,19 @@
           <el-input v-model="searchForm.orderNo" placeholder="订单编号" clearable size="small" @keyup.enter.native="handleSearch" @clear="handleSearch" />
         </el-col>
         <el-col :span="4">
-          <el-select v-model="searchForm.completionStatus" placeholder="完成状态" clearable size="small" style="width:100%" @change="handleSearch">
-            <el-option label="未开始" value="not_started" />
-            <el-option label="部分完成" value="partial" />
-            <el-option label="已完成" value="completed" />
+          <el-select v-model="searchForm.lifecycleStatus" placeholder="生命周期状态" clearable size="small" style="width:100%" @change="handleSearch">
+            <el-option label="已下单" value="CREATED" />
+            <el-option label="已排程" value="SCHEDULED" />
+            <el-option label="生产中" value="IN_PRODUCTION" />
+            <el-option label="生产完成" value="PRODUCED" />
+            <el-option label="部分发货" value="SHIPPED_PARTIAL" />
+            <el-option label="全部发货" value="SHIPPED_FULL" />
+            <el-option label="部分收货" value="PARTIAL_RECEIVED" />
+            <el-option label="已收货" value="RECEIVED" />
+            <el-option label="部分回款" value="PAYMENT_PARTIAL" />
+            <el-option label="已回款" value="PAID" />
+            <el-option label="关闭" value="CLOSED" />
+            <el-option label="取消" value="CANCELLED" />
           </el-select>
         </el-col>
         <el-col :span="4">
@@ -62,6 +71,7 @@
         </el-col>
       </el-row>
     </div>
+    <div class="orders-table-wrapper">
     <el-table
       ref="ordersTable"
       class="orders-table"
@@ -85,11 +95,6 @@
       <el-table-column prop="deliveryDate" label="交货日期" width="98" sortable="custom">
         <template slot-scope="scope">{{ formatMonthDay(scope.row.deliveryDate) }}</template>
       </el-table-column>
-      <el-table-column prop="completionStatus" label="完成状态" width="100" align="center" sortable="custom">
-        <template slot-scope="scope">
-          <el-tag size="mini" :type="getOrderCompletionStatusType(scope.row)">{{ getOrderCompletionStatusText(scope.row) }}</el-tag>
-        </template>
-      </el-table-column>
       <el-table-column label="生命周期" width="110" align="center">
         <template slot-scope="scope">
           <el-tag size="mini" :type="getLifecycleStatusType(scope.row && scope.row.status)">{{ getLifecycleStatusText(scope.row && scope.row.status) }}</el-tag>
@@ -97,7 +102,7 @@
       </el-table-column>
       <el-table-column v-if="isAdminUser" prop="salesUserName" label="销售" width="72" />
       <el-table-column v-if="isAdminUser" prop="documentationPersonUserName" label="跟单员" width="72" />
-      <el-table-column label="操作" width="176" align="center">
+      <el-table-column label="操作" width="228" align="center">
         <template slot-scope="scope">
           <div class="op-btns">
             <el-button type="text" size="mini" @click="viewDetail(scope.row)">详情</el-button>
@@ -109,6 +114,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <div class="orders-pagination-wrapper">
       <el-pagination
@@ -334,7 +340,7 @@
             <div><strong>物料明细</strong></div>
           </div>
 
-          <div style="margin:8px 0; display:flex; justify-content:flex-end;">
+          <div class="items-action-toolbar">
             <el-button size="mini" @click="duplicateLastItemBasics">复制上一行</el-button>
             <el-button type="primary" size="mini" @click="addItem">新增明细行</el-button>
           </div>
@@ -475,7 +481,7 @@
                 <template slot-scope="scope">
                   <el-button type="text" size="mini" @click="toggleItemEdit(scope.row)">{{ scope.row._rowEditing ? '完成' : '编辑' }}</el-button>
                   <el-button type="text" size="mini" @click="duplicateItemBasics(scope.$index)">复制</el-button>
-                  <el-button type="text" size="mini" style="color:#f56c6c" @click="removeItem(scope.$index)">删除</el-button>
+                  <el-button type="text" size="mini" style="color:#f56c6c" @click="removeItem(scope.$index, scope.row)">删除</el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -633,7 +639,7 @@
 </template>
 
 <script>
-import { getOrders, createOrder, updateOrder, deleteOrder, cancelOrder, downloadOrderTemplate, importOrders, exportOrders, getOrderDetail, generateOrderNo, getOrderHistorySpecs, getOrderRemarkHistory, getHistoryInitStatus, importHistoryInitOrders, syncIncrementalOrders } from '@/api/sales'
+import { getOrders, createOrder, updateOrder, deleteOrder, deleteOrderItem, cancelOrder, downloadOrderTemplate, importOrders, exportOrders, getOrderDetail, generateOrderNo, getOrderHistorySpecs, getOrderRemarkHistory, getHistoryInitStatus, importHistoryInitOrders, syncIncrementalOrders } from '@/api/sales'
 import { getQuotationList } from '@/api/quotation'
 import { getCustomerList } from '@/api/customer'
 import { getAllEnabledSpecs } from '@/api/tapeSpec'
@@ -670,13 +676,14 @@ export default {
       editVisible: false,
       isEditing: false,
       editForm: this.emptyForm(),
+      removedItemIds: [],
       // flag: whether customerOrderNo has been manually edited by user
       customerOrderEdited: false, // 搜索表单
       orderNoEdited: false,
       searchForm: {
         customer: '',
         orderNo: '',
-        completionStatus: '',
+        lifecycleStatus: '',
         showCompleted: false,
         orderDateStart: '',
         orderDateEnd: ''
@@ -711,7 +718,8 @@ export default {
         website: 'www.finechemfr.com'
       },
       printLogoUrl: '/logo/finechem-logo.png',
-      orderRemarkHistoryOptions: []
+      orderRemarkHistoryOptions: [],
+      ordersTableResizeHandler: null
     }
   },
   computed: {
@@ -773,6 +781,8 @@ export default {
       this.fetchHistoryInitStatus()
     }
     window.addEventListener('sales:orders:refresh', this.salesOrderRefreshHandler)
+    this.ordersTableResizeHandler = () => this.scheduleTableLayout()
+    window.addEventListener('resize', this.ordersTableResizeHandler)
   },
   activated() {
     // when navigating to this route (keep-alive) ensure list is fresh
@@ -783,13 +793,33 @@ export default {
     if (this.salesOrderRefreshHandler) {
       window.removeEventListener('sales:orders:refresh', this.salesOrderRefreshHandler)
     }
+    if (this.ordersTableResizeHandler) {
+      window.removeEventListener('resize', this.ordersTableResizeHandler)
+    }
   },
   beforeDestroy() {
     if (this.salesOrderRefreshHandler) {
       window.removeEventListener('sales:orders:refresh', this.salesOrderRefreshHandler)
     }
+    if (this.ordersTableResizeHandler) {
+      window.removeEventListener('resize', this.ordersTableResizeHandler)
+    }
   },
   methods: {
+    scheduleTableLayout() {
+      this.$nextTick(() => {
+        const table = this.$refs.ordersTable
+        if (table && typeof table.doLayout === 'function') {
+          table.doLayout()
+          setTimeout(() => {
+            if (table && typeof table.doLayout === 'function') {
+              table.doLayout()
+            }
+          }, 40)
+        }
+      })
+    },
+
     async fetchHistoryInitStatus() {
       try {
         const res = await getHistoryInitStatus()
@@ -851,6 +881,8 @@ export default {
         SCHEDULED: '已排程',
         IN_PRODUCTION: '生产中',
         PRODUCED: '生产完成',
+        RECEIVED: '已收货',
+        PARTIAL_RECEIVED: '部分收货',
         SHIPPED_PARTIAL: '部分发货',
         SHIPPED_FULL: '全部发货',
         PAYMENT_PARTIAL: '部分回款',
@@ -860,6 +892,12 @@ export default {
         CANCELED: '取消',
         pending: '待处理',
         processing: '处理中',
+        in_production: '生产中',
+        produced: '生产完成',
+        received: '已收货',
+        partial_received: '部分收货',
+        shipped_partial: '部分发货',
+        shipped_full: '全部发货',
         completed: '已完成',
         cancelled: '取消',
         canceled: '取消',
@@ -871,9 +909,9 @@ export default {
       const raw = String(status || '').trim()
       if (!raw) return 'info'
       const upper = raw.toUpperCase()
-      if (upper === 'PAID' || upper === 'SHIPPED_FULL' || upper === 'PRODUCED' || upper === 'COMPLETED') return 'success'
+      if (upper === 'PAID' || upper === 'SHIPPED_FULL' || upper === 'PRODUCED' || upper === 'COMPLETED' || upper === 'RECEIVED') return 'success'
       if (upper === 'CANCELLED' || upper === 'CANCELED' || upper === 'CANCELLED' || upper === 'CLOSED') return 'danger'
-      if (upper === 'SHIPPED_PARTIAL' || upper === 'IN_PRODUCTION' || upper === 'PROCESSING' || upper === 'PAYMENT_PARTIAL') return 'warning'
+      if (upper === 'SHIPPED_PARTIAL' || upper === 'IN_PRODUCTION' || upper === 'PROCESSING' || upper === 'PAYMENT_PARTIAL' || upper === 'PARTIAL_RECEIVED') return 'warning'
       return 'info'
     },
     formatItemCompletedRolls(item) {
@@ -1780,7 +1818,7 @@ export default {
           pageSize: this.pageSize,
           orderNo: this.searchForm.orderNo || undefined,
           customer: this.searchForm.customer || undefined,
-          completionStatus: this.searchForm.completionStatus || undefined,
+          status: this.searchForm.lifecycleStatus || undefined,
           showCompleted: !!this.searchForm.showCompleted,
           startDate: this.searchForm.orderDateStart || undefined,
           endDate: this.searchForm.orderDateEnd || undefined,
@@ -1829,9 +1867,6 @@ export default {
       this.fetchOrders()
     },
     handleShowCompletedChange() {
-      if (!this.searchForm.showCompleted && this.searchForm.completionStatus === 'completed') {
-        this.searchForm.completionStatus = ''
-      }
       this.handleSearch()
     },
     // 重置搜索
@@ -1840,7 +1875,7 @@ export default {
       this.searchForm = {
         customer: '',
         orderNo: '',
-        completionStatus: '',
+        lifecycleStatus: '',
         showCompleted: false,
         orderDateStart: '',
         orderDateEnd: ''
@@ -1871,6 +1906,7 @@ export default {
     },
     async openCreate() {
       this.isEditing = false
+      this.removedItemIds = []
       const restored = await this.restoreOrderDraftForCreate()
       if (restored) {
         this.$message.info('已恢复上次暂存的未完成信息')
@@ -1932,7 +1968,41 @@ export default {
       await this.loadHistorySpecsForRow(newItem)
       this.syncItemUnitPriceFromQuotation(newItem)
     },
-    removeItem(idx) {
+    async removeItem(idx, row) {
+      const target = row || this.editForm.items[idx]
+      if (!target) return
+      const targetId = Number(target.id || target.itemId || target.orderItemId || 0)
+
+      if (this.isEditing && targetId > 0 && this.editForm && this.editForm.orderNo) {
+        try {
+          await this.$confirm('确认删除该条明细吗？删除后将立即生效。', '提示', {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          })
+        } catch (e) {
+          return
+        }
+
+        try {
+          const res = await deleteOrderItem(this.editForm.orderNo, targetId)
+          if (res && (res.code === 200 || res.code === 20000)) {
+            this.editForm.items.splice(idx, 1)
+            this.removedItemIds = (this.removedItemIds || []).filter(id => Number(id) !== targetId)
+            this.$message.success('明细删除成功')
+            await this.fetchOrders()
+          } else {
+            this.$message.error((res && (res.msg || res.message)) || '明细删除失败')
+          }
+        } catch (e) {
+          this.$message.error((e && e.message) || '明细删除失败')
+        }
+        return
+      }
+
+      if (targetId > 0) {
+        this.removedItemIds.push(targetId)
+      }
       this.editForm.items.splice(idx, 1)
     },
     async openEdit(row) {
@@ -1946,6 +2016,7 @@ export default {
 
         const detailOrder = res.data
         this.isEditing = true
+        this.removedItemIds = []
         this.editForm = this.applyResolvedCustomerFields(JSON.parse(JSON.stringify(detailOrder)))
 
         // ensure deliveryAddress and customerOrderNo exist
@@ -1960,6 +2031,8 @@ export default {
 
         if (this.editForm.items) {
           this.editForm.items.forEach(item => {
+            const idNum = Number(item.id || item.itemId || item.orderItemId || 0)
+            item.id = idNum > 0 ? idNum : null
             item.thicknessDisplay = item.thickness != null ? item.thickness : ''
             item.lengthDisplay = item.length ? Math.round(item.length) : ''
             // normalize numeric fields to strings so inputs show properly
@@ -2096,8 +2169,9 @@ export default {
             converted.remainingQty = Math.max(converted.rolls - converted.deliveredQty, 0)
           }
           // 保留明细ID（如果存在），转换为数字类型
-          if (it.id !== undefined && it.id !== null && it.id !== '') {
-            converted.id = Number(it.id)
+          const itemId = Number(it.id || it.itemId || it.orderItemId || 0)
+          if (itemId > 0) {
+            converted.id = itemId
           }
           if (it.thicknessDisplay !== undefined && it.thicknessDisplay !== '') {
             converted.thickness = Number(it.thicknessDisplay)
@@ -2113,6 +2187,7 @@ export default {
         }
         const payload = JSON.parse(JSON.stringify(this.editForm))
         payload.items = preparedItems
+        payload.removedItemIds = Array.from(new Set((this.removedItemIds || []).filter(id => !!id)))
         // 调试：打印实际发送的数据
         console.log('=== 准备提交的payload ===')
         console.log('isEditing:', this.isEditing)
@@ -2130,6 +2205,7 @@ export default {
             window.dispatchEvent(new Event('dashboard:refresh'))
             this.$message.success('更新成功')
             this.editVisible = false
+            this.removedItemIds = []
           } else {
             this.$message.error('更新失败')
           }
@@ -2156,7 +2232,9 @@ export default {
         const errMsg = (e && (e.message || (e.response && e.response.data && (e.response.data.message || e.response.data.msg)))) || ''
         if (errMsg.includes('Duplicate entry') && errMsg.includes('uk_order_no')) {
           this.$message.error('订单编号已存在，请更换后再保存')
-        } else if (!errMsg) {
+        } else if (errMsg) {
+          this.$message.error(errMsg)
+        } else {
           this.$message.error('保存失败')
         }
       }
@@ -2251,7 +2329,7 @@ export default {
       const params = {
         orderNo: this.searchForm.orderNo,
         customer: this.searchForm.customer,
-        completionStatus: this.searchForm.completionStatus,
+        status: this.searchForm.lifecycleStatus,
         showCompleted: this.searchForm.showCompleted,
         startDate: this.searchForm.orderDateStart,
         endDate: this.searchForm.orderDateEnd
@@ -2845,6 +2923,14 @@ export default {
   border-radius: 8px;
   overflow: hidden;
 }
+.sales-orders .orders-table-wrapper {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+.sales-orders .orders-table-wrapper ::v-deep .el-table {
+  min-width: 1360px;
+}
 .sales-orders .orders-table ::v-deep .el-table__header th {
   background: #f5f7fa;
 }
@@ -2862,11 +2948,14 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  flex-wrap: wrap;
+  column-gap: 6px;
+  row-gap: 2px;
 }
 .orders-table .op-btns ::v-deep .el-button--text {
-  padding: 0 1px;
+  padding: 0 2px;
   font-size: 12px;
+  line-height: 16px;
 }
 .op-print {
   color: #67c23a;
@@ -2888,13 +2977,25 @@ export default {
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
 }
+
+.sales-orders .items-action-toolbar {
+  position: sticky;
+  top: 8px;
+  z-index: 20;
+  margin: 8px 0;
+  padding: 6px 8px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  backdrop-filter: saturate(120%) blur(2px);
+}
 .sales-orders .items-table-wrapper ::v-deep .el-table {
   width: max-content !important;
   min-width: 1580px;
-}
-.sales-orders .items-table-wrapper ::v-deep .el-table__header-wrapper,
-.sales-orders .items-table-wrapper ::v-deep .el-table__body-wrapper {
-  overflow-x: visible !important;
 }
 .sales-orders .items-table-wrapper ::v-deep .edit-items-table .cell {
   padding: 4px 5px;

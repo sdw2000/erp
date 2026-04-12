@@ -1176,18 +1176,6 @@ export default {
   padding: 0 4px;
 }
 .spec-unit { color:#909399; font-size:11px; white-space:nowrap; }
-.returns-edit-table /deep/ .el-table__header-wrapper {
-  overflow-x: hidden !important;
-}
-.returns-edit-table /deep/ .el-table__body-wrapper {
-  overflow-x: auto !important;
-}
-.returns-detail-dialog .returns-table /deep/ .el-table__header-wrapper,
-.returns-detail-dialog .returns-table /deep/ .el-table__body-wrapper,
-.return-print-table /deep/ .el-table__header-wrapper,
-.return-print-table /deep/ .el-table__body-wrapper {
-  overflow-x: hidden !important;
-}
 .returns-edit-table /deep/ th.el-table__cell .cell,
 .returns-edit-table /deep/ td.el-table__cell .cell,
 .returns-detail-dialog .returns-table /deep/ th.el-table__cell .cell,

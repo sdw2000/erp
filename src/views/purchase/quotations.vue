@@ -5,7 +5,9 @@
         <span>采购报价</span>
         <div style="float:right">
           <el-button type="success" icon="el-icon-download" size="small" @click="handleDownloadTemplate">下载模板</el-button>
-          <el-button type="warning" icon="el-icon-upload2" size="small" @click="triggerImport">导入</el-button>
+          <el-button type="success" plain icon="el-icon-download" size="small" @click="handleDownloadPriceSheetTemplate">初始化模板</el-button>
+          <el-button type="primary" icon="el-icon-upload" size="small" @click="triggerImport('init')">报价初始化</el-button>
+          <el-button type="warning" icon="el-icon-upload2" size="small" @click="triggerImport('normal')">导入</el-button>
           <el-button type="info" icon="el-icon-download" size="small" @click="handleExport">导出</el-button>
           <el-select v-model="filters.status" placeholder="状态" clearable size="small" style="width:120px; margin-right:8px" @change="handleSearch">
             <el-option label="草稿" value="draft" />
@@ -28,9 +30,6 @@
         <el-table-column prop="contactPhone" label="联系电话" width="140" />
         <el-table-column prop="quotationDate" label="报价日期" width="120" />
         <el-table-column prop="validUntil" label="有效期至" width="120" />
-        <el-table-column prop="totalAmount" label="总金额" width="120">
-          <template slot-scope="scope">{{ formatNumber(scope.row.totalAmount) }}</template>
-        </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template slot-scope="scope">
             <el-tag :type="statusTag(scope.row.status)" size="small">{{ statusText(scope.row.status) }}</el-tag>
@@ -62,7 +61,7 @@
           <p><strong>报价单号：</strong>{{ current.quotationNo || '-' }} &nbsp;&nbsp; <strong>供应商：</strong>{{ current.supplier || '-' }}</p>
           <p><strong>联系人：</strong>{{ current.contactPerson || '-' }} / {{ current.contactPhone || '-' }}</p>
           <p><strong>报价日期：</strong>{{ current.quotationDate || '-' }} &nbsp;&nbsp; <strong>有效期至：</strong>{{ current.validUntil || '-' }}</p>
-          <p><strong>状态：</strong>{{ statusText(current.status) }} &nbsp;&nbsp; <strong>总金额：</strong>{{ formatNumber(current.totalAmount) }}</p>
+          <p><strong>状态：</strong>{{ statusText(current.status) }}</p>
           <div style="margin-top: 10px;"><strong>物料明细</strong></div>
           <el-table v-if="detailMode(current.items || []) !== 'raw'" :data="detailFilmItems(current.items || [])" stripe style="margin-top:10px">
             <el-table-column type="index" width="50" align="center" />
@@ -146,6 +145,14 @@
           </el-row>
 
           <el-divider>物料明细</el-divider>
+          <el-alert
+            v-if="form.materialMode === 'raw'"
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 8px;"
+            title="胶水/原料录入说明：规格填如 180kg/桶 或 900kg/桶，数量填桶数，单价按元/kg 录入，系统自动按总重计算金额。"
+          />
           <div style="text-align:right; margin-bottom:8px">
             <el-button type="primary" size="mini" @click="addItem">新增明细</el-button>
           </div>
@@ -156,8 +163,10 @@
             <el-table-column label="物料编码" width="190">
               <template slot-scope="scope">
                 <el-select
+                  v-if="scope.row._editing"
                   v-model="scope.row.materialCode"
                   filterable
+                  :filter-method="handleMaterialFilter"
                   allow-create
                   placeholder="选择或输入"
                   size="small"
@@ -169,30 +178,44 @@
                     <span style="float:right; color:#8492a6; font-size:12px">{{ raw.materialName }}</span>
                   </el-option>
                 </el-select>
+                <span v-else>{{ scope.row.materialCode || '-' }}</span>
               </template>
             </el-table-column>
             <el-table-column label="物料名称" width="150">
-              <template slot-scope="scope"><el-input v-model="scope.row.materialName" size="small" /></template>
+              <template slot-scope="scope">
+                <el-input v-if="scope.row._editing" v-model="scope.row.materialName" size="small" />
+                <span v-else>{{ scope.row.materialName || '-' }}</span>
+              </template>
             </el-table-column>
             <el-table-column label="颜色" width="90">
-              <template slot-scope="scope"><el-input v-model="scope.row.colorCode" size="small" /></template>
+              <template slot-scope="scope">
+                <el-input v-if="scope.row._editing" v-model="scope.row.colorCode" size="small" />
+                <span v-else>{{ scope.row.colorCode || '-' }}</span>
+              </template>
             </el-table-column>
             <el-table-column label="规格" width="200">
               <template slot-scope="scope">
-                <div style="display:flex; gap:4px;">
+                <div v-if="scope.row._editing" style="display:flex; gap:4px;">
                   <el-input v-model="scope.row.thicknessDisplay" size="small" placeholder="厚度" style="width:60px" />
                   <span style="line-height: 28px;">*</span>
                   <el-input v-model="scope.row.width" size="small" placeholder="宽度" style="width:60px" />
                   <span style="line-height: 28px;">*</span>
                   <el-input v-model="scope.row.lengthDisplay" size="small" placeholder="长度" style="width:60px" />
                 </div>
+                <span v-else>{{ formatFilmSpec(scope.row) || '-' }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="卷数" width="80">
-              <template slot-scope="scope"><el-input v-model="scope.row.rolls" size="small" /></template>
+            <el-table-column :label="quantityLabel('film')" width="80">
+              <template slot-scope="scope">
+                <el-input v-if="scope.row._editing" v-model="scope.row.rolls" size="small" :placeholder="quantityLabel('film')" />
+                <span v-else>{{ scope.row.rolls || '-' }}</span>
+              </template>
             </el-table-column>
-            <el-table-column label="单价" width="90">
-              <template slot-scope="scope"><el-input v-model="scope.row.unitPrice" size="small" /></template>
+            <el-table-column :label="priceLabel('film')" width="90">
+              <template slot-scope="scope">
+                <el-input v-if="scope.row._editing" v-model="scope.row.unitPrice" size="small" :placeholder="priceLabel('film')" />
+                <span v-else>{{ scope.row.unitPrice || '-' }}</span>
+              </template>
             </el-table-column>
             <el-table-column label="面积(㎡)" width="100">
               <template slot-scope="scope">{{ calcFilmSqm(scope.row) }}</template>
@@ -201,10 +224,15 @@
               <template slot-scope="scope">{{ calcFilmAmount(scope.row) }}</template>
             </el-table-column>
             <el-table-column label="备注" min-width="140">
-              <template slot-scope="scope"><el-input v-model="scope.row.remark" size="small" /></template>
-            </el-table-column>
-            <el-table-column label="操作" width="70" align="center">
               <template slot-scope="scope">
+                <el-input v-if="scope.row._editing" v-model="scope.row.remark" size="small" />
+                <span v-else>{{ scope.row.remark || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="120" align="center">
+              <template slot-scope="scope">
+                <el-button v-if="!scope.row._editing" type="text" size="mini" @click="toggleItemEdit(scope.row, true)">编辑</el-button>
+                <el-button v-else type="text" size="mini" @click="toggleItemEdit(scope.row, false)">完成</el-button>
                 <el-button type="text" size="mini" style="color:#f56c6c" @click="removeFilmItem(scope.$index)">删除</el-button>
               </template>
             </el-table-column>
@@ -217,8 +245,10 @@
             <el-table-column label="物料编码" width="190">
               <template slot-scope="scope">
                 <el-select
+                  v-if="scope.row._editing"
                   v-model="scope.row.materialCode"
                   filterable
+                  :filter-method="handleMaterialFilter"
                   allow-create
                   placeholder="选择或输入"
                   size="small"
@@ -230,31 +260,49 @@
                     <span style="float:right; color:#8492a6; font-size:12px">{{ raw.materialName }}</span>
                   </el-option>
                 </el-select>
+                <span v-else>{{ scope.row.materialCode || '-' }}</span>
               </template>
             </el-table-column>
             <el-table-column label="物料名称" width="150">
-              <template slot-scope="scope"><el-input v-model="scope.row.materialName" size="small" /></template>
+              <template slot-scope="scope">
+                <el-input v-if="scope.row._editing" v-model="scope.row.materialName" size="small" />
+                <span v-else>{{ scope.row.materialName || '-' }}</span>
+              </template>
             </el-table-column>
             <el-table-column label="规格" width="150">
-              <template slot-scope="scope"><el-input v-model="scope.row.rawSpec" size="small" placeholder="如: 25kg/桶" /></template>
+              <template slot-scope="scope">
+                <el-input v-if="scope.row._editing" v-model="scope.row.rawSpec" size="small" placeholder="如: 180kg/桶" />
+                <span v-else>{{ scope.row.rawSpec || '-' }}</span>
+              </template>
             </el-table-column>
-            <el-table-column label="数量" width="90">
-              <template slot-scope="scope"><el-input v-model="scope.row.quantity" size="small" /></template>
+            <el-table-column :label="quantityLabel('raw')" width="90">
+              <template slot-scope="scope">
+                <el-input v-if="scope.row._editing" v-model="scope.row.quantity" size="small" :placeholder="quantityLabel('raw')" />
+                <span v-else>{{ scope.row.quantity || '-' }}</span>
+              </template>
             </el-table-column>
             <el-table-column label="总重(kg)" width="100">
               <template slot-scope="scope">{{ calcRawTotalWeight(scope.row) }}</template>
             </el-table-column>
-            <el-table-column label="单价" width="90">
-              <template slot-scope="scope"><el-input v-model="scope.row.unitPrice" size="small" /></template>
+            <el-table-column :label="priceLabel('raw')" width="110">
+              <template slot-scope="scope">
+                <el-input v-if="scope.row._editing" v-model="scope.row.unitPrice" size="small" :placeholder="priceLabel('raw')" />
+                <span v-else>{{ scope.row.unitPrice || '-' }}</span>
+              </template>
             </el-table-column>
             <el-table-column label="金额" width="100">
               <template slot-scope="scope">{{ calcRawAmount(scope.row) }}</template>
             </el-table-column>
             <el-table-column label="备注" min-width="140">
-              <template slot-scope="scope"><el-input v-model="scope.row.remark" size="small" /></template>
-            </el-table-column>
-            <el-table-column label="操作" width="70" align="center">
               <template slot-scope="scope">
+                <el-input v-if="scope.row._editing" v-model="scope.row.remark" size="small" />
+                <span v-else>{{ scope.row.remark || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="120" align="center">
+              <template slot-scope="scope">
+                <el-button v-if="!scope.row._editing" type="text" size="mini" @click="toggleItemEdit(scope.row, true)">编辑</el-button>
+                <el-button v-else type="text" size="mini" @click="toggleItemEdit(scope.row, false)">完成</el-button>
                 <el-button type="text" size="mini" style="color:#f56c6c" @click="removeRawItem(scope.$index)">删除</el-button>
               </template>
             </el-table-column>
@@ -270,9 +318,9 @@
 </template>
 
 <script>
-import { listPurchaseQuotations, getPurchaseQuotationDetail, createPurchaseQuotation, updatePurchaseQuotation, deletePurchaseQuotation } from '@/api/purchaseQuotation'
+import { listPurchaseQuotations, getPurchaseQuotationDetail, createPurchaseQuotation, updatePurchaseQuotation, deletePurchaseQuotation, initializePurchaseQuotationFromPriceSheet } from '@/api/purchaseQuotation'
 import { getAllEnabledSpecs } from '@/api/tapeSpec'
-import { getRawMaterialList } from '@/api/tapeFormula'
+import { getRawMaterialList } from '@/api/tapeRawMaterial'
 
 export default {
   name: 'PurchaseQuotations',
@@ -282,12 +330,14 @@ export default {
       records: [],
       filters: { supplier: '', status: '' },
       pagination: { page: 1, size: 10, total: 0 },
+      importMode: 'normal',
       detailVisible: false,
       editVisible: false,
       isEdit: false,
       current: null,
       specs: [],
       rawMaterials: [],
+      materialSearchKeyword: '',
       form: this.emptyForm()
     }
   },
@@ -317,62 +367,246 @@ export default {
         console.error('获取原材料失败', e)
       }
     },
-    triggerImport() {
+    quoteHeaderColumns() {
+      return ['报价单号', '供应商', '联系人', '联系电话', '报价日期', '有效期至', '状态(draft/submitted/accepted/rejected/expired)', '备注']
+    },
+    quoteItemColumns() {
+      return ['报价单号', '物料类型(film/raw)', '物料编码', '物料名称', '规格', '数量/卷数', '单位单价', '备注']
+    },
+    priceSheetColumns() {
+      return ['供应商代码*', '供应商名称', '物料代码*', '物料名称', '单位*', '单价*', '规格/备注']
+    },
+    buildPriceSheetTemplateData() {
+      return {
+        headers: {
+          sheet1: this.priceSheetColumns()
+        },
+        rows: {
+          sheet1: [[
+            'BDJ001',
+            '示例供应商A',
+            '7058',
+            '示例物料A',
+            'kg',
+            '28.08',
+            '橡胶 180kg/桶'
+          ], [
+            'BDJ001',
+            '示例供应商A',
+            '708',
+            '示例物料B',
+            'kg',
+            '64.80',
+            '1%'
+          ], [
+            'BG001',
+            '示例供应商B',
+            'ZX01',
+            '示例物料C',
+            'pcs',
+            '1.65',
+            '140*140*580' 
+          ]]
+        }
+      }
+    },
+    buildQuoteTemplateData() {
+      return {
+        headers: {
+          sheet1: this.quoteHeaderColumns(),
+          sheet2: this.quoteItemColumns()
+        },
+        rows: {
+          sheet1: [[
+            'Q20260309001',
+            '示例供应商',
+            '张三',
+            '13800138000',
+            '2026-03-09',
+            '2026-04-09',
+            'draft',
+            '采购报价初始化示例'
+          ]],
+          sheet2: [[
+            'Q20260309001',
+            'film',
+            'FM-001',
+            '示例薄膜',
+            '100μm*1020mm*5000m',
+            '10',
+            '2.35',
+            '单位为元/㎡'
+          ], [
+            'Q20260309001',
+            'raw',
+            'GL-001',
+            '示例胶水',
+            '180kg/桶',
+            '8',
+            '12.50',
+            '单位为元/kg'
+          ]]
+        }
+      }
+    },
+    normalizeQuoteHeaderRow(row) {
+      return {
+        quotationNo: String(row['报价单号'] || row.quotationNo || '').trim(),
+        supplier: String(row['供应商'] || row.supplier || '').trim(),
+        contactPerson: String(row['联系人'] || row.contactPerson || '').trim(),
+        contactPhone: String(row['联系电话'] || row.contactPhone || '').trim(),
+        quotationDate: String(row['报价日期'] || row.quotationDate || '').trim(),
+        validUntil: String(row['有效期至'] || row.validUntil || '').trim(),
+        status: String(row['状态(draft/submitted/accepted/rejected/expired)'] || row.status || 'draft').trim() || 'draft',
+        remark: String(row['备注'] || row.remark || '').trim()
+      }
+    },
+    normalizeQuoteItemRow(row) {
+      return {
+        quotationNo: String(row['报价单号'] || row.quotationNo || '').trim(),
+        materialType: String(row['物料类型(film/raw)'] || row.materialType || '').trim(),
+        materialCode: String(row['物料编码'] || row.materialCode || '').trim(),
+        materialName: String(row['物料名称'] || row.materialName || '').trim(),
+        specifications: String(row['规格'] || row.specifications || '').trim(),
+        quantity: String(row['数量/卷数'] || row.quantity || '').trim(),
+        unitPrice: String(row['单位单价'] || row.unitPrice || '').trim(),
+        remark: String(row['备注'] || row.remark || '').trim()
+      }
+    },
+    buildQuotePayloadFromGroup(headerRow, itemRows) {
+      const firstItem = itemRows[0] || {}
+      const materialMode = firstItem.materialType === 'raw' ? 'raw' : 'film'
+      const items = itemRows
+        .filter(item => item.materialCode || item.materialName)
+        .map(item => {
+          const isRaw = item.materialType === 'raw'
+          const quantity = Number(item.quantity || 0)
+          const unitPrice = Number(item.unitPrice || 0)
+          const payloadItem = {
+            materialCode: item.materialCode,
+            materialName: item.materialName,
+            specifications: item.specifications,
+            thickness: null,
+            width: null,
+            length: null,
+            quantity: quantity || null,
+            unit: isRaw ? 'kg' : '卷',
+            sqm: null,
+            unitPrice: unitPrice || null,
+            amount: null,
+            remark: item.remark
+          }
+
+          if (isRaw) {
+            const match = String(item.specifications || '').match(/([0-9]+(?:\.[0-9]+)?)\s*kg\s*\/\s*桶/i)
+            const perBucket = match ? Number(match[1]) : null
+            const totalWeight = perBucket && quantity ? perBucket * quantity : null
+            payloadItem.sqm = totalWeight ? Number(totalWeight.toFixed(2)) : null
+            payloadItem.amount = totalWeight && unitPrice ? Number((totalWeight * unitPrice).toFixed(2)) : null
+          } else {
+            const specParts = String(item.specifications || '').split('*').map(part => part.trim()).filter(Boolean)
+            const widthPart = specParts[1] || ''
+            const lengthPart = specParts[2] || ''
+            const width = widthPart ? Number(widthPart.replace(/[^0-9.]/g, '')) : null
+            const length = lengthPart ? Number(lengthPart.replace(/[^0-9.]/g, '')) : null
+            payloadItem.width = width
+            payloadItem.length = length
+            payloadItem.thickness = specParts[0] ? Number(specParts[0].replace(/[^0-9.]/g, '')) : null
+            const sqm = width && length && quantity ? ((width / 1000) * length * quantity) : null
+            payloadItem.sqm = sqm ? Number(sqm.toFixed(2)) : null
+            payloadItem.amount = payloadItem.sqm && unitPrice ? Number((payloadItem.sqm * unitPrice).toFixed(2)) : null
+          }
+
+          return payloadItem
+        })
+
+      return {
+        supplier: headerRow.supplier,
+        contactPerson: headerRow.contactPerson,
+        contactPhone: headerRow.contactPhone,
+        quotationDate: headerRow.quotationDate,
+        validUntil: headerRow.validUntil,
+        status: headerRow.status || 'draft',
+        remark: headerRow.remark,
+        items,
+        materialMode
+      }
+    },
+    triggerImport(mode = 'normal') {
+      this.importMode = mode
       this.$refs.importFile && this.$refs.importFile.click()
     },
     handleDownloadTemplate() {
-      import('@/vendor/Export2Excel').then(excel => {
-        const header = ['供应商', '联系人', '联系电话', '报价日期', '有效期至', '状态(draft/submitted/accepted/rejected/expired)', '备注']
-        const data = [[
-          '示例供应商',
-          '张三',
-          '13800138000',
-          '2026-03-09',
-          '2026-04-09',
-          'draft',
-          ''
-        ]]
-        excel.export_json_to_excel({
-          header,
-          data,
-          filename: '采购报价导入模板',
-          bookType: 'xlsx'
-        })
+      import('xlsx').then(XLSX => {
+        const template = this.buildQuoteTemplateData()
+        const workbook = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([template.headers.sheet1, ...template.rows.sheet1]), '报价单')
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([template.headers.sheet2, ...template.rows.sheet2]), '报价明细')
+        XLSX.writeFile(workbook, '采购报价导入模板.xlsx')
+      })
+    },
+    handleDownloadPriceSheetTemplate() {
+      import('xlsx').then(XLSX => {
+        const template = this.buildPriceSheetTemplateData()
+        const workbook = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([template.headers.sheet1, ...template.rows.sheet1]), '报价初始化')
+        XLSX.writeFile(workbook, '采购报价初始化模板.xlsx')
       })
     },
     async handleImportChange(e) {
       const file = e.target.files && e.target.files[0]
       if (!file) return
       try {
+        if (this.importMode === 'init') {
+          const formData = new FormData()
+          formData.append('file', file)
+          const res = await initializePurchaseQuotationFromPriceSheet(formData)
+          if (res && (res.code === 200 || res.code === 20000)) {
+            const data = res.data || {}
+            this.$message.success(`初始化完成：生成${data.createdQuotations || 0}张报价单，${data.createdItems || 0}条明细`)
+            if (data.failedGroups && data.failedGroups > 0) {
+              this.$alert((data.failures || []).join('\n') || '部分分组初始化失败', '初始化结果', { confirmButtonText: '确定' })
+            }
+            this.fetchList()
+          } else {
+            this.$message.error((res && res.msg) || '报价初始化失败')
+          }
+          return
+        }
+
         const XLSX = await import('xlsx')
         const ab = await file.arrayBuffer()
         const wb = XLSX.read(ab, { type: 'array' })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' })
-        if (!rows || !rows.length) {
+        const headerSheetName = wb.SheetNames.find(name => /报价单|header/i.test(name)) || wb.SheetNames[0]
+        const itemSheetName = wb.SheetNames.find(name => /明细|item/i.test(name)) || wb.SheetNames[1]
+        const headerRows = XLSX.utils.sheet_to_json(wb.Sheets[headerSheetName], { defval: '' })
+        const itemRows = itemSheetName ? XLSX.utils.sheet_to_json(wb.Sheets[itemSheetName], { defval: '' }) : []
+        if (!headerRows || !headerRows.length) {
           this.$message.warning('导入文件为空')
           return
         }
 
+        const itemGroups = new Map()
+        ;(itemRows || []).forEach(row => {
+          const normalized = this.normalizeQuoteItemRow(row)
+          const key = normalized.quotationNo || '__default__'
+          if (!itemGroups.has(key)) itemGroups.set(key, [])
+          itemGroups.get(key).push(normalized)
+        })
+
         let success = 0
         let fail = 0
 
-        for (const row of rows) {
-          const supplier = String(row['供应商'] || row['supplier'] || '').trim()
+        for (let index = 0; index < headerRows.length; index++) {
+          const header = this.normalizeQuoteHeaderRow(headerRows[index])
+          const supplier = header.supplier
           if (!supplier) {
             fail++
             continue
           }
-          const payload = {
-            supplier,
-            contactPerson: String(row['联系人'] || row['contactPerson'] || '').trim(),
-            contactPhone: String(row['联系电话'] || row['contactPhone'] || '').trim(),
-            quotationDate: String(row['报价日期'] || row['quotationDate'] || '').trim(),
-            validUntil: String(row['有效期至'] || row['validUntil'] || '').trim(),
-            status: String(row['状态(draft/submitted/accepted/rejected/expired)'] || row['status'] || 'draft').trim() || 'draft',
-            remark: String(row['备注'] || row['remark'] || '').trim(),
-            items: []
-          }
+          const quotationNo = header.quotationNo || `TMP-${index + 1}`
+          const matchedItems = itemGroups.get(quotationNo) || itemGroups.get('__default__') || []
+          const payload = this.buildQuotePayloadFromGroup(header, matchedItems)
           try {
             const res = await createPurchaseQuotation(payload)
             if (res && (res.code === 200 || res.code === 20000)) {
@@ -387,8 +621,9 @@ export default {
         this.$message.success(`导入完成：成功${success}条，失败${fail}条`)
         this.fetchList()
       } catch (err) {
-        this.$message.error('导入失败，请检查模板格式')
+        this.$message.error(this.importMode === 'init' ? '报价初始化失败，请检查模板格式' : '导入失败，请检查模板格式')
       } finally {
+        this.importMode = 'normal'
         if (this.$refs.importFile) this.$refs.importFile.value = ''
       }
     },
@@ -400,25 +635,39 @@ export default {
           return
         }
         const data = res.data && res.data.records ? res.data.records : (Array.isArray(res.data) ? res.data : (res.data && res.data.list ? res.data.list : []))
-        import('@/vendor/Export2Excel').then(excel => {
-          const header = ['报价单号', '供应商', '联系人', '联系电话', '报价日期', '有效期至', '总金额', '状态', '备注']
-          const rows = (data || []).map(item => [
-            item.quotationNo || '',
-            item.supplier || '',
-            item.contactPerson || '',
-            item.contactPhone || '',
-            item.quotationDate || '',
-            item.validUntil || '',
-            item.totalAmount || '',
-            item.status || '',
-            item.remark || ''
-          ])
-          excel.export_json_to_excel({
-            header,
-            data: rows,
-            filename: `采购报价数据_${new Date().toLocaleDateString().replace(/\//g, '-')}`,
-            bookType: 'xlsx'
+        import('xlsx').then(XLSX => {
+          const headerRows = [['报价单号', '供应商', '联系人', '联系电话', '报价日期', '有效期至', '总金额', '状态', '备注']]
+          const detailRows = [['报价单号', '物料类型', '物料编码', '物料名称', '规格', '数量/卷数', '单位单价', '金额', '备注']]
+          ;(data || []).forEach(item => {
+            headerRows.push([
+              item.quotationNo || '',
+              item.supplier || '',
+              item.contactPerson || '',
+              item.contactPhone || '',
+              item.quotationDate || '',
+              item.validUntil || '',
+              item.totalAmount || '',
+              item.status || '',
+              item.remark || ''
+            ])
+            ;(item.items || []).forEach(detail => {
+              detailRows.push([
+                item.quotationNo || '',
+                detail.width !== null && detail.width !== undefined ? 'film' : 'raw',
+                detail.materialCode || '',
+                detail.materialName || '',
+                detail.specifications || '',
+                detail.quantity || '',
+                detail.unitPrice || '',
+                detail.amount || '',
+                detail.remark || ''
+              ])
+            })
           })
+          const workbook = XLSX.utils.book_new()
+          XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(headerRows), '报价单')
+          XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(detailRows), '报价明细')
+          XLSX.writeFile(workbook, `采购报价数据_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`)
         })
       } catch (e) {
         this.$message.error('导出失败')
@@ -450,7 +699,8 @@ export default {
         lengthDisplay: '',
         rolls: '',
         unitPrice: '',
-        remark: ''
+        remark: '',
+        _editing: true
       }
     },
     emptyRawItem() {
@@ -461,7 +711,8 @@ export default {
         quantity: '',
         totalWeight: '',
         unitPrice: '',
-        remark: ''
+        remark: '',
+        _editing: true
       }
     },
     statusTag(status) {
@@ -473,6 +724,12 @@ export default {
     statusText(status) {
       const map = { draft: '草稿', submitted: '已提交', accepted: '已接受', rejected: '已拒绝', expired: '已过期' }
       return map[status] || status || '-'
+    },
+    quantityLabel(mode) {
+      return mode === 'raw' ? '桶数' : '卷数'
+    },
+    priceLabel(mode) {
+      return mode === 'raw' ? '单价(元/kg)' : '单价(元/㎡)'
     },
     formatNumber(val) {
       if (val === null || val === undefined) return '-'
@@ -532,6 +789,8 @@ export default {
       if (res && (res.code === 200 || res.code === 20000)) {
         this.isEdit = true
         this.form = this.normalizeEditForm(res.data)
+        ;(this.form.filmItems || []).forEach(item => { item._editing = false })
+        ;(this.form.rawItems || []).forEach(item => { item._editing = false })
         this.editVisible = true
       }
     },
@@ -554,7 +813,8 @@ export default {
             lengthDisplay: item.length,
             rolls: item.quantity,
             unitPrice: item.unitPrice,
-            remark: item.remark
+            remark: item.remark,
+            _editing: false
           })
         } else {
           form.rawItems.push({
@@ -565,7 +825,8 @@ export default {
             quantity: item.quantity,
             totalWeight: item.sqm,
             unitPrice: item.unitPrice,
-            remark: item.remark
+            remark: item.remark,
+            _editing: false
           })
         }
       })
@@ -595,17 +856,34 @@ export default {
       return (this.rawMaterials || []).filter(item => !String(item.unit || '').toLowerCase().includes('m'))
     },
     materialOptionsForCurrentMode() {
-      if (this.form.materialMode === 'film') return this.filmMaterialOptions()
-      if (this.form.materialMode === 'raw') return this.nonFilmMaterialOptions()
-      return this.rawMaterials || []
+      let list = []
+      if (this.form.materialMode === 'film') list = this.filmMaterialOptions()
+      else if (this.form.materialMode === 'raw') list = this.nonFilmMaterialOptions()
+      else list = this.rawMaterials || []
+
+      const keyword = String(this.materialSearchKeyword || '').trim().toLowerCase()
+      if (!keyword) return list
+      return list.filter(item => {
+        const code = String(item.materialCode || '').toLowerCase()
+        const name = String(item.materialName || '').toLowerCase()
+        return code.includes(keyword) || name.includes(keyword)
+      })
+    },
+    handleMaterialFilter(query) {
+      this.materialSearchKeyword = query || ''
     },
     detectMaterialModeByCode(code) {
       const raw = (this.rawMaterials || []).find(r => r.materialCode === code)
       if (!raw) return this.form.materialMode || 'film'
-      return String(raw.unit || '').toLowerCase().includes('m') ? 'film' : 'raw'
+      const unitText = String(raw.unit || '').toLowerCase()
+      const nameText = `${raw.materialName || ''}${raw.spec || ''}`
+      if (unitText.includes('m') && !unitText.includes('kg')) return 'film'
+      if (unitText.includes('kg') || /胶水|粘合|原料|kg|桶/i.test(nameText)) return 'raw'
+      return this.form.materialMode || 'film'
     },
     formatFilmSpec(item) {
-      return [item.thickness || '', item.width || '', item.length || ''].filter(Boolean).join('*')
+      if (!item) return ''
+      return [item.thicknessDisplay || item.thickness || '', item.width || '', item.lengthDisplay || item.length || ''].filter(Boolean).join('*')
     },
     onMaterialCodeChange(row, code) {
       const mode = this.detectMaterialModeByCode(code)
@@ -661,6 +939,10 @@ export default {
     addItem() {
       if (this.form.materialMode === 'raw') this.addRawItem()
       else this.addFilmItem()
+    },
+    toggleItemEdit(row, editing) {
+      if (!row) return
+      this.$set(row, '_editing', !!editing)
     },
     parseSpecKg(spec) {
       if (!spec) return null
@@ -754,15 +1036,32 @@ export default {
       }
     },
     confirmDelete(row) {
-      this.$confirm(`确认删除报价单【${row.quotationNo || row.id}】?`, '提示', { type: 'warning' })
+      this.$confirm(`确认删除报价单【${row.quotationNo || row.id}】吗？删除后不可恢复。`, '删除确认', {
+        type: 'warning',
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        closeOnClickModal: false,
+        closeOnPressEscape: false
+      })
         .then(() => this.remove(row.id))
         .catch(() => {})
     },
     async remove(id) {
-      const res = await deletePurchaseQuotation(id)
-      if (res && (res.code === 200 || res.code === 20000)) {
-        this.$message.success('删除成功')
-        this.fetchList()
+      try {
+        const res = await deletePurchaseQuotation(id)
+        if (res && (res.code === 200 || res.code === 20000)) {
+          this.$message.success('删除成功')
+          this.records = (this.records || []).filter(item => item.id !== id)
+          this.pagination.total = Math.max(0, Number(this.pagination.total || 0) - 1)
+          if (this.records.length === 0 && this.pagination.page > 1) {
+            this.pagination.page = this.pagination.page - 1
+          }
+          this.fetchList()
+          return
+        }
+        this.$message.error((res && res.msg) || '删除失败')
+      } catch (e) {
+        this.$message.error((e && e.message) || '删除失败，请稍后重试')
       }
     }
   }

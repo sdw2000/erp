@@ -18,7 +18,7 @@
       </div>
 
       <el-table v-loading="loading" :data="list" stripe style="width:100%">
-        <el-table-column type="index" label="序号" width="60" align="center" />
+        <el-table-column type="index" :index="indexMethod" label="序号" width="60" align="center" />
         <el-table-column prop="companyCode" label="公司编码" width="140" />
         <el-table-column prop="companyName" label="公司名称" min-width="200" />
         <el-table-column prop="contactName" label="联系人" width="120" />
@@ -175,6 +175,9 @@ export default {
     this.fetchList()
   },
   methods: {
+    indexMethod(index) {
+      return (this.page.current - 1) * this.page.size + index + 1
+    },
     async fetchList() {
       this.loading = true
       try {

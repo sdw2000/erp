@@ -356,6 +356,15 @@ export async function fetchGatewayLastRequest(config = {}) {
   return data || {}
 }
 
+export async function fetchGatewayPreview(payload = {}, config = {}) {
+  const data = await gatewayFetch('/preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify(payload || {})
+  }, config)
+  return data && data.data ? data.data : {}
+}
+
 export async function fetchGatewayDashboard(config = {}) {
   try {
     const data = await gatewayFetch('/dashboard', { method: 'GET' }, config)

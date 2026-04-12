@@ -30,3 +30,11 @@ export function deleteSalesReconciliationHistory(id) {
     method: 'delete'
   })
 }
+
+export function confirmSalesReconciliationDetails(data) {
+  return request({
+    url: '/sales/reconciliation/confirm-details',
+    method: 'post',
+    data
+  })
+}

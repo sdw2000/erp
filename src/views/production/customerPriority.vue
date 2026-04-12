@@ -245,28 +245,51 @@ export default {
     }
   },
   created() {
-    this.loadData()
+    this.loadData(true)
   },
   methods: {
-    async loadData() {
+    async loadData(withStats = false) {
       this.loading = true
       try {
         const res = await getCustomerPriorityList(this.queryParams)
         this.priorityList = res.data.list || []
         this.total = Number(res.data?.total || 0)
-        this.calculateStats()
+        if (withStats) {
+          await this.loadStatsSummary()
+        }
       } catch (error) {
         this.$message.error('加载数据失败：' + error.message)
       } finally {
         this.loading = false
       }
     },
-    calculateStats() {
-      this.stats = {
-        high: this.priorityList.filter(item => item.totalScore >= 25).length,
-        medium: this.priorityList.filter(item => item.totalScore >= 15 && item.totalScore < 25).length,
-        low: this.priorityList.filter(item => item.totalScore < 15).length,
-        total: this.priorityList.length
+    async loadStatsSummary() {
+      const baseQuery = {
+        ...this.queryParams,
+        pageNum: 1,
+        pageSize: 1,
+        priorityRange: ''
+      }
+      try {
+        const [allRes, highRes, mediumRes, lowRes] = await Promise.all([
+          getCustomerPriorityList(baseQuery),
+          getCustomerPriorityList({ ...baseQuery, priorityRange: 'high' }),
+          getCustomerPriorityList({ ...baseQuery, priorityRange: 'medium' }),
+          getCustomerPriorityList({ ...baseQuery, priorityRange: 'low' })
+        ])
+        this.stats = {
+          high: Number(highRes && highRes.data && highRes.data.total) || 0,
+          medium: Number(mediumRes && mediumRes.data && mediumRes.data.total) || 0,
+          low: Number(lowRes && lowRes.data && lowRes.data.total) || 0,
+          total: Number(allRes && allRes.data && allRes.data.total) || 0
+        }
+      } catch (e) {
+        this.stats = {
+          high: 0,
+          medium: 0,
+          low: 0,
+          total: this.total || 0
+        }
       }
     },
     getPriorityType(score) {
@@ -276,7 +299,7 @@ export default {
     },
     handleQuery() {
       this.queryParams.pageNum = 1
-      this.loadData()
+      this.loadData(true)
     },
     handleReset() {
       this.queryParams = {
@@ -286,15 +309,15 @@ export default {
         customerName: '',
         priorityRange: ''
       }
-      this.loadData()
+      this.loadData(true)
     },
     handleSizeChange(val) {
       this.queryParams.pageSize = val
-      this.loadData()
+      this.loadData(false)
     },
     handlePageChange(val) {
       this.queryParams.pageNum = val
-      this.loadData()
+      this.loadData(false)
     },
     async handleViewDetail(row) {
       try {
@@ -309,7 +332,7 @@ export default {
       try {
         await calculatePriority([row.customerId])
         this.$message.success('重新计算成功')
-        this.loadData()
+        this.loadData(true)
       } catch (error) {
         this.$message.error('重新计算失败：' + error.message)
       }
@@ -321,7 +344,7 @@ export default {
         try {
           await recalculateAllPriorities()
           this.$message.success('重新计算成功')
-          this.loadData()
+          this.loadData(true)
         } catch (error) {
           this.$message.error('重新计算失败：' + error.message)
         }

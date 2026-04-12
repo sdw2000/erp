@@ -5,6 +5,7 @@
         <span style="font-size: 18px; font-weight: bold">
           <i class="el-icon-files" /> 薄膜仓库存管理
         </span>
+        <el-button size="small" style="float: right" @click="goHub">返回原材料总仓</el-button>
       </div>
 
       <!-- 查询表单 -->
@@ -172,6 +173,10 @@ export default {
     this.loadFilmStock()
   },
   methods: {
+    goHub() {
+      this.$router.push({ path: '/stock/raw-material-hub' })
+    },
+
     // 加载薄膜库存
     async loadFilmStock() {
       this.loading = true

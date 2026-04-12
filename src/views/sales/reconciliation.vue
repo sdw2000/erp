@@ -53,7 +53,18 @@
       </div>
 
       <div class="section-block">
-        <div class="section-title">当月送货明细</div>
+        <div class="section-head">
+          <div class="section-title">当月送货明细</div>
+          <el-button
+            type="success"
+            size="small"
+            icon="el-icon-check"
+            :disabled="!statementLoaded || !statement.detailRows.length"
+            @click="confirmCurrentStatement"
+          >
+            确认对账
+          </el-button>
+        </div>
         <el-table class="reconciliation-table" :data="statement.detailRows" border stripe style="width:100%">
           <el-table-column label="出货日期" width="100">
             <template slot-scope="scope">{{ formatShortDate(scope.row.bizDate) }}</template>
@@ -74,6 +85,20 @@
           <el-table-column label="总金额" width="120" align="right">
             <template slot-scope="scope">
               <span :class="{ 'negative-amount': Number(scope.row.amount) < 0 }">{{ formatNumber(scope.row.amount) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="对账到" width="140" align="center">
+            <template slot-scope="scope">
+              <el-select
+                v-if="scope.row.bizType === 'delivery'"
+                v-model="scope.row.reconcileTargetMonth"
+                size="mini"
+                style="width: 120px"
+              >
+                <el-option :value="queryForm.month" :label="`${queryForm.month}(当月)`" />
+                <el-option :value="getNextMonth(queryForm.month)" :label="`${getNextMonth(queryForm.month)}(下月)`" />
+              </el-select>
+              <span v-else>{{ scope.row.reconcileTargetMonth || queryForm.month }}</span>
             </template>
           </el-table-column>
         </el-table>
@@ -221,7 +246,7 @@
 
 <script>
 import { getCustomerList } from '@/api/customer'
-import { deleteSalesReconciliationHistory, getSalesReconciliationStatement, saveSalesReconciliationHistory } from '@/api/salesReconciliation'
+import { confirmSalesReconciliationDetails, deleteSalesReconciliationHistory, getSalesReconciliationStatement, saveSalesReconciliationHistory } from '@/api/salesReconciliation'
 import request from '@/utils/request'
 
 export default {
@@ -325,7 +350,13 @@ export default {
       }
       const data = res.data || {}
       this.statement = Object.assign({}, this.statement, data)
-      this.statement.detailRows = data.detailRows || []
+      this.statement.detailRows = (data.detailRows || []).map(row => {
+        const targetMonth = row.reconcileTargetMonth || this.queryForm.month
+        return {
+          ...row,
+          reconcileTargetMonth: targetMonth
+        }
+      })
       this.statement.historyRows = (data.historyRows || []).map(item => ({ ...item, _editing: false }))
       this.statement.printHistoryRows = data.printHistoryRows || []
       this.statement.summary = data.summary || this.statement.summary
@@ -401,6 +432,41 @@ export default {
     openPrintPreview() {
       if (!this.statementLoaded) return this.$message.warning('请先查询对账单')
       this.printVisible = true
+    },
+    getNextMonth(month) {
+      if (!month || !/^\d{4}-\d{2}$/.test(month)) return month
+      const [y, m] = month.split('-').map(Number)
+      const d = new Date(y, m - 1, 1)
+      d.setMonth(d.getMonth() + 1)
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    },
+    buildDetailConfirmPayload() {
+      const details = (this.statement.detailRows || [])
+        .filter(row => row.bizType === 'delivery' && row.noticeItemId)
+        .map(row => ({
+          noticeItemId: row.noticeItemId,
+          targetMonth: row.reconcileTargetMonth || this.queryForm.month
+        }))
+      return {
+        customerCode: this.queryForm.customerCode,
+        month: this.queryForm.month,
+        details
+      }
+    },
+    async confirmCurrentStatement() {
+      if (!this.queryForm.customerCode || !this.queryForm.month) {
+        return this.$message.warning('请先选择客户和月份')
+      }
+      const payload = this.buildDetailConfirmPayload()
+      if (!payload.details.length) {
+        return this.$message.warning('无可确认的发货明细')
+      }
+      const res = await confirmSalesReconciliationDetails(payload)
+      if (!res || res.code !== 200) {
+        return this.$message.error((res && (res.msg || res.message)) || '确认失败')
+      }
+      this.$message.success('对账确认成功')
+      await this.handleSearch()
     },
     handlePrintBrowser() {
       const area = document.getElementById('reconciliationPrintArea')

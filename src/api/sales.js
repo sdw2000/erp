@@ -36,6 +36,15 @@ export function deleteOrder(orderNo) {
   })
 }
 
+// 删除订单明细
+export function deleteOrderItem(orderNo, itemId) {
+  return request({
+    url: '/sales/orders/item',
+    method: 'delete',
+    params: { orderNo, itemId }
+  })
+}
+
 // 取消订单（必须填写取消原因）
 export function cancelOrder(data) {
   return request({

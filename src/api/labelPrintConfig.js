@@ -15,11 +15,12 @@ export function getActiveLabelPrintConfigs() {
   })
 }
 
-export function batchSaveLabelPrintConfigs(data) {
+export function batchSaveLabelPrintConfigs(data, params) {
   return request({
     url: '/basic-data/label-print-config/batch-save',
     method: 'post',
-    data
+    data,
+    params
   })
 }
 
@@ -78,6 +79,21 @@ export function getAllDeliveryNoticeTemplates() {
   })
 }
 
+export function getTemplatePreviewSamples() {
+  return request({
+    url: '/basic-data/label-print-config/template-preview-samples',
+    method: 'get'
+  })
+}
+
+export function saveTemplatePreviewSamples(data) {
+  return request({
+    url: '/basic-data/label-print-config/template-preview-samples',
+    method: 'post',
+    data
+  })
+}
+
 export function saveDeliveryNoticeTemplate(data) {
   return request({
     url: '/basic-data/label-print-config/delivery-notice/template',
@@ -91,5 +107,32 @@ export function deleteDeliveryNoticeTemplate(templateKey) {
     url: '/basic-data/label-print-config/delivery-notice/template',
     method: 'delete',
     params: { templateKey }
+  })
+}
+
+// 按模板获取打印渲染数据
+export function getPrintTemplateData(params) {
+  return request({
+    url: '/basic-data/label-print-config/template-data',
+    method: 'get',
+    params
+  })
+}
+
+// 每模板独立查询接口：销售合同
+export function getSalesContractPrintTemplateData(templateKey, orderNo) {
+  return request({
+    url: `/basic-data/label-print-config/template-data/sales-contract/${encodeURIComponent(templateKey)}`,
+    method: 'get',
+    params: { orderNo }
+  })
+}
+
+// 每模板独立查询接口：发货通知
+export function getDeliveryPrintTemplateData(templateKey, noticeId) {
+  return request({
+    url: `/basic-data/label-print-config/template-data/delivery-notice/${encodeURIComponent(templateKey)}`,
+    method: 'get',
+    params: { noticeId }
   })
 }

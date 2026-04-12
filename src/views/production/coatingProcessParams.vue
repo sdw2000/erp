@@ -50,13 +50,10 @@
             <span style="margin-left: 12px">厚度: {{ row.coatingThickness }}μm</span>
           </template>
         </el-table-column>
-        <el-table-column label="换产时间" width="160">
+        <el-table-column label="换产品时间" width="120">
           <template slot-scope="{ row }">
-            换色: {{ row.colorChangeTime }}分 / 换厚: {{ row.thicknessChangeTime }}分
+            {{ getChangeProductTime(row) }}分钟
           </template>
-        </el-table-column>
-        <el-table-column prop="setupTime" label="准备时间" width="90">
-          <template slot-scope="{ row }">{{ row.setupTime }}分钟</template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" show-overflow-tooltip />
         <el-table-column label="操作" width="140" fixed="right">
@@ -132,17 +129,7 @@
         </el-row>
         <el-row :gutter="20">
           <el-col :span="8">
-            <el-form-item label="换色时间" prop="colorChangeTime">
-              <el-input v-model.number="form.colorChangeTime" type="number" placeholder="分钟" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="换厚度时间" prop="thicknessChangeTime">
-              <el-input v-model.number="form.thicknessChangeTime" type="number" placeholder="分钟" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="准备时间">
+            <el-form-item label="换产品时间" prop="setupTime">
               <el-input v-model.number="form.setupTime" type="number" placeholder="分钟" />
             </el-form-item>
           </el-col>
@@ -192,7 +179,8 @@ export default {
       rules: {
         materialCode: [{ required: true, message: '请选择研发表中的产品料号', trigger: 'change' }],
         coatingSpeed: [{ required: true, message: '请输入涂布速度', trigger: 'blur' }],
-        coatingThickness: [{ required: true, message: '请输入涂布厚度', trigger: 'blur' }]
+        coatingThickness: [{ required: true, message: '请输入涂布厚度', trigger: 'blur' }],
+        setupTime: [{ required: true, message: '请输入换产品时间', trigger: 'blur' }]
       },
       queryMaterialLoading: false,
       queryMaterialOptions: [],
@@ -287,9 +275,19 @@ export default {
       this.dialogTitle = '编辑涂布工艺参数'
       this.isEditing = true
       const res = await getProcessParamsById(row.id)
+      const unifiedChangeTime = Number(
+        (res.data && res.data.setupTime) != null
+          ? res.data.setupTime
+          : ((res.data && res.data.colorChangeTime) != null
+            ? res.data.colorChangeTime
+            : ((res.data && res.data.thicknessChangeTime) != null ? res.data.thicknessChangeTime : 15))
+      )
       this.form = {
         ...this.getEmptyForm(),
         ...res.data,
+        setupTime: unifiedChangeTime,
+        colorChangeTime: unifiedChangeTime,
+        thicknessChangeTime: unifiedChangeTime,
         processType: 'COATING'
       }
       this.materialOptions = [{ materialCode: row.materialCode, materialName: row.materialName || '' }]
@@ -306,7 +304,14 @@ export default {
             return
           }
 
-          const payload = { ...this.form, processType: 'COATING' }
+          const unifiedChangeTime = Number(this.form.setupTime || 0)
+          const payload = {
+            ...this.form,
+            processType: 'COATING',
+            setupTime: unifiedChangeTime,
+            colorChangeTime: unifiedChangeTime,
+            thicknessChangeTime: unifiedChangeTime
+          }
           if (this.isEditing) {
             await updateProcessParams(this.form.id, payload)
           } else {
@@ -331,6 +336,14 @@ export default {
         this.$message.success('删除成功')
         this.loadList()
       }).catch(() => {})
+    },
+    getChangeProductTime(row) {
+      const value = row && row.setupTime != null
+        ? row.setupTime
+        : (row && row.colorChangeTime != null
+          ? row.colorChangeTime
+          : (row && row.thicknessChangeTime != null ? row.thicknessChangeTime : 0))
+      return Number(value || 0)
     }
   }
 }

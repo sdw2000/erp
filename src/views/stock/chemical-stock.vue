@@ -5,9 +5,12 @@
         <span style="font-size: 18px; font-weight: bold">
           <i class="el-icon-goods" /> 化工仓库存管理
         </span>
-        <el-button type="warning" icon="el-icon-warning" size="small" style="float: right" @click="handleCheckExpiring">
-          查看即将过期
-        </el-button>
+        <div style="float: right">
+          <el-button size="small" @click="goHub">返回原材料总仓</el-button>
+          <el-button type="warning" icon="el-icon-warning" size="small" @click="handleCheckExpiring">
+            查看即将过期
+          </el-button>
+        </div>
       </div>
 
       <!-- 查询表单 -->
@@ -155,6 +158,9 @@
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
       </el-table>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="detailDialogVisible = false">关闭</el-button>
+      </div>
     </el-dialog>
 
     <!-- 即将过期对话框 -->
@@ -180,6 +186,9 @@
         <el-table-column prop="location" label="库位" width="100" align="center" />
         <el-table-column prop="supplier" label="供应商" width="150" show-overflow-tooltip />
       </el-table>
+      <div slot="footer" class="dialog-footer">
+        <el-button type="primary" @click="expiringDialogVisible = false">关闭</el-button>
+      </div>
     </el-dialog>
   </div>
 </template>
@@ -216,6 +225,10 @@ export default {
     this.loadChemicalStock()
   },
   methods: {
+    goHub() {
+      this.$router.push({ path: '/stock/raw-material-hub' })
+    },
+
     // 加载化工库存
     async loadChemicalStock() {
       this.loading = true

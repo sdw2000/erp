@@ -6,14 +6,14 @@ function resolve(dir) {
   return path.join(__dirname, dir)
 }
 
-const name = defaultSettings.title || 'vue Element Admin' // page title
+const name = defaultSettings.title || '方恩电子管理系统' // page title
 
 // If your port is set to 80,
 // use administrator privileges to execute the command line.
 // For example, Mac: sudo npm run
 // You can change the port by the following method:
 // port = 9527 npm run dev OR npm run dev --port = 9527
-const port = process.env.port || process.env.npm_config_port || 8080 // dev port
+const port = 8080 // dev port（固定8080，便于局域网统一访问）
 
 // All configuration item explanations can be find in https://cli.vuejs.org/config/
 module.exports = {
@@ -61,10 +61,8 @@ module.exports = {
         logLevel: 'debug'
       }
     },
-    // 为局域网访问和 HMR 显式配置 sockjs 地址，避免被 proxy 干扰或 host 不匹配
-    // 为局域网访问和 HMR 显式配置 sockjs 地址，使用上面计算的 port 变量保持一致
+    // 固定局域网访问地址与HMR sockjs地址
     public: '192.168.0.138:' + port,
-    // webpack-dev-server (v3) 支持以下 sock 配置，确保客户端通过正确的 host/port 连接
     sockHost: '192.168.0.138',
     sockPort: port,
     sockPath: '/sockjs-node',

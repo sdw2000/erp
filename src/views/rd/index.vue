@@ -3,6 +3,7 @@
     <el-card>
       <div slot="header" class="clearfix">
         <span>产品规格管理</span>        <div style="float: right">
+          <el-button v-if="$canEdit()" type="primary" plain icon="el-icon-collection-tag" size="small" @click="openColorDictDialog">颜色字典维护</el-button>
           <el-button v-if="$canImportExport()" type="success" icon="el-icon-download" size="small" @click="handleDownloadTemplate">下载模板</el-button>
           <el-button v-if="$canImportExport()" type="warning" icon="el-icon-upload2" size="small" @click="handleImport">导入</el-button>
           <el-button v-if="$canImportExport()" type="info" icon="el-icon-download" size="small" @click="handleExport">导出</el-button>
@@ -21,7 +22,7 @@
         </el-form-item>
         <el-form-item label="颜色">
           <el-select v-model="searchForm.colorCode" placeholder="全部" clearable style="width: 120px">
-            <el-option v-for="item in colorOptions" :key="item.code" :label="item.name" :value="item.code" />
+            <el-option v-for="item in colorOptions" :key="item.code" :label="getColorOptionLabel(item, false)" :value="item.code" />
           </el-select>
         </el-form-item>
         <el-form-item label="基材">
@@ -36,9 +37,9 @@
       </el-form>
 
       <!-- 数据表格 -->
-      <el-table v-loading="loading" :data="list" style="width: 100%; margin-top: 15px" border stripe size="small">
+      <el-table ref="specTable" v-loading="loading" :data="list" style="width: 100%; margin-top: 15px" border stripe size="small">
         <el-table-column type="index" label="序号" width="55" align="center" :index="indexMethod" />
-        <el-table-column prop="productName" label="产品名称" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="productName" label="产品名称" width="250" show-overflow-tooltip />
         <el-table-column prop="materialCode" label="胶带料号" width="200" show-overflow-tooltip />
         <el-table-column prop="colorCode" label="颜色" width="70" align="center">
           <template slot-scope="scope">
@@ -117,7 +118,7 @@
           <el-col :span="8">
             <el-form-item label="颜色代码" prop="colorCode">
               <el-select v-model="form.colorCode" placeholder="请选择" style="width:100%" @change="onColorChange">
-                <el-option v-for="item in colorOptions" :key="item.code" :label="`${item.code} - ${item.name}`" :value="item.code" />
+                <el-option v-for="item in colorOptions" :key="item.code" :label="getColorOptionLabel(item, true)" :value="item.code" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -291,6 +292,80 @@
         <el-button type="primary" @click="importResultVisible = false">确定</el-button>
       </div>
     </el-dialog>
+
+    <!-- 颜色字典维护 -->
+    <el-dialog title="颜色字典维护" :visible.sync="colorDictDialogVisible" width="900px" :close-on-click-modal="false">
+      <el-form :inline="true" :model="colorDictSearch" class="search-form" style="margin-bottom: 10px;">
+        <el-form-item label="关键字">
+          <el-input v-model="colorDictSearch.keyword" clearable placeholder="颜色代码/颜色名称" style="width: 220px" />
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="colorDictSearch.status" clearable placeholder="全部" style="width: 120px">
+            <el-option label="启用" :value="1" />
+            <el-option label="禁用" :value="0" />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" icon="el-icon-search" @click="fetchColorDictList">查询</el-button>
+          <el-button icon="el-icon-refresh-left" @click="resetColorDictSearch">重置</el-button>
+        </el-form-item>
+      </el-form>
+
+      <el-form ref="colorDictForm" :model="colorDictForm" :rules="colorDictRules" label-width="90px" size="small" style="padding: 10px; background: #fafafa; border-radius: 4px; margin-bottom: 12px;">
+        <el-row :gutter="12">
+          <el-col :span="6">
+            <el-form-item label="颜色代码" prop="code">
+              <el-input v-model="colorDictForm.code" :disabled="!!colorDictForm.id" placeholder="如 R01" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="颜色名称" prop="name">
+              <el-input v-model="colorDictForm.name" placeholder="如 透明" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="备注">
+              <el-input v-model="colorDictForm.remark" placeholder="备注信息" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="4">
+            <el-form-item label="状态">
+              <el-switch v-model="colorDictForm.status" :active-value="1" :inactive-value="0" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row>
+          <el-col :span="24" style="text-align: right;">
+            <el-button size="small" @click="resetColorDictForm">清空</el-button>
+            <el-button type="primary" size="small" :loading="colorDictSubmitting" @click="submitColorDict">{{ colorDictForm.id ? '更新' : '新增' }}</el-button>
+          </el-col>
+        </el-row>
+      </el-form>
+
+      <el-table ref="colorDictTable" v-loading="colorDictLoading" :data="colorDictList" border stripe size="small" style="width: 100%">
+        <el-table-column type="index" label="序号" width="55" align="center" />
+        <el-table-column prop="code" label="颜色代码" width="120" align="center" />
+        <el-table-column prop="name" label="颜色名称" width="180" />
+        <el-table-column prop="remark" label="备注" width="260" show-overflow-tooltip />
+        <el-table-column prop="status" label="状态" width="80" align="center">
+          <template slot-scope="scope">
+            <el-tag :type="scope.row.status === 1 ? 'success' : 'info'" size="small">
+              {{ scope.row.status === 1 ? '启用' : '禁用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="140" align="center">
+          <template slot-scope="scope">
+            <el-button type="text" size="small" icon="el-icon-edit" @click.stop="editColorDict(scope.row)">编辑</el-button>
+            <el-button type="text" size="small" icon="el-icon-delete" style="color:#f56c6c" @click.stop="deleteColorDictRow(scope.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div slot="footer">
+        <el-button @click="colorDictDialogVisible = false">关 闭</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -298,11 +373,15 @@
 import {
   getSpecList, createSpec, updateSpec, deleteSpec,
   getColorDict, getBaseMaterialDict, getGlueMaterialDict,
-  exportSpec, importSpec, downloadTemplate
+  exportSpec, importSpec, downloadTemplate,
+  getColorDictList, createColorDict, updateColorDict, deleteColorDict
 } from '@/api/tapeSpec'
+import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
 export default {
   name: 'TapeSpecManagement',
+  mixins: [elTableAutoLayout],
+  tableLayoutRefs: ['specTable', 'colorDictTable'],
   data() {
     return {
       searchForm: {
@@ -332,7 +411,28 @@ export default {
 
       // 导入结果
       importResultVisible: false,
-      importResult: null
+      importResult: null,
+
+      // 颜色字典管理
+      colorDictDialogVisible: false,
+      colorDictLoading: false,
+      colorDictSubmitting: false,
+      colorDictSearch: {
+        keyword: '',
+        status: null
+      },
+      colorDictList: [],
+      colorDictForm: {
+        id: null,
+        code: '',
+        name: '',
+        remark: '',
+        status: 1
+      },
+      colorDictRules: {
+        code: [{ required: true, message: '请输入颜色代码', trigger: 'blur' }],
+        name: [{ required: true, message: '请输入颜色名称', trigger: 'blur' }]
+      }
     }
   },
   created() {
@@ -343,6 +443,9 @@ export default {
     $canEdit() {
       // 只有 admin 和 rd 角色可以进行增删改操作
       return this.$hasRole('admin') || this.$hasRole('rd')
+    },
+    isSuccess(res) {
+      return res && (res.code === 20000 || res.code === 200)
     },
     getEmptyForm() {
       return {
@@ -380,12 +483,43 @@ export default {
           getBaseMaterialDict(),
           getGlueMaterialDict()
         ])
-        if (colorRes.code === 20000) this.colorOptions = colorRes.data
-        if (baseRes.code === 20000) this.baseMaterialOptions = baseRes.data
-        if (glueRes.code === 20000) this.glueMaterialOptions = glueRes.data
+        if (this.isSuccess(colorRes)) {
+          const rawList = Array.isArray(colorRes.data) ? colorRes.data : []
+          this.colorOptions = rawList
+            .map(item => {
+              const code = String(item.code || '').trim().toUpperCase()
+              const name = String(item.name || '').trim()
+              const isPlaceholder = !!code && !!name && code === name.toUpperCase()
+              return {
+                ...item,
+                code,
+                name,
+                isPlaceholder
+              }
+            })
+            .filter(item => item.code)
+            .sort((a, b) => {
+              if (a.isPlaceholder !== b.isPlaceholder) {
+                return a.isPlaceholder ? 1 : -1
+              }
+              return String(a.code).localeCompare(String(b.code), 'zh-CN')
+            })
+        }
+        if (this.isSuccess(baseRes)) this.baseMaterialOptions = baseRes.data || []
+        if (this.isSuccess(glueRes)) this.glueMaterialOptions = glueRes.data || []
       } catch (e) {
         console.error('加载字典失败', e)
       }
+    },
+    getColorOptionLabel(item, withCode = true) {
+      const code = String(item && item.code ? item.code : '').trim().toUpperCase()
+      const name = String(item && item.name ? item.name : '').trim()
+      const isPlaceholder = !!code && !!name && code === name.toUpperCase()
+      const finalName = name || code
+      if (withCode) {
+        return isPlaceholder ? `${code} - ${finalName}（待维护）` : `${code} - ${finalName}`
+      }
+      return isPlaceholder ? `${finalName}（待维护）` : finalName
     },
     async fetchData() {
       this.loading = true
@@ -396,9 +530,10 @@ export default {
           ...this.searchForm
         }
         const res = await getSpecList(params)
-        if (res.code === 20000) {
-          this.list = res.data.records
+        if (this.isSuccess(res)) {
+          this.list = (res.data && res.data.records) || []
           this.pagination.total = Number(res.data?.total || 0)
+          this.scheduleTableLayout()
         }
       } catch (e) {
         console.error('获取列表失败', e)
@@ -425,13 +560,15 @@ export default {
     indexMethod(index) {
       return (this.pagination.page - 1) * this.pagination.size + index + 1
     },
-    handleAdd() {
+    async handleAdd() {
+      await this.loadDicts()
       this.dialogTitle = '新增规格'
       this.form = this.getEmptyForm()
       this.dialogVisible = true
       this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
     },
-    handleEdit(row) {
+    async handleEdit(row) {
+      await this.loadDicts()
       this.dialogTitle = '编辑规格'
       this.form = { ...row }
       this.dialogVisible = true
@@ -451,7 +588,7 @@ export default {
       this.submitting = true
       try {
         const res = this.form.id ? await updateSpec(this.form) : await createSpec(this.form)
-        if (res.code === 20000) {
+        if (this.isSuccess(res)) {
           this.$message.success(this.form.id ? '更新成功' : '创建成功')
           this.dialogVisible = false
           this.fetchData()
@@ -470,7 +607,7 @@ export default {
       }).then(async() => {
         try {
           const res = await deleteSpec(row.id)
-          if (res.code === 20000) {
+          if (this.isSuccess(res)) {
             this.$message.success('删除成功')
             this.fetchData()
           } else {
@@ -548,7 +685,7 @@ export default {
       this.loading = true
       try {
         const res = await importSpec(file)
-        if (res.code === 20000 || res.code === 200) {
+        if (this.isSuccess(res)) {
           const result = res.data || {}
           const successCount = Number(result.successCount || 0)
           const failCount = Number(result.failCount || 0)
@@ -588,6 +725,104 @@ export default {
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
+    },
+    openColorDictDialog() {
+      this.colorDictDialogVisible = true
+      this.fetchColorDictList()
+      this.resetColorDictForm()
+    },
+    async fetchColorDictList() {
+      this.colorDictLoading = true
+      try {
+        const params = {
+          keyword: this.colorDictSearch.keyword || undefined,
+          status: this.colorDictSearch.status
+        }
+        const res = await getColorDictList(params)
+        if (this.isSuccess(res)) {
+          this.colorDictList = Array.isArray(res.data) ? res.data : []
+          this.scheduleTableLayout()
+        }
+      } catch (e) {
+        this.$message.error('获取颜色字典失败')
+      } finally {
+        this.colorDictLoading = false
+      }
+    },
+    resetColorDictSearch() {
+      this.colorDictSearch = { keyword: '', status: null }
+      this.fetchColorDictList()
+    },
+    resetColorDictForm() {
+      this.colorDictForm = {
+        id: null,
+        code: '',
+        name: '',
+        remark: '',
+        status: 1
+      }
+      this.$nextTick(() => this.$refs.colorDictForm && this.$refs.colorDictForm.clearValidate())
+    },
+    editColorDict(row) {
+      if (!row || !row.id) {
+        this.$message.warning('该颜色记录无效，无法编辑')
+        return
+      }
+      this.colorDictForm = {
+        id: row.id,
+        code: row.code,
+        name: row.name,
+        remark: row.remark || '',
+        status: row.status
+      }
+      this.$message.info('已加载到上方编辑区，可直接修改后点击“更新”')
+      this.$nextTick(() => this.$refs.colorDictForm && this.$refs.colorDictForm.clearValidate())
+    },
+    async submitColorDict() {
+      try {
+        await this.$refs.colorDictForm.validate()
+      } catch (e) {
+        return
+      }
+
+      this.colorDictSubmitting = true
+      try {
+        const payload = { ...this.colorDictForm }
+        const res = payload.id ? await updateColorDict(payload) : await createColorDict(payload)
+        if (this.isSuccess(res)) {
+          this.$message.success(payload.id ? '更新成功' : '新增成功')
+          this.resetColorDictForm()
+          await this.fetchColorDictList()
+          await this.loadDicts()
+        } else {
+          this.$message.error(res.msg || '操作失败')
+        }
+      } catch (e) {
+        this.$message.error('操作失败')
+      } finally {
+        this.colorDictSubmitting = false
+      }
+    },
+    deleteColorDictRow(row) {
+      this.$confirm(`确认删除颜色代码 "${row.code}" 吗?`, '提示', {
+        type: 'warning'
+      }).then(async() => {
+        try {
+          const res = await deleteColorDict(row.id)
+          if (this.isSuccess(res)) {
+            this.$message.success('删除成功')
+            await this.fetchColorDictList()
+            await this.loadDicts()
+            if (this.colorDictForm.id === row.id) {
+              this.resetColorDictForm()
+            }
+          } else {
+            this.$message.error(res.msg || '删除失败')
+          }
+        } catch (e) {
+          this.$message.error('删除失败')
+        }
+      }).catch(() => {})
     }
   }
 }
