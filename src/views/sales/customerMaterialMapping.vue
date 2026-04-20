@@ -64,6 +64,7 @@
         <el-table-column prop="customerLength" label="客户长度(m)" width="130" align="right" />
         <el-table-column prop="customerMaterialCode" label="客户料号" min-width="170" />
         <el-table-column prop="customerMaterialName" label="客户物料名称" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="customerSpec" label="客户规格" min-width="180" show-overflow-tooltip />
         <el-table-column label="状态" width="90" align="center">
           <template slot-scope="scope">
             <el-tag :type="Number(scope.row.isActive) === 1 ? 'success' : 'info'">
@@ -172,6 +173,9 @@
         <el-form-item label="客户物料名称">
           <el-input v-model.trim="form.customerMaterialName" placeholder="可为空，空则回退我司品名" />
         </el-form-item>
+        <el-form-item label="客户规格">
+          <el-input v-model.trim="form.customerSpec" placeholder="可为空，建议手工填写客户标签规格" />
+        </el-form-item>
         <el-form-item label="状态">
           <el-switch v-model="form.isActive" :active-value="1" :inactive-value="0" />
         </el-form-item>
@@ -213,6 +217,7 @@ function defaultForm() {
     customerLength: null,
     customerMaterialCode: '',
     customerMaterialName: '',
+    customerSpec: '',
     isActive: 1,
     remark: ''
   }
@@ -526,7 +531,8 @@ export default {
             customerWidth: Number.isFinite(customerWidthNum) && customerWidthNum > 0 ? customerWidthNum : null,
             customerLength: Number.isFinite(customerLengthNum) && customerLengthNum > 0 ? customerLengthNum : null,
             customerMaterialCode: String(this.form.customerMaterialCode || '').trim() || null,
-            customerMaterialName: String(this.form.customerMaterialName || '').trim() || null
+            customerMaterialName: String(this.form.customerMaterialName || '').trim() || null,
+            customerSpec: String(this.form.customerSpec || '').trim() || null
           }
           const res = await saveCustomerMaterialMapping(payload)
           if (res && (res.code === 200 || res.code === 20000)) {
@@ -642,8 +648,8 @@ export default {
       }
 
       const lines = [
-        '客户代码,客户物料代码,我司料号,客户规格,我司规格,客户物料名称,备注',
-        'ZZWB1001,58.01.01.1154,S201-2525-C03-0600,50μm*5mm*33m,50μm*5mm*33m,示例客户品名,示例数据'
+        '客户代码,客户物料代码,我司料号,客户规格,我司规格,客户物料名称,客户标签规格,备注',
+        'ZZWB1001,58.01.01.1154,S201-2525-C03-0600,50μm*5mm*33m,50μm*5mm*33m,示例客户品名,50μm*5mm*33m,示例数据'
       ]
       this.downloadCsvFile(lines, 'customer-material-mapping-template.csv')
       this.$message.success('CSV模板已下载')
@@ -655,7 +661,7 @@ export default {
         return
       }
       const list = Array.isArray(res.data) ? res.data : []
-      const lines = ['customerCode,materialCode,thickness,width,length,customerThickness,customerWidth,customerLength,customerMaterialCode,customerMaterialName,isActive,remark']
+      const lines = ['customerCode,materialCode,thickness,width,length,customerThickness,customerWidth,customerLength,customerMaterialCode,customerMaterialName,customerSpec,isActive,remark']
       list.forEach(item => {
         lines.push([
           this.escapeCsvCell(item.customerCode),
@@ -668,6 +674,7 @@ export default {
           this.escapeCsvCell(item.customerLength),
           this.escapeCsvCell(item.customerMaterialCode),
           this.escapeCsvCell(item.customerMaterialName),
+          this.escapeCsvCell(item.customerSpec),
           this.escapeCsvCell(item.isActive == null ? 1 : item.isActive),
           this.escapeCsvCell(item.remark)
         ].join(','))

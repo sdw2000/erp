@@ -38,3 +38,34 @@ export function confirmSalesReconciliationDetails(data) {
     data
   })
 }
+
+export function exportSalesReconciliationStatement(params) {
+  return request({
+    url: '/sales/reconciliation/export',
+    method: 'get',
+    params,
+    responseType: 'blob'
+  })
+}
+
+export function importSalesReconciliationHistory(customerCode, fileOrFormData) {
+  const formData = fileOrFormData instanceof FormData ? fileOrFormData : new FormData()
+  if (!(fileOrFormData instanceof FormData)) {
+    formData.append('file', fileOrFormData)
+  }
+  return request({
+    url: '/sales/reconciliation/history/import',
+    method: 'post',
+    params: { customerCode },
+    data: formData,
+    timeout: 600000
+  })
+}
+
+export function initializeSalesReconciliationHistory(data) {
+  return request({
+    url: '/sales/reconciliation/history/initialize',
+    method: 'post',
+    data
+  })
+}

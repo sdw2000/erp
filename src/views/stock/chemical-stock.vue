@@ -7,11 +7,15 @@
         </span>
         <div style="float: right">
           <el-button size="small" @click="goHub">返回原材料总仓</el-button>
+          <el-button type="success" size="small" icon="el-icon-download" @click="handleDownloadTemplate">下载模板</el-button>
+          <el-button type="warning" size="small" icon="el-icon-upload2" @click="handleImport">导入</el-button>
           <el-button type="warning" icon="el-icon-warning" size="small" @click="handleCheckExpiring">
             查看即将过期
           </el-button>
         </div>
       </div>
+
+      <input ref="fileInput" type="file" accept=".xlsx,.xls" style="display:none" @change="onFileChange">
 
       <!-- 查询表单 -->
       <el-form :inline="true" :model="searchForm" class="search-form">
@@ -67,7 +71,7 @@
 
       <!-- 数据表格 -->
       <el-table ref="chemicalStockTable" v-loading="loading" :data="chemicalStockList" style="width: 100%" border stripe>
-        <el-table-column type="index" label="序号" width="60" align="center" />
+        <el-table-column type="index" label="序号" width="60" align="center" :index="indexMethod" />
         <el-table-column prop="materialCode" label="物料编号" width="140" />
         <el-table-column prop="materialName" label="物料名称" width="200" show-overflow-tooltip />
         <el-table-column prop="chemicalType" label="类型" width="100" align="center">
@@ -90,6 +94,11 @@
         <el-table-column label="可用数量" width="100" align="center">
           <template slot-scope="scope">
             <span style="color: #67c23a; font-weight: bold">{{ scope.row.availableQuantity }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="桶数" width="90" align="center">
+          <template slot-scope="scope">
+            <span style="font-weight: bold">{{ scope.row.bucketCount == null ? '-' : scope.row.bucketCount }}</span>
           </template>
         </el-table-column>
         <el-table-column label="锁定数量" width="100" align="center">
@@ -116,10 +125,23 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <el-pagination
+        :current-page="pagination.current"
+        :page-sizes="[20, 50, 100]"
+        :page-size="pagination.size"
+        :total="pagination.total"
+        layout="total, sizes, prev, pager, next, jumper"
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange"
+      />
     </el-card>
 
     <!-- 明细对话框 -->
     <el-dialog :visible.sync="detailDialogVisible" :title="`${currentChemical.materialName} - 库存明细`" width="90%">
+      <div style="margin-bottom: 10px; text-align: right">
+        <el-button type="primary" size="mini" icon="el-icon-plus" @click="openCreateDetail">新增明细</el-button>
+      </div>
       <el-table :data="detailList" border stripe max-height="500">
         <el-table-column type="index" label="序号" width="60" align="center" />
         <el-table-column prop="batchNo" label="批次号" width="140" />
@@ -157,9 +179,38 @@
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
+        <el-table-column label="操作" width="140" align="center" fixed="right">
+          <template slot-scope="scope">
+            <el-button type="text" size="mini" @click="openEditDetail(scope.row)">编辑</el-button>
+            <el-button type="text" size="mini" style="color:#f56c6c" @click="handleDeleteDetail(scope.row)">删除</el-button>
+          </template>
+        </el-table-column>
       </el-table>
       <div slot="footer" class="dialog-footer">
         <el-button @click="detailDialogVisible = false">关闭</el-button>
+      </div>
+    </el-dialog>
+
+    <el-dialog :visible.sync="detailEditDialogVisible" :title="detailEditMode === 'create' ? '新增明细' : '编辑明细'" width="700px">
+      <el-form :model="detailForm" label-width="95px" size="small">
+        <el-row :gutter="12">
+          <el-col :span="12"><el-form-item label="批次号"><el-input v-model="detailForm.batchNo" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="桶号/包号"><el-input v-model="detailForm.containerNo" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="单位"><el-input v-model="detailForm.unit" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="重量(kg)"><el-input-number v-model="detailForm.weight" :min="0" :precision="2" :controls="false" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="库位"><el-input v-model="detailForm.location" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="供应商"><el-input v-model="detailForm.supplier" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="入库日期"><el-date-picker v-model="detailForm.inboundDate" type="date" value-format="yyyy-MM-dd" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="有效期至"><el-date-picker v-model="detailForm.expiryDate" type="date" value-format="yyyy-MM-dd" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="是否开封"><el-switch v-model="detailForm.isOpened" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="危险等级"><el-select v-model="detailForm.dangerLevel" style="width:100%"><el-option :value="1" label="1级" /><el-option :value="2" label="2级" /><el-option :value="3" label="3级" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="状态"><el-select v-model="detailForm.status" style="width:100%"><el-option label="可用" value="available" /><el-option label="锁定" value="locked" /><el-option label="已使用" value="used" /></el-select></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="备注"><el-input v-model="detailForm.remark" type="textarea" :rows="2" /></el-form-item></el-col>
+        </el-row>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="detailEditDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleSaveDetail">保存</el-button>
       </div>
     </el-dialog>
 
@@ -194,7 +245,16 @@
 </template>
 
 <script>
-import { getChemicalStockList, getChemicalStockByType, getChemicalStockDetails, getExpiringChemicals } from '@/api/rawMaterialStock'
+import {
+  getChemicalStockPage,
+  getChemicalStockDetails,
+  createChemicalStockDetail,
+  updateChemicalStockDetail,
+  deleteChemicalStockDetail,
+  getExpiringChemicals,
+  downloadChemicalTemplate,
+  importChemicalStock
+} from '@/api/rawMaterialStock'
 import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
 export default {
@@ -208,6 +268,11 @@ export default {
         chemicalType: ''
       },
       chemicalStockList: [],
+      pagination: {
+        current: 1,
+        size: 20,
+        total: 0
+      },
       statistics: {
         totalTypes: 0,
         totalQuantity: 0,
@@ -217,6 +282,23 @@ export default {
       detailDialogVisible: false,
       currentChemical: {},
       detailList: [],
+      detailEditDialogVisible: false,
+      detailEditMode: 'create',
+      detailForm: {
+        id: null,
+        batchNo: '',
+        containerNo: '',
+        unit: '桶',
+        weight: 0,
+        location: '',
+        supplier: '',
+        inboundDate: '',
+        expiryDate: '',
+        isOpened: false,
+        dangerLevel: 1,
+        status: 'available',
+        remark: ''
+      },
       expiringDialogVisible: false,
       expiringList: []
     }
@@ -229,13 +311,101 @@ export default {
       this.$router.push({ path: '/stock/raw-material-hub' })
     },
 
+    handleDownloadTemplate() {
+      downloadChemicalTemplate().then(blob => {
+        this.downloadFile(blob, '化工库存导入模板.xlsx')
+      }).catch(() => {
+        this.$message.error('下载模板失败')
+      })
+    },
+
+    handleImport() {
+      this.$refs.fileInput.click()
+    },
+
+    async onFileChange(e) {
+      const file = e.target.files[0]
+      if (!file) return
+
+      this.loading = true
+      try {
+        const res = await importChemicalStock(file)
+        if (res.code === 200 || res.code === 20000) {
+          const result = res.data
+          let message = `导入完成！成功导入 ${result.successCount || 0} 条数据`
+          if (result.skipCount > 0) {
+            message += `，跳过 ${result.skipCount} 条数据`
+          }
+          this.$message.success(message)
+          
+          // 如果有跳过数据，提供下载选项
+          if (result.skipCount > 0 && result.skippedExcel) {
+            this.$confirm('有数据被跳过，是否下载跳过数据Excel？', '提示', {
+              confirmButtonText: '下载',
+              cancelButtonText: '取消',
+              type: 'warning'
+            }).then(() => {
+              // 下载跳过数据
+              this.downloadSkippedData(result.skippedExcel)
+            }).catch(() => {
+              // 用户取消下载
+            })
+          }
+          
+          this.pagination.current = 1
+          this.loadChemicalStock()
+        } else {
+          this.$message.error(res.msg || '导入失败')
+        }
+      } catch (error) {
+        this.$message.error('导入失败')
+      } finally {
+        this.loading = false
+        this.$refs.fileInput.value = ''
+      }
+    },
+
+    downloadFile(blob, fileName) {
+      const url = window.URL.createObjectURL(new Blob([blob]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', fileName)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    },
+
+    downloadSkippedData(skippedExcelBase64) {
+      // 将base64字符串转换为blob
+      const byteCharacters = atob(skippedExcelBase64)
+      const byteNumbers = new Array(byteCharacters.length)
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i)
+      }
+      const byteArray = new Uint8Array(byteNumbers)
+      const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      this.downloadFile(blob, 'chemical_stock_skipped_data.xlsx')
+    },
+
     // 加载化工库存
     async loadChemicalStock() {
       this.loading = true
       try {
-        const res = await getChemicalStockList()
-        if (res.code === 20000) {
-          this.chemicalStockList = res.data || []
+        const params = {
+          current: this.pagination.current,
+          size: this.pagination.size
+        }
+        if (this.searchForm.chemicalType) {
+          params.chemicalType = this.searchForm.chemicalType
+        }
+        const res = await getChemicalStockPage(params)
+        if (res.code === 200 || res.code === 20000) {
+          const pageData = res.data || {}
+          this.chemicalStockList = pageData.records || []
+          this.pagination.total = Number(pageData.total || 0)
+          this.pagination.current = Number(pageData.current || this.pagination.current)
+          this.pagination.size = Number(pageData.size || this.pagination.size)
           this.calculateStatistics()
         }
       } catch (error) {
@@ -248,7 +418,7 @@ export default {
 
     // 计算统计数据
     calculateStatistics() {
-      this.statistics.totalTypes = this.chemicalStockList.length
+      this.statistics.totalTypes = this.pagination.total
       this.statistics.totalQuantity = this.chemicalStockList.reduce((sum, item) => sum + parseInt(item.totalQuantity || 0), 0)
       this.statistics.availableQuantity = this.chemicalStockList.reduce((sum, item) => sum + parseInt(item.availableQuantity || 0), 0)
       this.statistics.lockedQuantity = this.chemicalStockList.reduce((sum, item) => sum + parseInt(item.lockedQuantity || 0), 0)
@@ -256,30 +426,30 @@ export default {
 
     // 搜索
     async handleSearch() {
-      if (!this.searchForm.chemicalType) {
-        this.loadChemicalStock()
-        return
-      }
-
-      this.loading = true
-      try {
-        const res = await getChemicalStockByType(this.searchForm.chemicalType)
-        if (res.code === 20000) {
-          this.chemicalStockList = res.data || []
-          this.calculateStatistics()
-        }
-      } catch (error) {
-        this.$message.error('查询失败')
-      } finally {
-        this.loading = false
-        this.scheduleTableLayout()
-      }
+      this.pagination.current = 1
+      await this.loadChemicalStock()
     },
 
     // 重置
     handleReset() {
       this.searchForm = { chemicalType: '' }
+      this.pagination.current = 1
       this.loadChemicalStock()
+    },
+
+    handleSizeChange(size) {
+      this.pagination.size = size
+      this.pagination.current = 1
+      this.loadChemicalStock()
+    },
+
+    handleCurrentChange(current) {
+      this.pagination.current = current
+      this.loadChemicalStock()
+    },
+
+    indexMethod(index) {
+      return (this.pagination.current - 1) * this.pagination.size + index + 1
     },
 
     // 查看明细
@@ -287,14 +457,108 @@ export default {
       this.currentChemical = row
       this.detailDialogVisible = true
 
+      await this.loadDetailList()
+    },
+
+    async loadDetailList() {
+      if (!this.currentChemical || !this.currentChemical.id) return
+
       try {
-        const res = await getChemicalStockDetails(row.id)
+        const res = await getChemicalStockDetails(this.currentChemical.id)
         if (res.code === 20000) {
           this.detailList = res.data || []
         }
       } catch (error) {
         this.$message.error('加载明细失败')
       }
+    },
+
+    openCreateDetail() {
+      this.detailEditMode = 'create'
+      this.detailForm = {
+        id: null,
+        batchNo: '',
+        containerNo: '',
+        unit: this.currentChemical.unit || '桶',
+        weight: Number(this.currentChemical.unitWeight || 0),
+        location: '',
+        supplier: '',
+        inboundDate: new Date().toISOString().slice(0, 10),
+        expiryDate: '',
+        isOpened: false,
+        dangerLevel: 1,
+        status: 'available',
+        remark: ''
+      }
+      this.detailEditDialogVisible = true
+    },
+
+    openEditDetail(row) {
+      this.detailEditMode = 'edit'
+      this.detailForm = {
+        id: row.id,
+        batchNo: row.batchNo || '',
+        containerNo: row.containerNo || '',
+        unit: row.unit || this.currentChemical.unit || '桶',
+        weight: Number(row.weight || 0),
+        location: row.location || '',
+        supplier: row.supplier || '',
+        inboundDate: row.inboundDate || '',
+        expiryDate: row.expiryDate || '',
+        isOpened: !!row.isOpened,
+        dangerLevel: row.dangerLevel || 1,
+        status: row.status || 'available',
+        remark: row.remark || ''
+      }
+      this.detailEditDialogVisible = true
+    },
+
+    async handleSaveDetail() {
+      try {
+        const payload = { ...this.detailForm }
+        if (this.detailEditMode === 'create') {
+          const res = await createChemicalStockDetail(this.currentChemical.id, payload)
+          if (!(res.code === 200 || res.code === 20000)) {
+            this.$message.error(res.msg || '新增失败')
+            return
+          }
+          this.$message.success('新增成功')
+        } else {
+          const res = await updateChemicalStockDetail(this.currentChemical.id, this.detailForm.id, payload)
+          if (!(res.code === 200 || res.code === 20000)) {
+            this.$message.error(res.msg || '更新失败')
+            return
+          }
+          this.$message.success('更新成功')
+        }
+        this.detailEditDialogVisible = false
+        await this.loadDetailList()
+        await this.loadChemicalStock()
+      } catch (e) {
+        this.$message.error('保存失败')
+      }
+    },
+
+    handleDeleteDetail(row) {
+      this.$confirm('确认删除该明细吗？', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(async() => {
+        try {
+          const res = await deleteChemicalStockDetail(this.currentChemical.id, row.id)
+          if (res.code === 200 || res.code === 20000) {
+            this.$message.success('删除成功')
+            await this.loadDetailList()
+            await this.loadChemicalStock()
+          } else {
+            this.$message.error(res.msg || '删除失败')
+          }
+        } catch (e) {
+          const msg = (e && e.response && e.response.data && (e.response.data.msg || e.response.data.message)) || '删除失败，请检查权限或后端日志'
+          this.$message.error(msg)
+        }
+      }).catch(() => {})
     },
 
     // 查看出库记录
@@ -426,5 +690,10 @@ export default {
   font-size: 24px;
   font-weight: bold;
   color: #303133;
+}
+
+.el-pagination {
+  margin-top: 15px;
+  text-align: right;
 }
 </style>

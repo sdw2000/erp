@@ -2,7 +2,10 @@
   <div class="stock-container">
     <el-card>
       <div slot="header" class="clearfix">
-        <span>库存管理</span>        <div style="float: right">
+        <span>库存管理</span>
+        <div style="float: right">
+          <span class="header-summary">库存总卷数：{{ headerTotalRolls }}</span>
+          <span class="header-summary" style="margin-left: 16px;">库存总平米数：{{ headerTotalSqm }}</span>
           <!-- 只有 admin 和 warehouse 有权进行导入导出 -->
           <el-button v-if="$canImportExport()" type="success" icon="el-icon-download" size="small" @click="handleDownloadTemplate">下载模板</el-button>
           <el-button v-if="$canImportExport()" type="warning" icon="el-icon-upload2" size="small" @click="handleImport">导入</el-button>
@@ -14,6 +17,9 @@
       <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="料号">
           <el-input v-model="searchForm.materialCode" placeholder="支持模糊查询" clearable />
+        </el-form-item>
+        <el-form-item label="是否含退货专仓库存">
+          <el-switch v-model="searchForm.includeReturnWarehouse" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="el-icon-search" @click="handleSearch">搜 索</el-button>
@@ -54,6 +60,7 @@
               <el-table-column prop="thickness" label="厚度(μm)" min-width="90" align="center" />
               <el-table-column prop="width" label="宽度(mm)" min-width="90" align="center" />
               <el-table-column prop="currentLength" label="长度(m)" min-width="90" align="right" />
+              <el-table-column prop="totalRolls" label="库存卷数" min-width="90" align="center" />
               <el-table-column prop="totalSqm" label="总平米" min-width="100" align="right" />
               <el-table-column prop="availableArea" label="可用平米" min-width="110" align="right">
                 <template slot-scope="detailScope">
@@ -109,8 +116,13 @@
     <!-- 导入结果弹窗 -->
     <el-dialog title="导入结果" :visible.sync="importResultVisible" width="500px">
       <div v-if="importResult">
+        <p><strong>任务状态：</strong>{{ importResult.status || '-' }}</p>
+        <p><strong>处理进度：</strong>{{ importResult.processedRows || 0 }} / {{ importResult.totalRows || 0 }}</p>
         <p><strong>成功：</strong>{{ importResult.successCount }} 条</p>
-        <p><strong>失败：</strong>{{ importResult.failCount }} 条</p>
+        <p><strong>失败/跳过：</strong>{{ importResult.failCount }} 条</p>
+        <p v-if="Number(importResult.failCount || 0) > 0" style="color:#e6a23c; margin-top: 6px;">
+          检测到失败行，可点击下方“下载失败行Excel”获取明细。
+        </p>
         <div v-if="importResult.errors && importResult.errors.length > 0">
           <p><strong>错误详情：</strong></p>
           <ul>
@@ -119,6 +131,11 @@
         </div>
       </div>
       <div slot="footer">
+        <el-button
+          v-if="importResult && Number(importResult.failCount || 0) > 0"
+          type="warning"
+          @click="downloadSkippedData(importResult.skippedExcel)"
+        >下载失败行Excel</el-button>
         <el-button type="primary" @click="importResultVisible = false">确定</el-button>
       </div>
     </el-dialog>
@@ -126,7 +143,7 @@
 </template>
 
 <script>
-import { getStockSummaryPage, getStockByMaterialPage, importStock, exportStock, downloadTemplate } from '@/api/tapeStock'
+import { getStockSummary, getStockSummaryPage, getStockByMaterialPage, importStockAsync, getImportTaskStatus, downloadImportFailedFile, exportStock, downloadTemplate } from '@/api/tapeStock'
 import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
 export default {
@@ -136,7 +153,8 @@ export default {
   data() {
     return {
       searchForm: {
-        materialCode: ''
+        materialCode: '',
+        includeReturnWarehouse: false
       },
       summaryList: [],
       summaryPage: 1,
@@ -150,19 +168,39 @@ export default {
       detailLoading: {},
       loading: false,
       importResultVisible: false,
-      importResult: null
+      importResult: null,
+      importTaskId: '',
+      importPollingTimer: null,
+      headerTotalRolls: 0,
+      headerTotalSqm: 0
     }
   }, created() {
     this.fetchData()
+    this.fetchHeaderTotals()
   },
   methods: {
+    async fetchHeaderTotals() {
+      try {
+        const res = await getStockSummary()
+        if (res.code === 20000 || res.code === 200) {
+          const list = res.data || []
+          this.headerTotalRolls = list.reduce((sum, item) => sum + Number(item.totalRolls || 0), 0)
+          const sqm = list.reduce((sum, item) => sum + Number(item.totalSqm || 0), 0)
+          this.headerTotalSqm = Number(sqm.toFixed(2))
+        }
+      } catch (e) {
+        this.headerTotalRolls = 0
+        this.headerTotalSqm = 0
+      }
+    },
     async fetchData() {
       this.loading = true
       try {
         const res = await getStockSummaryPage({
           current: this.summaryPage,
           size: this.summaryPageSize,
-          materialCode: this.searchForm.materialCode || undefined
+          materialCode: this.searchForm.materialCode || undefined,
+          includeReturnWarehouse: this.searchForm.includeReturnWarehouse
         })
         if (res.code === 20000 || res.code === 200) {
           const list = ((res.data && res.data.records) || []).map(x => ({
@@ -196,11 +234,13 @@ export default {
     handleSearch() {
       this.summaryPage = 1
       this.fetchData()
+      this.fetchHeaderTotals()
     },
     handleReset() {
       this.searchForm = { materialCode: '' }
       this.summaryPage = 1
       this.fetchData()
+      this.fetchHeaderTotals()
     },
     handleDownloadTemplate() {
       downloadTemplate().then(res => {
@@ -217,12 +257,22 @@ export default {
 
       this.loading = true
       try {
-        const res = await importStock(file)
+        const res = await importStockAsync(file)
         if (res.code === 20000 || res.code === 200) {
-          this.$message.success('导入完成')
-          this.importResult = res.data
+          this.importTaskId = (res.data && res.data.taskId) || ''
+          this.importResult = {
+            status: 'PENDING',
+            successCount: 0,
+            failCount: 0,
+            totalRows: 0,
+            processedRows: 0,
+            message: '任务已创建，等待执行',
+            errors: [],
+            hasFailedFile: false
+          }
           this.importResultVisible = true
-          this.fetchData()
+          this.$message.success('导入任务已创建，正在后台执行')
+          this.startImportPolling()
         } else {
           this.$message.error(res.msg || '导入失败')
         }
@@ -231,6 +281,65 @@ export default {
       } finally {
         this.loading = false
         this.$refs.fileInput.value = ''
+      }
+    },
+    startImportPolling() {
+      this.stopImportPolling()
+      this.pollImportTask()
+      this.importPollingTimer = setInterval(() => {
+        this.pollImportTask()
+      }, 2000)
+    },
+    stopImportPolling() {
+      if (this.importPollingTimer) {
+        clearInterval(this.importPollingTimer)
+        this.importPollingTimer = null
+      }
+    },
+    async pollImportTask() {
+      if (!this.importTaskId) return
+      try {
+        const res = await getImportTaskStatus(this.importTaskId)
+        if (res.code !== 200 && res.code !== 20000) return
+        const d = res.data || {}
+        this.importResult = {
+          status: d.status,
+          successCount: Number(d.successCount || 0),
+          failCount: Number(d.failCount || 0),
+          totalRows: Number(d.totalRows || 0),
+          processedRows: Number(d.processedRows || 0),
+          message: d.message || '',
+          errors: d.errors || [],
+          hasFailedFile: !!d.hasFailedFile
+        }
+        if (d.status === 'SUCCESS' || d.status === 'FAILED') {
+          this.stopImportPolling()
+          await this.fetchData()
+          await this.fetchHeaderTotals()
+          const msg = d.message || `导入完成：成功 ${d.successCount || 0} 条，失败/跳过 ${d.failCount || 0} 条`
+          if (d.status === 'SUCCESS') {
+            this.$message.success(msg)
+          } else {
+            this.$message.error(msg)
+          }
+        }
+      } catch (e) {
+        // 轮询失败不打断，等待下一次
+      }
+    },
+    downloadSkippedData(skippedExcelBase64) {
+      try {
+        if (!this.importTaskId) {
+          this.$message.warning('未找到导入任务ID，无法下载失败文件')
+          return
+        }
+        downloadImportFailedFile(this.importTaskId).then(blob => {
+          this.downloadFile(blob, 'tape_stock_import_failed.xlsx')
+        }).catch(() => {
+          this.$message.error('下载失败行文件失败')
+        })
+      } catch (e) {
+        this.$message.error('下载失败行文件失败')
       }
     }, handleExport() {
       this.loading = true
@@ -274,7 +383,8 @@ export default {
         const res = await getStockByMaterialPage({
           materialCode: code,
           current: this.detailPageMap[code] || 1,
-          size: this.detailPageSizeMap[code] || 20
+          size: this.detailPageSizeMap[code] || 20,
+          includeReturnWarehouse: this.searchForm.includeReturnWarehouse
         })
         if (res.code === 20000 || res.code === 200) {
           const details = ((res.data && res.data.records) || []).map(x => ({
@@ -313,6 +423,9 @@ export default {
     detailRowClassName({ row }) {
       return this.isAvailableZero(row) ? 'row-zero' : ''
     }
+  },
+  beforeDestroy() {
+    this.stopImportPolling()
   }
 }
 </script>
@@ -320,6 +433,11 @@ export default {
 <style lang="scss" scoped>
 .stock-container {
   padding: 20px;
+  .header-summary {
+    color: #409EFF;
+    font-weight: 600;
+    margin-right: 12px;
+  }
   .search-card, .toolbar-card {
     margin-bottom: 15px;
   }

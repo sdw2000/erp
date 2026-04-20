@@ -52,6 +52,9 @@ function sanitizeCodeFields(payload) {
 }
 
 function shouldSilenceBusinessError(config, serverMsg) {
+  if (config && config.silentError) {
+    return true
+  }
   const url = String((config && config.url) || '')
   const msg = String(serverMsg || '')
   // 涂布机台可用性预估：未输入料号属于编辑过程中的中间态，不弹全局错误
@@ -155,7 +158,8 @@ service.interceptors.response.use(
   error => {
     console.log('err' + error) // for debug
     let message = error.message
-    const silent = shouldSilenceBusinessError(error && error.config, message)
+    const cfg = (error && error.config) || ((error && error.response && error.response.config) ? error.response.config : null)
+    const silent = shouldSilenceBusinessError(cfg, message)
     if (error.response) {
       // Server returned an error response
       const { status, data } = error.response

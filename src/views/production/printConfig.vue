@@ -20,6 +20,9 @@
       </div>
     </el-alert>
 
+    <el-tabs v-model="activeTab" type="border-card" class="print-config-tabs" @tab-click="onActiveTabChange">
+      <el-tab-pane label="一键部署" name="deploy">
+
     <el-card shadow="never" style="margin-bottom: 16px;">
       <div slot="header" class="card-header">
         <span>客户端一键部署（标签打印网关）</span>
@@ -37,6 +40,10 @@
         :closable="false"
       />
     </el-card>
+
+      </el-tab-pane>
+
+      <el-tab-pane label="状态看板" name="dashboard">
 
     <el-card shadow="never" style="margin-bottom: 16px;">
       <div slot="header" class="card-header">
@@ -82,6 +89,10 @@
         placeholder="点击“刷新状态”读取本机网关状态看板"
       />
     </el-card>
+
+      </el-tab-pane>
+
+      <el-tab-pane label="网关与模板映射" name="config">
 
     <el-row :gutter="16">
       <el-col :span="12">
@@ -160,7 +171,13 @@
             </div>
           </div>
 
-          <el-table :data="gatewayTemplates" border stripe size="small">
+          <el-form :inline="true" size="small" style="margin-bottom: 8px;">
+            <el-form-item label="搜索">
+              <el-input v-model="gatewayTemplateKeyword" clearable placeholder="模板键/路径/打印机" style="width: 280px;" @input="onGatewayTemplateFilterChange" />
+            </el-form-item>
+          </el-form>
+
+          <el-table :data="pagedGatewayTemplates" border stripe size="small">
             <el-table-column label="模板键" min-width="160">
               <template slot-scope="scope">
                 <el-input v-model="scope.row.templateKey" placeholder="如 coating_label" />
@@ -185,13 +202,29 @@
             </el-table-column>
             <el-table-column label="操作" width="100" fixed="right">
               <template slot-scope="scope">
-                <el-button type="text" size="small" @click="removeTemplateRow(scope.$index)">删除</el-button>
+                <el-button type="text" size="small" @click="removeTemplateRow(resolveOriginalIndex(gatewayTemplates, scope.row))">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
+
+          <div style="margin-top: 10px; text-align: right;">
+            <el-pagination
+              :current-page="gatewayTemplatePage"
+              :page-size="gatewayTemplatePageSize"
+              :page-sizes="[5, 10, 20, 50]"
+              layout="total, sizes, prev, pager, next"
+              :total="filteredGatewayTemplates.length"
+              @size-change="onGatewayTemplatePageSizeChange"
+              @current-change="onGatewayTemplatePageChange"
+            />
+          </div>
         </el-card>
       </el-col>
     </el-row>
+
+      </el-tab-pane>
+
+      <el-tab-pane label="模板规则配置" name="rules">
 
     <el-row :gutter="16" style="margin-top: 16px;">
       <el-col :span="12">
@@ -200,7 +233,12 @@
             <span>全局标签模板规则</span>
             <el-button size="mini" :loading="ruleLoading" @click="addBizRuleRow">新增规则</el-button>
           </div>
-          <el-table :data="bizRuleRows" border stripe size="small">
+          <el-form :inline="true" size="small" style="margin-bottom: 8px;">
+            <el-form-item label="搜索">
+              <el-input v-model="bizRuleKeyword" clearable placeholder="业务类型/模板键" style="width: 260px;" @input="onBizRuleFilterChange" />
+            </el-form-item>
+          </el-form>
+          <el-table :data="pagedBizRuleRows" border stripe size="small">
             <el-table-column label="业务类型" min-width="180">
               <template slot-scope="scope">
                 <el-input v-model="scope.row.bizType" placeholder="如 COATING_ROLL_LABEL" />
@@ -213,10 +251,21 @@
             </el-table-column>
             <el-table-column label="操作" width="100">
               <template slot-scope="scope">
-                <el-button type="text" size="small" @click="removeBizRuleRow(scope.$index)">删除</el-button>
+                <el-button type="text" size="small" @click="removeBizRuleRow(resolveOriginalIndex(bizRuleRows, scope.row))">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
+          <div style="margin-top: 10px; text-align: right;">
+            <el-pagination
+              :current-page="bizRulePage"
+              :page-size="bizRulePageSize"
+              :page-sizes="[5, 10, 20, 50]"
+              layout="total, sizes, prev, pager, next"
+              :total="filteredBizRuleRows.length"
+              @size-change="onBizRulePageSizeChange"
+              @current-change="onBizRulePageChange"
+            />
+          </div>
         </el-card>
       </el-col>
 
@@ -226,7 +275,12 @@
             <span>客户默认标签模板</span>
             <el-button size="mini" :loading="ruleLoading" @click="addCustomerDefaultRow">新增规则</el-button>
           </div>
-          <el-table :data="customerDefaultRows" border stripe size="small">
+          <el-form :inline="true" size="small" style="margin-bottom: 8px;">
+            <el-form-item label="搜索">
+              <el-input v-model="customerDefaultKeyword" clearable placeholder="客户编码/模板键" style="width: 260px;" @input="onCustomerDefaultFilterChange" />
+            </el-form-item>
+          </el-form>
+          <el-table :data="pagedCustomerDefaultRows" border stripe size="small">
             <el-table-column label="客户编码" min-width="160">
               <template slot-scope="scope">
                 <el-input v-model="scope.row.customerCode" placeholder="如 CUST001" />
@@ -239,10 +293,21 @@
             </el-table-column>
             <el-table-column label="操作" width="100">
               <template slot-scope="scope">
-                <el-button type="text" size="small" @click="removeCustomerDefaultRow(scope.$index)">删除</el-button>
+                <el-button type="text" size="small" @click="removeCustomerDefaultRow(resolveOriginalIndex(customerDefaultRows, scope.row))">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
+          <div style="margin-top: 10px; text-align: right;">
+            <el-pagination
+              :current-page="customerDefaultPage"
+              :page-size="customerDefaultPageSize"
+              :page-sizes="[5, 10, 20, 50]"
+              layout="total, sizes, prev, pager, next"
+              :total="filteredCustomerDefaultRows.length"
+              @size-change="onCustomerDefaultPageSizeChange"
+              @current-change="onCustomerDefaultPageChange"
+            />
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -270,7 +335,12 @@
               <el-button size="mini" type="primary" :loading="ruleSaving" @click="saveRuleConfigAction">保存规则到数据库</el-button>
             </div>
           </div>
-          <el-table :data="customerBizRuleRows" border stripe size="small">
+          <el-form :inline="true" size="small" style="margin-bottom: 8px;">
+            <el-form-item label="搜索">
+              <el-input v-model="customerBizRuleKeyword" clearable placeholder="客户编码/业务类型/模板键" style="width: 320px;" @input="onCustomerBizRuleFilterChange" />
+            </el-form-item>
+          </el-form>
+          <el-table :data="pagedCustomerBizRuleRows" border stripe size="small">
             <el-table-column label="客户编码" min-width="160">
               <template slot-scope="scope">
                 <el-input v-model="scope.row.customerCode" placeholder="如 CUST001" />
@@ -288,13 +358,28 @@
             </el-table-column>
             <el-table-column label="操作" width="100">
               <template slot-scope="scope">
-                <el-button type="text" size="small" @click="removeCustomerBizRuleRow(scope.$index)">删除</el-button>
+                <el-button type="text" size="small" @click="removeCustomerBizRuleRow(resolveOriginalIndex(customerBizRuleRows, scope.row))">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
+          <div style="margin-top: 10px; text-align: right;">
+            <el-pagination
+              :current-page="customerBizRulePage"
+              :page-size="customerBizRulePageSize"
+              :page-sizes="[5, 10, 20, 50]"
+              layout="total, sizes, prev, pager, next"
+              :total="filteredCustomerBizRuleRows.length"
+              @size-change="onCustomerBizRulePageSizeChange"
+              @current-change="onCustomerBizRulePageChange"
+            />
+          </div>
         </el-card>
       </el-col>
     </el-row>
+
+      </el-tab-pane>
+
+      <el-tab-pane label="测试与预览" name="test">
 
     <el-row :gutter="16" style="margin-top: 16px; margin-bottom: 24px;">
       <el-col :span="24">
@@ -372,6 +457,9 @@
         </el-card>
       </el-col>
     </el-row>
+
+      </el-tab-pane>
+    </el-tabs>
 
     <el-dialog :visible.sync="previewDialogVisible" :title="previewDialogTitle" width="80%" top="4vh">
       <div v-if="previewPages.length" style="max-height: 70vh; overflow: auto;">
@@ -533,6 +621,7 @@ function normalizeBizTypeValue(value) {
 
 const SLITTING_GLOBAL_BIZ_TYPES = [
   'SLITTING_CORE_LABEL',
+  'SLITTING_CORE_LABEL_NARROW',
   'SLITTING_INNER_LABEL',
   'SLITTING_OUTER_LABEL',
   'SLITTING_PALLET_LABEL'
@@ -540,6 +629,7 @@ const SLITTING_GLOBAL_BIZ_TYPES = [
 
 const SLITTING_DEFAULT_TEMPLATE_BY_BIZ_TYPE = {
   SLITTING_CORE_LABEL: 'SLITTING_CORE_LABEL',
+  SLITTING_CORE_LABEL_NARROW: 'SLITTING_CORE_LABEL_NARROW',
   SLITTING_INNER_LABEL: 'SLITTING_INNER_LABEL',
   SLITTING_OUTER_LABEL: 'SLITTING_OUTER_LABEL',
   SLITTING_PALLET_LABEL: 'SLITTING_PALLET_LABEL'
@@ -550,9 +640,12 @@ const DEFAULT_TEMPLATE_PATH_HINT = {
   COATING_INBOUND_SHEET: 'D:\\MES\\BarTender\\Templates\\coating.btw',
   REWINDING_ROLL_LABEL: 'D:\\MES\\BarTender\\Templates\\rolling.btw',
   SLITTING_CORE_LABEL: 'D:\\MES\\BarTender\\Templates\\rolling.btw',
+  SLITTING_CORE_LABEL_NARROW: 'D:\\MES\\BarTender\\Templates\\rolling.btw',
   SLITTING_INNER_LABEL: 'D:\\MES\\BarTender\\Templates\\rolling.btw',
   SLITTING_OUTER_LABEL: 'D:\\MES\\BarTender\\Templates\\rolling.btw',
-  SLITTING_PALLET_LABEL: 'D:\\MES\\BarTender\\Templates\\rolling.btw'
+  SLITTING_PALLET_LABEL: 'D:\\MES\\BarTender\\Templates\\rolling.btw',
+  RUIPU_PUTONG_GUANXIN: 'D:\\MES\\BarTender\\Templates\\ruipu_putong_guanxin.btw',
+  RP01_fenqie_neibiao: 'D:\\MES\\BarTender\\Templates\\RP01_fenqie_neibiao.btw'
 }
 
 const TEMPLATE_PREVIEW_DATA_STORAGE_KEY = 'MES_PRINT_TEMPLATE_PREVIEW_DATA'
@@ -599,6 +692,15 @@ const TEMPLATE_PREVIEW_DATA_MAP = {
     palletNo: 'PLT-CORE-001',
     spec: '芯卷'
   },
+  SLITTING_CORE_LABEL_NARROW: {
+    materialCode: 'SLIT-CORE-N-001',
+    materialName: '分切窄芯标签',
+    cartonSpec: '430×320×300',
+    cartonNo: 'CT-CORE-N-001',
+    slittingQty: 24,
+    palletNo: 'PLT-CORE-N-001',
+    spec: '窄芯卷'
+  },
   SLITTING_INNER_LABEL: {
     materialCode: 'SLIT-INNER-001',
     materialName: '分切内标签',
@@ -632,14 +734,27 @@ export default {
   name: 'PrintConfig',
   data() {
     return {
+      activeTab: 'deploy',
       localConfig: getBarTenderConfig(),
       gatewayConfig: normalizeGatewayConfig(),
       gatewayTemplates: [createTemplateRow()],
+      gatewayTemplateKeyword: '',
+      gatewayTemplatePage: 1,
+      gatewayTemplatePageSize: 10,
       printers: [],
       printerPreview: '',
       bizRuleRows: [createBizRuleRow()],
+      bizRuleKeyword: '',
+      bizRulePage: 1,
+      bizRulePageSize: 10,
       customerDefaultRows: [createCustomerDefaultRow()],
+      customerDefaultKeyword: '',
+      customerDefaultPage: 1,
+      customerDefaultPageSize: 10,
       customerBizRuleRows: [createCustomerBizRuleRow()],
+      customerBizRuleKeyword: '',
+      customerBizRulePage: 1,
+      customerBizRulePageSize: 10,
       sceneContext: {
         active: false,
         bizType: '',
@@ -715,14 +830,135 @@ export default {
       const printers = (this.dashboardData && this.dashboardData.printers) || {}
       const n = Number(printers.count || 0)
       return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : 0
+    },
+    filteredGatewayTemplates() {
+      const keyword = String(this.gatewayTemplateKeyword || '').trim().toLowerCase()
+      const rows = Array.isArray(this.gatewayTemplates) ? this.gatewayTemplates : []
+      if (!keyword) return rows
+      return rows.filter(row => {
+        const text = [row.templateKey, row.formatPath, row.printer].map(v => String(v || '').toLowerCase()).join(' ')
+        return text.includes(keyword)
+      })
+    },
+    pagedGatewayTemplates() {
+      const start = (this.gatewayTemplatePage - 1) * this.gatewayTemplatePageSize
+      return this.filteredGatewayTemplates.slice(start, start + this.gatewayTemplatePageSize)
+    },
+    filteredBizRuleRows() {
+      const keyword = String(this.bizRuleKeyword || '').trim().toLowerCase()
+      const rows = Array.isArray(this.bizRuleRows) ? this.bizRuleRows : []
+      if (!keyword) return rows
+      return rows.filter(row => {
+        const text = [row.bizType, row.templateKey].map(v => String(v || '').toLowerCase()).join(' ')
+        return text.includes(keyword)
+      })
+    },
+    pagedBizRuleRows() {
+      const start = (this.bizRulePage - 1) * this.bizRulePageSize
+      return this.filteredBizRuleRows.slice(start, start + this.bizRulePageSize)
+    },
+    filteredCustomerDefaultRows() {
+      const keyword = String(this.customerDefaultKeyword || '').trim().toLowerCase()
+      const rows = Array.isArray(this.customerDefaultRows) ? this.customerDefaultRows : []
+      if (!keyword) return rows
+      return rows.filter(row => {
+        const text = [row.customerCode, row.defaultTemplate].map(v => String(v || '').toLowerCase()).join(' ')
+        return text.includes(keyword)
+      })
+    },
+    pagedCustomerDefaultRows() {
+      const start = (this.customerDefaultPage - 1) * this.customerDefaultPageSize
+      return this.filteredCustomerDefaultRows.slice(start, start + this.customerDefaultPageSize)
+    },
+    filteredCustomerBizRuleRows() {
+      const keyword = String(this.customerBizRuleKeyword || '').trim().toLowerCase()
+      const rows = Array.isArray(this.customerBizRuleRows) ? this.customerBizRuleRows : []
+      if (!keyword) return rows
+      return rows.filter(row => {
+        const text = [row.customerCode, row.bizType, row.templateKey].map(v => String(v || '').toLowerCase()).join(' ')
+        return text.includes(keyword)
+      })
+    },
+    pagedCustomerBizRuleRows() {
+      const start = (this.customerBizRulePage - 1) * this.customerBizRulePageSize
+      return this.filteredCustomerBizRuleRows.slice(start, start + this.customerBizRulePageSize)
     }
   },
   created() {
     this.applyRouteSceneContext()
+    this.applyUiStateFromRouteQuery()
     this.loadTemplatePreviewConfig()
     this.loadInitialData()
   },
   methods: {
+    applyUiStateFromRouteQuery() {
+      const query = (this.$route && this.$route.query) || {}
+      const toInt = (v, d) => {
+        const n = Number(v)
+        return Number.isFinite(n) && n > 0 ? Math.trunc(n) : d
+      }
+      const tab = String(query.pcTab || '').trim()
+      const tabSet = new Set(['deploy', 'dashboard', 'config', 'rules', 'test'])
+      if (tabSet.has(tab)) this.activeTab = tab
+
+      this.gatewayTemplateKeyword = String(query.pcGk || '').trim()
+      this.gatewayTemplatePage = toInt(query.pcGp, this.gatewayTemplatePage)
+      this.gatewayTemplatePageSize = toInt(query.pcGs, this.gatewayTemplatePageSize)
+
+      this.bizRuleKeyword = String(query.pcBrk || '').trim()
+      this.bizRulePage = toInt(query.pcBrp, this.bizRulePage)
+      this.bizRulePageSize = toInt(query.pcBrs, this.bizRulePageSize)
+
+      this.customerDefaultKeyword = String(query.pcCdk || '').trim()
+      this.customerDefaultPage = toInt(query.pcCdp, this.customerDefaultPage)
+      this.customerDefaultPageSize = toInt(query.pcCds, this.customerDefaultPageSize)
+
+      this.customerBizRuleKeyword = String(query.pcCbk || '').trim()
+      this.customerBizRulePage = toInt(query.pcCbp, this.customerBizRulePage)
+      this.customerBizRulePageSize = toInt(query.pcCbs, this.customerBizRulePageSize)
+    },
+    persistUiStateToRoute() {
+      const route = this.$route || {}
+      const oldQuery = route.query || {}
+      const nextQuery = { ...oldQuery }
+      const setOrDelete = (key, val, defaultVal = '') => {
+        if (val === defaultVal || val === '' || val === null || val === undefined) {
+          delete nextQuery[key]
+          return
+        }
+        nextQuery[key] = String(val)
+      }
+
+      setOrDelete('pcTab', this.activeTab, 'deploy')
+      setOrDelete('pcGk', this.gatewayTemplateKeyword, '')
+      setOrDelete('pcGp', this.gatewayTemplatePage, 1)
+      setOrDelete('pcGs', this.gatewayTemplatePageSize, 10)
+
+      setOrDelete('pcBrk', this.bizRuleKeyword, '')
+      setOrDelete('pcBrp', this.bizRulePage, 1)
+      setOrDelete('pcBrs', this.bizRulePageSize, 10)
+
+      setOrDelete('pcCdk', this.customerDefaultKeyword, '')
+      setOrDelete('pcCdp', this.customerDefaultPage, 1)
+      setOrDelete('pcCds', this.customerDefaultPageSize, 10)
+
+      setOrDelete('pcCbk', this.customerBizRuleKeyword, '')
+      setOrDelete('pcCbp', this.customerBizRulePage, 1)
+      setOrDelete('pcCbs', this.customerBizRulePageSize, 10)
+
+      const oldJson = JSON.stringify(oldQuery)
+      const newJson = JSON.stringify(nextQuery)
+      if (oldJson === newJson) return
+
+      if (!this.$router || typeof this.$router.replace !== 'function') return
+      const navResult = this.$router.replace({ query: nextQuery })
+      if (navResult && typeof navResult.catch === 'function') {
+        navResult.catch(() => {})
+      }
+    },
+    onActiveTabChange() {
+      this.persistUiStateToRoute()
+    },
     async loadTemplatePreviewConfig() {
       try {
         const res = await getTemplatePreviewSamples()
@@ -871,8 +1107,21 @@ export default {
     async syncTemplatesFromServer() {
       this.syncTemplateLoading = true
       try {
+        // 兜底刷新一次状态，确保拿到运行中网关的 configPath
+        if (!((this.dashboardData && this.dashboardData.service && this.dashboardData.service.configPath))) {
+          await this.loadGatewayDashboard()
+        }
         const defaultPrinter = String(this.printerPreview || this.gatewayConfig.defaultPrinter || '').trim()
-        const res = await syncGatewayTemplates(this.localConfig, { defaultPrinter })
+        const syncPaths = this.buildSyncPathOptions()
+        if (!syncPaths.configPath || !syncPaths.localManifestPath) {
+          throw new Error('未获取到本机网关配置路径，请先点击“刷新状态”，确认网关在线后再同步')
+        }
+        const res = await syncGatewayTemplates(this.localConfig, {
+          defaultPrinter,
+          templateDir: syncPaths.templateDir,
+          localManifestPath: syncPaths.localManifestPath,
+          configPath: syncPaths.configPath
+        })
         if (res && (res.code === 200 || res.message)) {
           this.$message.success('模板已从服务端同步到本机')
         } else {
@@ -883,9 +1132,10 @@ export default {
 
         const detailText = this.buildTemplateSyncDetailText(res)
         if (detailText) {
-          this.$alert(detailText, '模板同步结果明细', {
+          this.$alert(`<div class="template-sync-result-scroll">${this.escapeHtml(detailText)}</div>`, '模板同步结果明细', {
             confirmButtonText: '我知道了',
-            dangerouslyUseHTMLString: false
+            dangerouslyUseHTMLString: true,
+            customClass: 'template-sync-result-dialog'
           })
         }
       } catch (error) {
@@ -901,11 +1151,17 @@ export default {
     },
     buildTemplateSyncDetailText(res) {
       const config = (res && res.config) || {}
+      const syncData = (res && res.data) || {}
       const templates = (config && config.templates) || {}
       const keys = Object.keys(templates || {}).sort()
       if (!keys.length) return ''
 
       const lines = []
+      lines.push('本次同步参数：')
+      lines.push(`templateDir = ${String(syncData.templateDir || '-').trim() || '-'}`)
+      lines.push(`localManifestPath = ${String(syncData.localManifestPath || '-').trim() || '-'}`)
+      lines.push(`configPath = ${String(syncData.configPath || '-').trim() || '-'}`)
+      lines.push('')
       lines.push('以下为同步后本机模板映射：')
       lines.push('')
       keys.forEach(key => {
@@ -915,6 +1171,61 @@ export default {
         lines.push(`${key} => ${formatPath || '-'}${printer ? `  | 打印机: ${printer}` : ''}`)
       })
       return lines.join('\n')
+    },
+    getPathDir(pathText) {
+      const raw = String(pathText || '').trim()
+      if (!raw) return ''
+      const normalized = raw.replace(/\//g, '\\')
+      const idx = normalized.lastIndexOf('\\')
+      if (idx <= 0) return ''
+      return normalized.slice(0, idx)
+    },
+    buildSyncPathOptions() {
+      const service = (this.dashboardData && this.dashboardData.service) || {}
+      const configPath = String(service.configPath || '').trim()
+      const configDir = this.getPathDir(configPath)
+      return {
+        templateDir: 'D:\\MES\\BarTender\\Templates',
+        localManifestPath: configDir ? `${configDir}\\template-manifest.local.json` : '',
+        configPath
+      }
+    },
+    escapeHtml(text) {
+      return String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/\n/g, '<br/>')
+    },
+    sanitizeGatewayText(value) {
+      return String(value == null ? '' : value)
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+        .trim()
+    },
+    buildSafeGatewayConfigPayload() {
+      const templates = {}
+      ;(this.gatewayTemplates || []).forEach(row => {
+        const templateKey = this.sanitizeGatewayText(row && row.templateKey)
+        if (!templateKey) return
+        templates[templateKey] = {
+          formatPath: this.sanitizeGatewayText(row && row.formatPath),
+          printer: this.sanitizeGatewayText(row && row.printer)
+        }
+      })
+
+      const timeoutRaw = Number(this.gatewayConfig && this.gatewayConfig.defaultTimeoutSeconds)
+      const defaultTimeoutSeconds = Number.isFinite(timeoutRaw) && timeoutRaw > 0
+        ? Math.trunc(timeoutRaw)
+        : 30
+
+      return {
+        listenPrefix: this.sanitizeGatewayText(this.gatewayConfig && this.gatewayConfig.listenPrefix),
+        barTenderExe: this.sanitizeGatewayText(this.gatewayConfig && this.gatewayConfig.barTenderExe),
+        defaultTimeoutSeconds,
+        templates
+      }
     },
     formatUptime(totalSeconds) {
       const sec = Math.max(0, Number(totalSeconds || 0))
@@ -982,21 +1293,57 @@ export default {
       const requiredTemplateKeys = []
       ;(this.bizRuleRows || []).forEach(row => {
         const templateKey = String((row && row.templateKey) || '').trim()
-        if (templateKey) requiredTemplateKeys.push(templateKey)
+        const bizType = normalizeBizTypeValue(row && row.bizType)
+        if (templateKey) {
+          requiredTemplateKeys.push({ templateKey, bizType })
+        }
+      })
+      ;(this.customerDefaultRows || []).forEach(row => {
+        const templateKey = String((row && row.defaultTemplate) || '').trim()
+        if (templateKey) {
+          requiredTemplateKeys.push({ templateKey, bizType: '' })
+        }
+      })
+      ;(this.customerBizRuleRows || []).forEach(row => {
+        const templateKey = String((row && row.templateKey) || '').trim()
+        const bizType = normalizeBizTypeValue(row && row.bizType)
+        if (templateKey) {
+          requiredTemplateKeys.push({ templateKey, bizType })
+        }
       })
 
       // 去重
-      const uniqRequired = Array.from(new Set(requiredTemplateKeys))
+      const uniqRequired = []
+      const seenKeys = new Set()
+      requiredTemplateKeys.forEach(item => {
+        const templateKey = String((item && item.templateKey) || '').trim()
+        if (!templateKey || seenKeys.has(templateKey)) return
+        seenKeys.add(templateKey)
+        uniqRequired.push({
+          templateKey,
+          bizType: String((item && item.bizType) || '').trim()
+        })
+      })
       if (!uniqRequired.length) return
 
       const coatingSeed = existing.COATING_ROLL_LABEL || existing.COATING_INBOUND_SHEET || null
       const rollingSeed = existing.REWINDING_ROLL_LABEL || existing.SLITTING_CORE_LABEL || existing.SLITTING_INNER_LABEL || existing.SLITTING_OUTER_LABEL || existing.SLITTING_PALLET_LABEL || null
 
       let appendedCount = 0
-      uniqRequired.forEach(templateKey => {
+      uniqRequired.forEach(({ templateKey, bizType }) => {
         if (existing[templateKey]) return
 
-        const isSlitting = templateKey.indexOf('SLITTING_') === 0
+        const upperKey = templateKey.toUpperCase()
+        const upperBizType = String(bizType || '').trim().toUpperCase()
+        const isSlitting = SLITTING_GLOBAL_BIZ_TYPES.includes(upperBizType) ||
+          upperKey.indexOf('SLITTING_') === 0 ||
+          upperKey.includes('NEIBIAO') ||
+          upperKey.includes('WAIBIAO') ||
+          upperKey.includes('GUANXIN') ||
+          upperKey.includes('INNER') ||
+          upperKey.includes('OUTER') ||
+          upperKey.includes('CORE') ||
+          upperKey.includes('PALLET')
         const seed = isSlitting ? rollingSeed : coatingSeed
         const formatPath = String((seed && seed.formatPath) || DEFAULT_TEMPLATE_PATH_HINT[templateKey] || '').trim()
         const printer = String((seed && seed.printer) || '').trim()
@@ -1392,22 +1739,9 @@ export default {
     async saveGatewayConfigAction() {
       this.gatewaySaving = true
       try {
-        const templates = {}
-        this.gatewayTemplates.forEach(row => {
-          const templateKey = String(row.templateKey || '').trim()
-          if (!templateKey) return
-          templates[templateKey] = {
-            formatPath: String(row.formatPath || '').trim(),
-            printer: String(row.printer || '').trim()
-          }
-        })
+        this.ensureGatewayTemplateMappingsForGlobalRules()
 
-        const payload = {
-          listenPrefix: String(this.gatewayConfig.listenPrefix || '').trim(),
-          barTenderExe: String(this.gatewayConfig.barTenderExe || '').trim(),
-          defaultTimeoutSeconds: Number(this.gatewayConfig.defaultTimeoutSeconds || 30),
-          templates
-        }
+        const payload = this.buildSafeGatewayConfigPayload()
 
         const saved = await saveGatewayConfig(payload, this.localConfig)
         this.gatewayConfig = normalizeGatewayConfig(saved)
@@ -1415,7 +1749,12 @@ export default {
         if (!this.gatewayTemplates.length) this.gatewayTemplates = [createTemplateRow()]
         this.$message.success('本机 BarTender 配置已保存')
       } catch (error) {
-        this.$message.error(error.message || '保存本机配置失败')
+        const msg = String((error && error.message) || '').trim()
+        if (/json|convertfrom-json|无法转换|deserialize/i.test(msg)) {
+          this.$message.error(`保存失败：网关提示 JSON 无法转换。请先检查“监听地址/BarTender 路径/模板键”是否包含异常字符，再重试。详细信息：${msg || '未知错误'}`)
+        } else {
+          this.$message.error(msg || '保存本机配置失败')
+        }
       } finally {
         this.gatewaySaving = false
       }
@@ -1432,31 +1771,98 @@ export default {
     },
     addTemplateRow() {
       this.gatewayTemplates.push(createTemplateRow())
+      this.gatewayTemplatePage = Math.max(1, Math.ceil(this.filteredGatewayTemplates.length / this.gatewayTemplatePageSize))
+      this.persistUiStateToRoute()
     },
     removeTemplateRow(index) {
       this.gatewayTemplates.splice(index, 1)
       if (!this.gatewayTemplates.length) this.gatewayTemplates.push(createTemplateRow())
+      this.persistUiStateToRoute()
     },
     addBizRuleRow() {
       this.bizRuleRows.push(createBizRuleRow())
+      this.bizRulePage = Math.max(1, Math.ceil(this.filteredBizRuleRows.length / this.bizRulePageSize))
+      this.persistUiStateToRoute()
     },
     removeBizRuleRow(index) {
       this.bizRuleRows.splice(index, 1)
       if (!this.bizRuleRows.length) this.bizRuleRows.push(createBizRuleRow())
+      this.persistUiStateToRoute()
     },
     addCustomerDefaultRow() {
       this.customerDefaultRows.push(createCustomerDefaultRow())
+      this.customerDefaultPage = Math.max(1, Math.ceil(this.filteredCustomerDefaultRows.length / this.customerDefaultPageSize))
+      this.persistUiStateToRoute()
     },
     removeCustomerDefaultRow(index) {
       this.customerDefaultRows.splice(index, 1)
       if (!this.customerDefaultRows.length) this.customerDefaultRows.push(createCustomerDefaultRow())
+      this.persistUiStateToRoute()
     },
     addCustomerBizRuleRow() {
       this.customerBizRuleRows.push(createCustomerBizRuleRow())
+      this.customerBizRulePage = Math.max(1, Math.ceil(this.filteredCustomerBizRuleRows.length / this.customerBizRulePageSize))
+      this.persistUiStateToRoute()
+    },
+    resolveOriginalIndex(sourceRows, row) {
+      return Array.isArray(sourceRows) ? sourceRows.indexOf(row) : -1
+    },
+    onGatewayTemplateFilterChange() {
+      this.gatewayTemplatePage = 1
+      this.persistUiStateToRoute()
+    },
+    onGatewayTemplatePageChange(page) {
+      this.gatewayTemplatePage = page
+      this.persistUiStateToRoute()
+    },
+    onGatewayTemplatePageSizeChange(size) {
+      this.gatewayTemplatePageSize = size
+      this.gatewayTemplatePage = 1
+      this.persistUiStateToRoute()
+    },
+    onBizRuleFilterChange() {
+      this.bizRulePage = 1
+      this.persistUiStateToRoute()
+    },
+    onBizRulePageChange(page) {
+      this.bizRulePage = page
+      this.persistUiStateToRoute()
+    },
+    onBizRulePageSizeChange(size) {
+      this.bizRulePageSize = size
+      this.bizRulePage = 1
+      this.persistUiStateToRoute()
+    },
+    onCustomerDefaultFilterChange() {
+      this.customerDefaultPage = 1
+      this.persistUiStateToRoute()
+    },
+    onCustomerDefaultPageChange(page) {
+      this.customerDefaultPage = page
+      this.persistUiStateToRoute()
+    },
+    onCustomerDefaultPageSizeChange(size) {
+      this.customerDefaultPageSize = size
+      this.customerDefaultPage = 1
+      this.persistUiStateToRoute()
+    },
+    onCustomerBizRuleFilterChange() {
+      this.customerBizRulePage = 1
+      this.persistUiStateToRoute()
+    },
+    onCustomerBizRulePageChange(page) {
+      this.customerBizRulePage = page
+      this.persistUiStateToRoute()
+    },
+    onCustomerBizRulePageSizeChange(size) {
+      this.customerBizRulePageSize = size
+      this.customerBizRulePage = 1
+      this.persistUiStateToRoute()
     },
     removeCustomerBizRuleRow(index) {
       this.customerBizRuleRows.splice(index, 1)
       if (!this.customerBizRuleRows.length) this.customerBizRuleRows.push(createCustomerBizRuleRow())
+      this.persistUiStateToRoute()
     },
     buildPreviewDataForTemplate(template, baseData = {}) {
       const code = String(template || '').trim().toUpperCase()
@@ -1525,10 +1931,24 @@ export default {
         ...baseData
       }
     },
+    validateTemplateMappingForTest(template) {
+      const key = String(template || '').trim()
+      if (!key) return { ok: false, message: '请先选择模板键' }
+      const row = (this.gatewayTemplates || []).find(item => String((item && item.templateKey) || '').trim() === key)
+      if (!row) {
+        return { ok: false, message: `模板未映射：${key}，请先在“模板映射”中配置` }
+      }
+      const formatPath = String((row && row.formatPath) || '').trim()
+      if (!formatPath) {
+        return { ok: false, message: `模板 ${key} 未配置文件路径（formatPath）` }
+      }
+      return { ok: true }
+    },
     async handleTestPrint() {
       const template = String(this.testForm.template || '').trim()
-      if (!template) {
-        this.$message.warning('请先选择模板键')
+      const check = this.validateTemplateMappingForTest(template)
+      if (!check.ok) {
+        this.$message.warning(check.message)
         return
       }
 
@@ -1556,8 +1976,9 @@ export default {
     },
     async handleTemplatePreview() {
       const template = String(this.testForm.template || '').trim()
-      if (!template) {
-        this.$message.warning('请先选择模板键')
+      const check = this.validateTemplateMappingForTest(template)
+      if (!check.ok) {
+        this.$message.warning(check.message)
         return
       }
 
@@ -1664,5 +2085,18 @@ export default {
   color: #303133;
   font-size: 18px;
   font-weight: 600;
+}
+
+:deep(.template-sync-result-dialog .el-message-box__message) {
+  margin: 0;
+}
+
+:deep(.template-sync-result-dialog .template-sync-result-scroll) {
+  max-height: 360px;
+  overflow-y: auto;
+  white-space: normal;
+  word-break: break-all;
+  line-height: 1.6;
+  padding-right: 6px;
 }
 </style>

@@ -4,6 +4,13 @@
       <div slot="header" class="clearfix">
         <span>入库申请</span>
         <div style="float: right">
+          <el-button
+            type="warning"
+            icon="el-icon-connection"
+            size="small"
+            :loading="mergeHistoryLoading"
+            @click="handleMergeHistoricalSlitting"
+          >历史分切成品合并</el-button>
           <el-button type="success" icon="el-icon-s-order" size="small" @click="openBatchScanDialog">批量扫码入库</el-button>
           <el-button type="primary" icon="el-icon-plus" size="small" @click="handleAdd">新增入库申请</el-button>
         </div>
@@ -30,9 +37,17 @@
 
       <!-- 数据表格 -->
       <el-table ref="inboundTable" v-loading="loading" :data="list" style="width: 100%; margin-top: 15px" border stripe>
-        <el-table-column prop="requestNo" label="申请单号" width="150" />
+        <el-table-column label="订单号" width="170" show-overflow-tooltip>
+          <template slot-scope="scope">
+            {{ displayOrderNo(scope.row) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="materialCode" label="料号" width="180" />
-        <el-table-column prop="productName" label="产品名称" width="160" show-overflow-tooltip />
+        <el-table-column label="产品名称" width="160" show-overflow-tooltip>
+          <template slot-scope="scope">
+            {{ displayProductName(scope.row) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="batchNo" label="生产批次号" width="130" />
         <el-table-column label="规格" width="160">
           <template slot-scope="scope">
@@ -53,6 +68,11 @@
           </template>
         </el-table-column>
         <el-table-column prop="applyTime" label="申请时间" width="160" />
+        <el-table-column label="来源" min-width="160" show-overflow-tooltip>
+          <template slot-scope="scope">
+            <span>{{ parseInboundSource(scope.row) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="180" fixed="right">
           <template slot-scope="scope">
             <template v-if="scope.row.status === 0">
@@ -162,7 +182,7 @@
     <!-- 审批弹窗 -->
     <el-dialog :title="approveTitle" :visible.sync="approveVisible" width="520px">
       <el-form label-width="80px">
-        <template v-if="approveAction">
+        <template v-if="approveAction && !isSlittingInbound(approveRow)">
           <el-form-item label="申请母卷号">
             <el-input :value="approveRow ? approveRow.batchNo : ''" disabled />
           </el-form-item>
@@ -241,7 +261,14 @@
 </template>
 
 <script>
-import { getInboundList, createInboundRequest, approveInbound, approveInboundByRollCodes, cancelInbound } from '@/api/tapeStock'
+import {
+  getInboundList,
+  createInboundRequest,
+  approveInbound,
+  approveInboundByRollCodes,
+  cancelInbound,
+  mergeHistoricalSlittingInboundStock
+} from '@/api/tapeStock'
 import { mapGetters } from 'vuex'
 import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
@@ -254,6 +281,11 @@ export default {
       searchForm: {
         status: null,
         materialCode: ''
+      },
+      arrivalFocus: {
+        active: false,
+        receiptId: '',
+        itemId: ''
       },
       list: [],
       loading: false,
@@ -272,6 +304,7 @@ export default {
       },
       approveVisible: false,
       approveLoading: false,
+      mergeHistoryLoading: false,
       approveTitle: '',
       approveRow: null,
       approveAction: true,
@@ -297,7 +330,16 @@ export default {
     ...mapGetters(['name'])
   },
   created() {
+    this.applyArrivalQueryFilterFromRoute()
     this.fetchData()
+    this.handleArrivalMessageHint()
+  },
+  watch: {
+    '$route.query.msgId'() {
+      this.applyArrivalQueryFilterFromRoute()
+      this.fetchData()
+      this.handleArrivalMessageHint()
+    }
   },
   methods: {
     isApiSuccess(res) {
@@ -312,6 +354,42 @@ export default {
         return `${t}μm*${w}mm*${l}m`
       }
       return row.specDesc || '-'
+    },
+    displayProductName(row) {
+      if (!row) return '-'
+      const name = row.productName ? String(row.productName).trim() : ''
+      if (name) return name
+      const code = row.materialCode ? String(row.materialCode).trim() : ''
+      return code || '-'
+    },
+    displayOrderNo(row) {
+      if (!row) return '-'
+      const orderNo = this.extractInboundTokenFromRemark(row.remark, 'orderNo')
+      if (orderNo) return orderNo
+      const purchaseOrderNo = this.extractInboundTokenFromRemark(row.remark, 'purchaseOrderNo')
+      if (purchaseOrderNo) return purchaseOrderNo
+      const receiptNo = this.extractInboundTokenFromRemark(row.remark, 'receiptNo')
+      if (receiptNo) return receiptNo
+      return '-'
+    },
+    parseInboundSource(row) {
+      if (!row) return '-'
+      const remark = String(row.remark || '')
+      if (remark.includes('[SALES_RETURN]')) {
+        const m = remark.match(/returnNo=([^|]+)/)
+        const returnNo = m && m[1] ? m[1] : ''
+        return returnNo ? `销售退货：${returnNo}` : '销售退货'
+      }
+      return row.applyDept || row.remark || '-'
+    },
+    isSlittingInbound(row) {
+      if (!row) return false
+      const remark = String(row.remark || '').toUpperCase()
+      const batchNo = String(row.batchNo || '').toUpperCase()
+      return remark.includes('PROCESS=SLITTING') ||
+        remark.includes('PROCESS=SLIT') ||
+        batchNo.includes('-SLITTING-') ||
+        batchNo.includes('-SLIT-')
     },
     getEmptyForm() {
       return {
@@ -329,6 +407,38 @@ export default {
         applyDept: '',
         remark: ''
       }
+    },
+    extractInboundTokenFromRemark(remark, key) {
+      const text = String(remark || '')
+      if (!text || !key) return ''
+      const escapedKey = String(key).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const reg = new RegExp(`(?:^|[|,;\\s])${escapedKey}=([^|,;]+)`, 'i')
+      const m = text.match(reg)
+      return m && m[1] ? String(m[1]).trim() : ''
+    },
+    applyArrivalQueryFilterFromRoute() {
+      const query = (this.$route && this.$route.query) || {}
+      const source = String(query.source || '')
+      if (source !== 'purchase-receipt') {
+        this.arrivalFocus = { active: false, receiptId: '', itemId: '' }
+        return
+      }
+
+      const receiptId = String(query.receiptId || '').trim()
+      const itemId = String(query.itemId || '').trim()
+      const materialCode = String(query.materialCode || '').trim()
+      this.arrivalFocus = {
+        active: !!(receiptId || itemId),
+        receiptId,
+        itemId
+      }
+
+      // 到货提醒默认聚焦待审批，便于仓库直接处理
+      this.searchForm.status = 0
+      if (materialCode) {
+        this.searchForm.materialCode = materialCode
+      }
+      this.pagination.page = 1
     }, async fetchData() {
       this.loading = true
       try {
@@ -340,8 +450,25 @@ export default {
         }
         const res = await getInboundList(params)
         if (this.isApiSuccess(res)) {
-          this.list = res.data.records
-          this.pagination.total = Number(res.data.total) || 0
+          const records = Array.isArray(res.data.records) ? res.data.records : []
+          const total = Number(res.data.total) || 0
+
+          if (this.arrivalFocus.active) {
+            const matched = records.filter(row => {
+              const remark = String((row && row.remark) || '')
+              if (!remark.includes('[PURCHASE_RECEIPT]')) return false
+              const rowReceiptId = this.extractInboundTokenFromRemark(remark, 'receiptId')
+              const rowItemId = this.extractInboundTokenFromRemark(remark, 'itemId')
+              const receiptOk = !this.arrivalFocus.receiptId || rowReceiptId === this.arrivalFocus.receiptId
+              const itemOk = !this.arrivalFocus.itemId || rowItemId === this.arrivalFocus.itemId
+              return receiptOk && itemOk
+            })
+            this.list = matched
+            this.pagination.total = matched.length
+          } else {
+            this.list = records
+            this.pagination.total = total
+          }
         }
       } catch (e) {
         console.error(e)
@@ -354,8 +481,50 @@ export default {
       this.pagination.page = 1
       this.fetchData()
     },
+    handleArrivalMessageHint() {
+      const query = (this.$route && this.$route.query) || {}
+      const source = query.source || ''
+      const receiptNo = query.receiptNo || ''
+      const materialName = query.materialName || ''
+      if (source !== 'purchase-receipt') {
+        return
+      }
+      const msgId = query.msgId ? String(query.msgId) : ''
+      if (msgId && this._lastMessageHintId === msgId) {
+        return
+      }
+      this._lastMessageHintId = msgId
+      if (receiptNo && materialName) {
+        this.$message.info(`到货提醒：${receiptNo} / ${materialName}，已为你定位到待审批入库申请。`)
+      } else if (receiptNo) {
+        this.$message.info(`到货提醒：${receiptNo}，已为你定位到待审批入库申请。`)
+      } else {
+        this.$message.info('有新的到货信息，已为你定位到待审批入库申请。')
+      }
+    },
+    handleMergeHistoricalSlitting() {
+      this.$confirm('将把历史分切成品“每卷一条”数据聚合为“单条多卷”。是否继续？', '提示', { type: 'warning' }).then(async() => {
+        this.mergeHistoryLoading = true
+        try {
+          const res = await mergeHistoricalSlittingInboundStock()
+          if (this.isApiSuccess(res)) {
+            const data = res.data || {}
+            const msg = `合并完成：候选单据${Number(data.candidateRefs || 0)}，已合并单据${Number(data.mergedRefs || 0)}，合并分组${Number(data.mergedGroups || 0)}，失效行${Number(data.deactivatedRows || 0)}`
+            this.$message.success(msg)
+            this.fetchData()
+          } else {
+            this.$message.error(res.msg || '历史分切成品合并失败')
+          }
+        } catch (e) {
+          this.$message.error('历史分切成品合并失败')
+        } finally {
+          this.mergeHistoryLoading = false
+        }
+      })
+    },
     handleReset() {
       this.searchForm = { status: null, materialCode: '' }
+      this.arrivalFocus = { active: false, receiptId: '', itemId: '' }
       this.handleSearch()
     },
     handleSizeChange(size) {
@@ -405,7 +574,8 @@ export default {
       this.auditRemark = ''
       this.scanRollCode = ''
       this.scanRollCodes = ''
-      this.scanLocation = (row && row.location && row.location !== '待上架') ? row.location : ''
+      const isSlitting = this.isSlittingInbound(row)
+      this.scanLocation = isSlitting ? '' : ((row && row.location && row.location !== '待上架') ? row.location : '')
       this.approveVisible = true
     },
     parseRollCodes(text) {
@@ -463,24 +633,27 @@ export default {
     },
     async confirmApprove() {
       if (this.approveAction) {
+        const isSlitting = this.isSlittingInbound(this.approveRow)
         const expected = this.approveRow && this.approveRow.batchNo ? String(this.approveRow.batchNo).trim() : ''
         const multiCodes = this.parseRollCodes(this.scanRollCodes)
         const scanned = this.scanRollCode ? String(this.scanRollCode).trim() : (multiCodes.length === 1 ? multiCodes[0] : '')
         const location = this.scanLocation ? String(this.scanLocation).trim() : ''
-        if (!scanned && multiCodes.length === 0) {
-          this.$message.warning('请扫码母卷号')
-          return
-        }
-        if (multiCodes.length <= 1 && expected && scanned && expected.toUpperCase() !== scanned.toUpperCase()) {
-          this.$message.error('扫码母卷号与申请批次不一致')
-          return
-        }
-        if (!location) {
-          this.$message.warning('请扫码卡板位')
-          return
+        if (!isSlitting) {
+          if (!scanned && multiCodes.length === 0) {
+            this.$message.warning('请扫码母卷号')
+            return
+          }
+          if (multiCodes.length <= 1 && expected && scanned && expected.toUpperCase() !== scanned.toUpperCase()) {
+            this.$message.error('扫码母卷号与申请批次不一致')
+            return
+          }
+          if (!location) {
+            this.$message.warning('请扫码卡板位')
+            return
+          }
         }
 
-        if (multiCodes.length > 1) {
+        if (!isSlitting && multiCodes.length > 1) {
           this.approveLoading = true
           try {
             const res = await approveInboundByRollCodes({
@@ -516,8 +689,8 @@ export default {
           this.approveAction,
           this.name,
           this.auditRemark,
-          this.scanRollCode,
-          this.scanLocation
+          this.isSlittingInbound(this.approveRow) ? '' : this.scanRollCode,
+          this.isSlittingInbound(this.approveRow) ? '' : this.scanLocation
         )
         if (this.isApiSuccess(res)) {
           this.$message.success(this.approveAction ? '已通过' : '已拒绝')

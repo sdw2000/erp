@@ -1,0 +1,1 @@
+Get-CimInstance Win32_Process | Where-Object { ($_.CommandLine -and ($_.CommandLine -match 'start-gateway.ps1' -or $_.CommandLine -match 'MES-BarTender-Gateway')) } | Select-Object ProcessId,CommandLine | Format-List -Force

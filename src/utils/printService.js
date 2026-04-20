@@ -19,6 +19,7 @@ const DEFAULT_CONFIG = {
   endpoint: 'http://127.0.0.1:9123/print',
   apiKey: '',
   timeoutMs: 30000,
+  printConcurrency: 3,
   allowBrowserFallback: false
 }
 
@@ -45,6 +46,13 @@ export function getBarTenderConfig(baseConfig = {}) {
   } else {
     // 兼容历史配置的 8s 超时：BarTender 首次加载模板可能超过 8s，统一抬高到 30s
     merged.timeoutMs = Math.max(30000, Math.trunc(timeoutMs))
+  }
+
+  const printConcurrency = Number(merged.printConcurrency)
+  if (!Number.isFinite(printConcurrency) || printConcurrency <= 0) {
+    merged.printConcurrency = DEFAULT_CONFIG.printConcurrency
+  } else {
+    merged.printConcurrency = Math.max(1, Math.min(8, Math.trunc(printConcurrency)))
   }
 
   return merged
@@ -176,9 +184,9 @@ function normalizeLabelPrintConfigs(records = []) {
   const byCustomer = {}
 
   ;(records || []).forEach(item => {
-    const bizType = String((item && item.bizType) || '').trim()
+    const bizType = String((item && item.bizType) || '').trim().toUpperCase()
     const templateKey = String((item && item.templateKey) || '').trim()
-    const customerCode = String((item && item.customerCode) || '').trim()
+    const customerCode = String((item && item.customerCode) || '').trim().toUpperCase()
     if (!bizType || !templateKey) return
 
     if (customerCode) {
@@ -261,10 +269,56 @@ async function gatewayFetch(path, options = {}, config = {}) {
   }
 }
 
+function firstNotBlank(...values) {
+  for (let i = 0; i < values.length; i++) {
+    const text = String(values[i] == null ? '' : values[i]).trim()
+    if (text) return text
+  }
+  return ''
+}
+
+async function reportPrintRecord({ payload = {}, trace = {}, result = null, error = null } = {}) {
+  try {
+    const data = (payload && payload.data) || {}
+    const body = {
+      sceneName: firstNotBlank(trace.sceneName),
+      bizType: firstNotBlank(trace.bizType),
+      templateKey: firstNotBlank(payload.template),
+      jobName: firstNotBlank(payload.jobName),
+      copies: Number(payload.copies || 1),
+      customerCode: firstNotBlank(trace.customerCode, data.customerCode),
+      customerOrderNo: firstNotBlank(trace.customerOrderNo, data.customerOrderNo),
+      orderNo: firstNotBlank(trace.orderNo, data.orderNo),
+      materialCode: firstNotBlank(trace.materialCode, data.materialCode, data.internalMaterialCode),
+      materialName: firstNotBlank(trace.materialName, data.materialName, data.internalMaterialName),
+      batchNo: firstNotBlank(trace.batchNo, data.batchNo, data.issueBatchNo, data.slittingBatchNo),
+      printerName: firstNotBlank(trace.printerName, payload.printer),
+      printStatus: error ? 'FAIL' : 'SUCCESS',
+      resultMessage: error ? String((error && error.message) || error || '').trim() : firstNotBlank(result && (result.message || result.msg)),
+      printData: data,
+      printPayload: payload,
+      printResult: result || null
+    }
+
+    const headers = { 'Content-Type': 'application/json; charset=utf-8' }
+    const token = getToken()
+    if (token) headers['X-Token'] = token
+
+    const apiBase = String(process.env.VUE_APP_BASE_API || '/dev-api').replace(/\/$/, '')
+    await fetch(`${apiBase}/production/label-print-record/save`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body)
+    })
+  } catch (e) {
+    // 忽略日志上报异常，避免影响主打印流程
+  }
+}
+
 export function resolveTemplateKey({ bizType = '', customerCode = '', defaultTemplate = '' } = {}, rules = {}) {
   const cfg = getTemplateRules(rules)
-  const b = String(bizType || '').trim()
-  const c = String(customerCode || '').trim()
+  const b = String(bizType || '').trim().toUpperCase()
+  const c = String(customerCode || '').trim().toUpperCase()
 
   // 1) 客户+业务优先：byCustomer.CUST001.byBizType.COATING_ROLL_LABEL
   if (c && cfg.byCustomer[c]) {
@@ -287,7 +341,7 @@ export function resolveTemplateKey({ bizType = '', customerCode = '', defaultTem
   return String(defaultTemplate || '').trim()
 }
 
-export async function sendBarTenderPrint(payload, config = {}) {
+export async function sendBarTenderPrint(payload, config = {}, trace = {}) {
   const cfg = getBarTenderConfig(config)
   if (!cfg.enabled) {
     throw new Error('BarTender is disabled in MES_BARTENDER_CONFIG')
@@ -301,6 +355,7 @@ export async function sendBarTenderPrint(payload, config = {}) {
   const controller = new AbortController()
   const timeoutMs = Number(cfg.timeoutMs || 30000)
   const timer = setTimeout(() => controller.abort(), timeoutMs)
+  let failureReported = false
 
   try {
     const headers = { 'Content-Type': 'application/json; charset=utf-8' }
@@ -323,10 +378,18 @@ export async function sendBarTenderPrint(payload, config = {}) {
 
     const data = await resp.json().catch(() => ({}))
     if (!resp.ok) {
-      throw new Error((data && (data.message || data.msg)) || `HTTP ${resp.status}`)
+      const err = new Error((data && (data.message || data.msg)) || `HTTP ${resp.status}`)
+      reportPrintRecord({ payload, trace, result: data || null, error: err }).catch(() => {})
+      failureReported = true
+      throw err
     }
-
+    reportPrintRecord({ payload, trace, result: data || null, error: null }).catch(() => {})
     return data || {}
+  } catch (error) {
+    if (!failureReported) {
+      reportPrintRecord({ payload, trace, result: null, error }).catch(() => {})
+    }
+    throw error
   } finally {
     clearTimeout(timer)
   }
@@ -432,6 +495,9 @@ export async function syncGatewayTemplates(config = {}, options = {}) {
 
   const payload = {
     manifestUrl,
+    templateDir: String(options.templateDir || '').trim(),
+    localManifestPath: String(options.localManifestPath || '').trim(),
+    configPath: String(options.configPath || '').trim(),
     defaultPrinter: String(options.defaultPrinter || '').trim(),
     apiKey: String(options.apiKey || '').trim(),
     authToken: String(options.authToken || getToken() || '').trim()
@@ -445,28 +511,38 @@ export async function syncGatewayTemplates(config = {}, options = {}) {
   return data || {}
 }
 
-export async function printByTemplate(template, data, options = {}, config = {}) {
+export async function printByTemplate(template, data, options = {}, config = {}, trace = {}) {
   const payload = {
     template,
     jobName: options.jobName || `${template}_${Date.now()}`,
     copies: Number(options.copies || 1),
     data: data || {}
   }
-  return sendBarTenderPrint(payload, config)
+  return sendBarTenderPrint(payload, config, trace)
 }
 
-export async function printByRule({ bizType = '', customerCode = '', defaultTemplate = '', data = {}, options = {}, config = {}, rules = {}} = {}) {
+export async function printByRule({ bizType = '', customerCode = '', defaultTemplate = '', data = {}, options = {}, config = {}, rules = {}, trace = {}} = {}) {
   const resolvedRules = Object.keys(rules || {}).length ? getTemplateRules(rules) : await loadTemplateRules()
   const template = resolveTemplateKey({ bizType, customerCode, defaultTemplate }, resolvedRules)
   if (!template) {
     throw new Error('未找到可用模板，请检查 MES_PRINT_TEMPLATE_RULES 配置')
   }
-  return printByTemplate(template, data, options, config)
+  return printByTemplate(template, data, options, config, {
+    ...(trace || {}),
+    bizType,
+    customerCode,
+    customerOrderNo: (data && data.customerOrderNo) || '',
+    orderNo: (data && data.orderNo) || '',
+    materialCode: (data && (data.materialCode || data.internalMaterialCode)) || '',
+    materialName: (data && (data.materialName || data.internalMaterialName)) || '',
+    batchNo: (data && (data.batchNo || data.issueBatchNo || data.slittingBatchNo)) || ''
+  })
 }
 
 export async function printByScene(scene = {}, source = {}, runtime = {}) {
   const bizType = String(resolveSceneValue(scene.bizType, source, runtime) || '').trim()
   const customerCode = String(resolveSceneValue(scene.customerCode, source, runtime) || '').trim()
+  const sceneName = String(resolveSceneValue(scene.sceneName, source, runtime) || '').trim()
   const defaultTemplate = String(resolveSceneValue(scene.defaultTemplate, source, runtime) || '').trim()
   const data = resolveSceneValue(scene.data || scene.buildData, source, runtime) || {}
   const options = resolveSceneValue(scene.options || scene.buildOptions, source, runtime) || {}
@@ -480,7 +556,15 @@ export async function printByScene(scene = {}, source = {}, runtime = {}) {
     data,
     options,
     config,
-    rules
+    rules,
+    trace: {
+      sceneName,
+      customerOrderNo: (data && data.customerOrderNo) || '',
+      orderNo: (data && data.orderNo) || '',
+      materialCode: (data && (data.materialCode || data.internalMaterialCode)) || '',
+      materialName: (data && (data.materialName || data.internalMaterialName)) || '',
+      batchNo: (data && (data.batchNo || data.issueBatchNo || data.slittingBatchNo)) || ''
+    }
   })
 }
 

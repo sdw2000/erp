@@ -1,0 +1,9 @@
+﻿{
+    "manifestUrl":  "http://localhost:8090/api/print-template/manifest",
+    "templateDir":  "D:\\MES\\BarTender\\Templates",
+    "localManifestPath":  "e:\\vue\\ERP\\tools\\bartender\\template-manifest.local.json",
+    "configPath":  "e:\\vue\\ERP\\tools\\bartender\\config.json",
+    "defaultPrinter":  "",
+    "apiKey":  "",
+    "authToken":  ""
+}

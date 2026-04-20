@@ -1,0 +1,35 @@
+﻿{
+  "listenPrefix": "http://127.0.0.1:9123/",
+  "barTenderExe": "C:\Program Files (x86)\Seagull\BarTender Suite\bartend.exe",
+  "defaultTimeoutSeconds": 30,
+  "templates": {
+    "COATING_ROLL_LABEL": {
+      "formatPath": "C:\Users\Administrator\AppData\Local\MES-BarTender-Gateway\templates\coating.btw",
+      "printer": "Gprinter GP-1324D"
+    },
+    "COATING_INBOUND_SHEET": {
+      "formatPath": "C:\Users\Administrator\AppData\Local\MES-BarTender-Gateway\templates\coating.btw",
+      "printer": "Gprinter GP-1324D"
+    },
+    "REWINDING_ROLL_LABEL": {
+      "formatPath": "C:\Users\Administrator\AppData\Local\MES-BarTender-Gateway\templates\rolling.btw",
+      "printer": "Gprinter GP-1324D"
+    },
+    "SLITTING_CORE_LABEL": {
+      "formatPath": "C:\Users\Administrator\AppData\Local\MES-BarTender-Gateway\templates\rolling.btw",
+      "printer": "Gprinter GP-1324D"
+    },
+    "SLITTING_INNER_LABEL": {
+      "formatPath": "C:\Users\Administrator\AppData\Local\MES-BarTender-Gateway\templates\rolling.btw",
+      "printer": "Gprinter GP-1324D"
+    },
+    "SLITTING_OUTER_LABEL": {
+      "formatPath": "C:\Users\Administrator\AppData\Local\MES-BarTender-Gateway\templates\rolling.btw",
+      "printer": "Gprinter GP-1324D"
+    },
+    "SLITTING_PALLET_LABEL": {
+      "formatPath": "C:\Users\Administrator\AppData\Local\MES-BarTender-Gateway\templates\rolling.btw",
+      "printer": "Gprinter GP-1324D"
+    }
+  }
+}

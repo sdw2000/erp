@@ -8,6 +8,29 @@ $ErrorActionPreference = 'Stop'
 $script:LastPayload = $null
 $script:LastResult = $null
 $script:GatewayStartedAt = Get-Date
+$script:LastSubmittedPrintProcessId = $null
+
+function Wait-PreviousBarTenderPrint {
+  param([int]$TimeoutSeconds = 120)
+
+  if ($null -eq $script:LastSubmittedPrintProcessId) { return }
+  $pidToWait = 0
+  try { $pidToWait = [int]$script:LastSubmittedPrintProcessId } catch { $pidToWait = 0 }
+  if ($pidToWait -le 0) { return }
+
+  try {
+    $proc = Get-Process -Id $pidToWait -ErrorAction SilentlyContinue
+    if ($null -eq $proc) {
+      $script:LastSubmittedPrintProcessId = $null
+      return
+    }
+    Wait-Process -Id $pidToWait -Timeout $TimeoutSeconds -ErrorAction SilentlyContinue
+  } catch {
+    # ignore
+  } finally {
+    $script:LastSubmittedPrintProcessId = $null
+  }
+}
 
 function ConvertTo-SafeJson {
   param(
@@ -288,7 +311,8 @@ function Invoke-BarTenderPrint {
     [string]$Printer,
     [int]$Copies,
     [object]$Data,
-    [int]$TimeoutSeconds
+    [int]$TimeoutSeconds,
+    [switch]$Async
   )
 
   if (!(Test-Path $BarTenderExe)) { throw "BarTender executable not found: $BarTenderExe" }
@@ -298,6 +322,10 @@ function Invoke-BarTenderPrint {
   $namedSubs = Build-NamedSubStringsXml -Data $Data
   $formatEsc = Escape-Xml $FormatPath
   $printerEsc = Escape-Xml $Printer
+  $printSetupPrinterXml = ''
+  if (-not [string]::IsNullOrWhiteSpace([string]$Printer)) {
+    $printSetupPrinterXml = "<Printer>$printerEsc</Printer>"
+  }
 
   $xml = @"
 <?xml version="1.0" encoding="utf-8"?>
@@ -306,7 +334,7 @@ function Invoke-BarTenderPrint {
     <Print>
       <Format>$formatEsc</Format>
       <PrintSetup>
-        <Printer>$printerEsc</Printer>
+        $printSetupPrinterXml
         <IdenticalCopiesOfLabel>$Copies</IdenticalCopiesOfLabel>
       </PrintSetup>
       $namedSubs
@@ -317,10 +345,32 @@ function Invoke-BarTenderPrint {
 
   $tempXml = Join-Path $env:TEMP ("mes_bt_" + [guid]::NewGuid().ToString('N') + ".xml")
   Set-Content -Path $tempXml -Value $xml -Encoding UTF8
+  $cleanupByCaller = $true
 
   try {
     $args = "/XMLScriptFile=`"$tempXml`" /X"
+    if ($Async) {
+      # 异步提交模式下仍按顺序串行提交，避免同时拉起多个 bartend.exe 导致偶发漏打
+      Wait-PreviousBarTenderPrint -TimeoutSeconds 120
+    }
     $proc = Start-Process -FilePath $BarTenderExe -ArgumentList $args -PassThru -WindowStyle Hidden
+    if ($Async) {
+      $script:LastSubmittedPrintProcessId = $proc.Id
+      $cleanupByCaller = $false
+      Start-Job -ScriptBlock {
+        param($procId, $xmlPath)
+        try {
+          Wait-Process -Id $procId -Timeout 300 -ErrorAction SilentlyContinue
+        } catch {}
+        Remove-Item -Path $xmlPath -ErrorAction SilentlyContinue
+      } -ArgumentList $proc.Id, $tempXml | Out-Null
+
+      return @{
+        submitted = $true
+        processId = $proc.Id
+      }
+    }
+
     $finished = $proc.WaitForExit($TimeoutSeconds * 1000)
     if (-not $finished) {
       try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch {}
@@ -330,7 +380,9 @@ function Invoke-BarTenderPrint {
       throw "BarTender exit code: $($proc.ExitCode)"
     }
   } finally {
-    Remove-Item -Path $tempXml -ErrorAction SilentlyContinue
+    if ($cleanupByCaller) {
+      Remove-Item -Path $tempXml -ErrorAction SilentlyContinue
+    }
   }
 }
 
@@ -636,17 +688,36 @@ try {
 
         $payload = $bodyText | ConvertFrom-Json
         $templateKey = [string]$payload.template
+        $templateKey = $templateKey.Trim()
         if ([string]::IsNullOrWhiteSpace($templateKey)) {
           throw 'payload.template is required'
         }
 
-        $tpl = $config.templates.PSObject.Properties[$templateKey].Value
-        if ($null -eq $tpl) {
-          throw "Template not configured: $templateKey"
+        $tplProp = $null
+        if ($null -ne $config.templates) {
+          $tplProp = $config.templates.PSObject.Properties[$templateKey]
+          if ($null -eq $tplProp -and $templateKey -eq 'RUIPU_PUTONG_GUANXIN') {
+            $tplProp = $config.templates.PSObject.Properties['RUIPU_PUTONG_GUANGXIN']
+          }
+          if ($null -eq $tplProp -and $templateKey -eq 'RUIPU_PUTONG_GUANGXIN') {
+            $tplProp = $config.templates.PSObject.Properties['RUIPU_PUTONG_GUANXIN']
+          }
         }
+        if ($null -eq $tplProp) {
+          $keys = @()
+          if ($null -ne $config.templates) {
+            $keys = @($config.templates.PSObject.Properties | ForEach-Object { [string]$_.Name })
+          }
+          throw "Template not configured: $templateKey. Available templates: $($keys -join ', ')"
+        }
+        $tpl = $tplProp.Value
 
         $barTenderExe = [string]$config.barTenderExe
         $formatPath = [string]$tpl.formatPath
+        $formatPath = $formatPath.Trim()
+        if ([string]::IsNullOrWhiteSpace($formatPath)) {
+          throw "Template formatPath is empty: $templateKey"
+        }
         $timeout = 30
         if ($null -ne $config.defaultTimeoutSeconds) {
           [int]::TryParse([string]$config.defaultTimeoutSeconds, [ref]$timeout) | Out-Null
@@ -673,18 +744,38 @@ try {
 
       $payload = $bodyText | ConvertFrom-Json
       $templateKey = [string]$payload.template
+      $templateKey = $templateKey.Trim()
       if ([string]::IsNullOrWhiteSpace($templateKey)) {
         throw 'payload.template is required'
       }
 
-      $tpl = $config.templates.PSObject.Properties[$templateKey].Value
-      if ($null -eq $tpl) {
-        throw "Template not configured: $templateKey"
+      $tplProp = $null
+      if ($null -ne $config.templates) {
+        $tplProp = $config.templates.PSObject.Properties[$templateKey]
+        if ($null -eq $tplProp -and $templateKey -eq 'RUIPU_PUTONG_GUANXIN') {
+          $tplProp = $config.templates.PSObject.Properties['RUIPU_PUTONG_GUANGXIN']
+        }
+        if ($null -eq $tplProp -and $templateKey -eq 'RUIPU_PUTONG_GUANGXIN') {
+          $tplProp = $config.templates.PSObject.Properties['RUIPU_PUTONG_GUANXIN']
+        }
       }
+      if ($null -eq $tplProp) {
+        $keys = @()
+        if ($null -ne $config.templates) {
+          $keys = @($config.templates.PSObject.Properties | ForEach-Object { [string]$_.Name })
+        }
+        throw "Template not configured: $templateKey. Available templates: $($keys -join ', ')"
+      }
+      $tpl = $tplProp.Value
 
       $barTenderExe = [string]$config.barTenderExe
       $formatPath = [string]$tpl.formatPath
+      $formatPath = $formatPath.Trim()
+      if ([string]::IsNullOrWhiteSpace($formatPath)) {
+        throw "Template formatPath is empty: $templateKey"
+      }
       $printer = [string]$tpl.printer
+      $printer = $printer.Trim()
       $copies = 1
       if ($null -ne $payload.copies) {
         [int]::TryParse([string]$payload.copies, [ref]$copies) | Out-Null
@@ -694,10 +785,33 @@ try {
         [int]::TryParse([string]$config.defaultTimeoutSeconds, [ref]$timeout) | Out-Null
       }
 
-      Invoke-BarTenderPrint -BarTenderExe $barTenderExe -FormatPath $formatPath -Printer $printer -Copies $copies -Data $payload.data -TimeoutSeconds $timeout
+      $printStartedAt = Get-Date
 
-      $script:LastResult = @{ ok = $true; message = 'Print job submitted'; template = $templateKey; time = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') }
-      Write-JsonResponse -Response $res -StatusCode 200 -Body @{ code = 200; message = 'Print job submitted'; template = $templateKey }
+      $submitResult = Invoke-BarTenderPrint -BarTenderExe $barTenderExe -FormatPath $formatPath -Printer $printer -Copies $copies -Data $payload.data -TimeoutSeconds $timeout -Async
+
+      $printFinishedAt = Get-Date
+      $durationMs = 0
+      try { $durationMs = [int](($printFinishedAt - $printStartedAt).TotalMilliseconds) } catch {}
+
+      $script:LastResult = @{
+        ok = $true
+        message = 'Print job accepted (async)'
+        template = $templateKey
+        time = $printFinishedAt.ToString('yyyy-MM-dd HH:mm:ss')
+        startedAt = $printStartedAt.ToString('yyyy-MM-dd HH:mm:ss.fff')
+        finishedAt = $printFinishedAt.ToString('yyyy-MM-dd HH:mm:ss.fff')
+        durationMs = $durationMs
+        processId = $submitResult.processId
+      }
+      Write-JsonResponse -Response $res -StatusCode 200 -Body @{
+        code = 200
+        message = 'Print job accepted (async)'
+        template = $templateKey
+        startedAt = $printStartedAt.ToString('yyyy-MM-dd HH:mm:ss.fff')
+        finishedAt = $printFinishedAt.ToString('yyyy-MM-dd HH:mm:ss.fff')
+        durationMs = $durationMs
+        processId = $submitResult.processId
+      }
     } catch {
       $script:LastResult = @{ ok = $false; message = $_.Exception.Message; time = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') }
       Write-JsonResponse -Response $res -StatusCode 500 -Body @{ code = 500; message = $_.Exception.Message }

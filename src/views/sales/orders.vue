@@ -62,7 +62,7 @@
         <el-col :span="6">
           <el-switch
             v-model="searchForm.showCompleted"
-            active-text="显示已完成"
+            active-text="显示已收货"
             style="margin-right: 8px;"
             @change="handleShowCompletedChange"
           />
@@ -102,11 +102,12 @@
       </el-table-column>
       <el-table-column v-if="isAdminUser" prop="salesUserName" label="销售" width="72" />
       <el-table-column v-if="isAdminUser" prop="documentationPersonUserName" label="跟单员" width="72" />
-      <el-table-column label="操作" width="228" align="center">
+      <el-table-column label="操作" width="268" align="center">
         <template slot-scope="scope">
           <div class="op-btns">
             <el-button type="text" size="mini" @click="viewDetail(scope.row)">详情</el-button>
             <el-button type="text" size="mini" class="op-print" @click="handlePrint(scope.row)">打印</el-button>
+            <el-button v-if="canGoDelivery" type="text" size="mini" @click="goDelivery(scope.row)">发货</el-button>
             <el-button type="text" size="mini" @click="openEdit(scope.row)">编辑</el-button>
             <el-button v-if="!isOrderCancelled(scope.row)" type="text" size="mini" class="op-danger" @click="confirmCancelOrder(scope.row)">取消订单</el-button>
             <el-button type="text" size="mini" class="op-danger" @click="confirmDelete(scope.row)">删除</el-button>
@@ -155,7 +156,7 @@
         <el-table :data="currentOrder.items" stripe style="width:100%; margin-top:10px;">
           <el-table-column type="index" label="序号" width="60" align="center" />          <el-table-column prop="materialCode" label="产品编码" width="180" />
           <el-table-column prop="materialName" label="产品名称" width="180" />
-          <el-table-column label="规格" width="180">
+          <el-table-column label="规格" width="234">
             <template slot-scope="scope">
               {{ formatSpec(scope.row) }}
             </template>
@@ -388,7 +389,7 @@
                   <span v-else>{{ scope.row.colorCode || '-' }}</span>
                 </template>
               </el-table-column>
-              <el-table-column width="128">
+              <el-table-column width="166">
                 <template slot="header">
                   <div style="text-align: center; line-height: 1.3;">
                     <div>规格</div>
@@ -415,11 +416,11 @@
                       />
                     </el-select>
                     <div style="display: flex; gap: 2px;">
-                      <el-input v-model="scope.row.thicknessDisplay" class="small-input" type="text" inputmode="numeric" pattern="[0-9]*\.?[0-9]*" placeholder="厚度" style="width: 36px;" />
+                      <el-input v-model="scope.row.thicknessDisplay" class="small-input" type="text" inputmode="numeric" pattern="[0-9]*\.?[0-9]*" placeholder="厚度" style="width: 47px;" />
                       <span style="line-height: 28px;">*</span>
-                      <el-input v-model="scope.row.width" class="small-input" type="text" inputmode="numeric" pattern="[0-9]*\.?[0-9]*" placeholder="宽度" style="width: 36px;" @input="onWidthInput(scope.row)" @blur="formatWidthOnBlur(scope.row)" />
+                      <el-input v-model="scope.row.width" class="small-input" type="text" inputmode="numeric" pattern="[0-9]*\.?[0-9]*" placeholder="宽度" style="width: 47px;" @input="onWidthInput(scope.row)" @blur="formatWidthOnBlur(scope.row)" />
                       <span style="line-height: 28px;">*</span>
-                      <el-input v-model="scope.row.lengthDisplay" class="small-input" type="text" inputmode="numeric" pattern="[0-9]*\.?[0-9]*" placeholder="长度" style="width: 36px;" @input="onItemSpecChanged(scope.row)" />
+                      <el-input v-model="scope.row.lengthDisplay" class="small-input" type="text" inputmode="numeric" pattern="[0-9]*\.?[0-9]*" placeholder="长度" style="width: 47px;" @input="onItemSpecChanged(scope.row)" />
                     </div>
                   </div>
                   <span v-else>{{ getItemSpecText(scope.row) }}</span>
@@ -729,6 +730,14 @@ export default {
       }
       const roles = (this.$store && this.$store.getters && this.$store.getters.roles) || []
       return Array.isArray(roles) && roles.includes('admin')
+    },
+    canGoDelivery() {
+      if (typeof this.$hasRole === 'function') {
+        return this.$hasRole('admin') || this.$hasRole('sales') || this.$hasRole('warehouse')
+      }
+      const roles = (this.$store && this.$store.getters && this.$store.getters.roles) || []
+      if (!Array.isArray(roles)) return false
+      return roles.includes('admin') || roles.includes('sales') || roles.includes('warehouse')
     },
     pagedOrders() {
       return this.orders
@@ -1903,6 +1912,22 @@ export default {
         console.error('获取订单详情异常:', e)
         this.$message.error('获取订单详情失败')
       }
+    },
+    goDelivery(row) {
+      const orderNo = String((row && row.orderNo) || '').trim()
+      if (!orderNo) {
+        this.$message.warning('订单号无效')
+        return
+      }
+      this.$router.push({
+        path: '/sales/delivery',
+        query: {
+          fromOrders: '1',
+          orderNo,
+          autoOpen: '1',
+          t: String(Date.now())
+        }
+      })
     },
     async openCreate() {
       this.isEditing = false

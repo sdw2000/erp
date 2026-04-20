@@ -53,7 +53,7 @@
         <el-table-column prop="materialCategory" label="物料类别" width="100" align="center">
           <template slot-scope="scope">
             <el-tag :type="scope.row.materialCategory === 'film' ? 'success' : 'warning'" size="small">
-              {{ formatCategory(scope.row.materialCategory) }}
+              {{ formatCategory(scope.row.materialCategory, scope.row) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -113,15 +113,22 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="物料类别" prop="materialCategory">
-              <el-select v-model="form.materialCategory" style="width:100%" placeholder="请选择" @change="onCategoryChange">
-                <el-option label="薄膜" value="film"/>
-                <el-option label="化工物料" value="chemical"/>
+              <el-select v-model="form.materialCategory" style="width:100%" placeholder="请选择/可输入" filterable allow-create default-first-option @change="onCategoryChange">
+                <el-option label="原膜" value="原膜"/>
+                <el-option label="离型材料" value="离型材料"/>
+                <el-option label="管芯" value="管芯"/>
+                <el-option label="化工料" value="化工料"/>
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="物料类型" prop="materialType">
-              <el-select v-model="form.materialType" style="width:100%" placeholder="请选择">
+              <el-select v-model="form.materialType" style="width:100%" placeholder="请选择/可输入" filterable allow-create default-first-option>
+                <el-option label="PET膜" value="PET膜"/>
+                <el-option label="BOPP膜" value="BOPP膜"/>
+                <el-option label="离型纸" value="离型纸"/>
+                <el-option label="离型膜" value="离型膜"/>
+                <el-option label="纸管" value="纸管"/>
                 <el-option label="树脂" value="resin"/>
                 <el-option label="溶剂" value="solvent"/>
                 <el-option label="助剂" value="additive"/>
@@ -153,33 +160,33 @@
           style="margin-bottom: 12px;"
           title="支持按最小值/最大值/单位维护性能参数，例如：1200~1203mm、≥0、0~0、15±2。保存后会以 JSON 存储，便于后续品质控制。"
         />
-        <template v-if="form.materialCategory === 'film'">
-          <el-row :gutter="20">
+        <template v-for="item in getCurrentInspectionFields()">
+          <el-row :key="item.key + '-value'" :gutter="20">
             <el-col :span="8">
-              <el-form-item label="宽度标准值">
-                <el-input v-model="performanceForm.widthInspection.standardValue" placeholder="标准值" />
+              <el-form-item :label="item.label + '标准值'">
+                <el-input v-model="performanceForm[item.key].standardValue" placeholder="标准值" />
               </el-form-item>
             </el-col>
             <el-col :span="8">
-              <el-form-item label="宽度下限">
-                <el-input v-model="performanceForm.widthInspection.min" placeholder="最小值" />
+              <el-form-item :label="item.label + '下限'">
+                <el-input v-model="performanceForm[item.key].min" placeholder="最小值" />
               </el-form-item>
             </el-col>
             <el-col :span="8">
-              <el-form-item label="宽度上限">
-                <el-input v-model="performanceForm.widthInspection.max" placeholder="最大值" />
+              <el-form-item :label="item.label + '上限'">
+                <el-input v-model="performanceForm[item.key].max" placeholder="最大值" />
               </el-form-item>
             </el-col>
           </el-row>
-          <el-row :gutter="20">
+          <el-row :key="item.key + '-meta'" :gutter="20">
             <el-col :span="8">
               <el-form-item label="单位">
-                <el-input v-model="performanceForm.widthInspection.unit" placeholder="mm" />
+                <el-input v-model="performanceForm[item.key].unit" :placeholder="item.unit || '可选'" />
               </el-form-item>
             </el-col>
             <el-col :span="8">
               <el-form-item label="判定方式">
-                <el-select v-model="performanceForm.widthInspection.judgeMode" style="width:100%">
+                <el-select v-model="performanceForm[item.key].judgeMode" style="width:100%">
                   <el-option label="区间" value="range" />
                   <el-option label="≥下限" value="min" />
                   <el-option label="≤上限" value="max" />
@@ -189,282 +196,7 @@
             </el-col>
             <el-col :span="8">
               <el-form-item label="说明">
-                <el-input v-model="performanceForm.widthInspection.remark" placeholder="可选" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="厚向抗拉标准值">
-                <el-input v-model="performanceForm.thicknessTensile.standardValue" placeholder="标准值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="厚向抗拉下限">
-                <el-input v-model="performanceForm.thicknessTensile.min" placeholder="最小值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="厚向抗拉上限">
-                <el-input v-model="performanceForm.thicknessTensile.max" placeholder="最大值" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="单位">
-                <el-input v-model="performanceForm.thicknessTensile.unit" placeholder="N/15mm" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="判定方式">
-                <el-select v-model="performanceForm.thicknessTensile.judgeMode" style="width:100%">
-                  <el-option label="区间" value="range" />
-                  <el-option label="≥下限" value="min" />
-                  <el-option label="≤上限" value="max" />
-                  <el-option label="标准值" value="value" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="说明">
-                <el-input v-model="performanceForm.thicknessTensile.remark" placeholder="可选" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="横向抗拉标准值">
-                <el-input v-model="performanceForm.transverseTensile.standardValue" placeholder="标准值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="横向抗拉下限">
-                <el-input v-model="performanceForm.transverseTensile.min" placeholder="最小值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="横向抗拉上限">
-                <el-input v-model="performanceForm.transverseTensile.max" placeholder="最大值" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="单位">
-                <el-input v-model="performanceForm.transverseTensile.unit" placeholder="N/15mm" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="判定方式">
-                <el-select v-model="performanceForm.transverseTensile.judgeMode" style="width:100%">
-                  <el-option label="区间" value="range" />
-                  <el-option label="≥下限" value="min" />
-                  <el-option label="≤上限" value="max" />
-                  <el-option label="标准值" value="value" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="说明">
-                <el-input v-model="performanceForm.transverseTensile.remark" placeholder="可选" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="厚向伸长标准值">
-                <el-input v-model="performanceForm.thicknessElongation.standardValue" placeholder="标准值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="厚向伸长下限">
-                <el-input v-model="performanceForm.thicknessElongation.min" placeholder="最小值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="厚向伸长上限">
-                <el-input v-model="performanceForm.thicknessElongation.max" placeholder="最大值" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="单位">
-                <el-input v-model="performanceForm.thicknessElongation.unit" placeholder="%" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="判定方式">
-                <el-select v-model="performanceForm.thicknessElongation.judgeMode" style="width:100%">
-                  <el-option label="区间" value="range" />
-                  <el-option label="≥下限" value="min" />
-                  <el-option label="≤上限" value="max" />
-                  <el-option label="标准值" value="value" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="说明">
-                <el-input v-model="performanceForm.thicknessElongation.remark" placeholder="可选" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="横向伸长标准值">
-                <el-input v-model="performanceForm.transverseElongation.standardValue" placeholder="标准值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="横向伸长下限">
-                <el-input v-model="performanceForm.transverseElongation.min" placeholder="最小值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="横向伸长上限">
-                <el-input v-model="performanceForm.transverseElongation.max" placeholder="最大值" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="单位">
-                <el-input v-model="performanceForm.transverseElongation.unit" placeholder="%" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="判定方式">
-                <el-select v-model="performanceForm.transverseElongation.judgeMode" style="width:100%">
-                  <el-option label="区间" value="range" />
-                  <el-option label="≥下限" value="min" />
-                  <el-option label="≤上限" value="max" />
-                  <el-option label="标准值" value="value" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="说明">
-                <el-input v-model="performanceForm.transverseElongation.remark" placeholder="可选" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="电晕值标准值">
-                <el-input v-model="performanceForm.coronaBothSides.standardValue" placeholder="标准值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="电晕值下限">
-                <el-input v-model="performanceForm.coronaBothSides.min" placeholder="最小值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="电晕值上限">
-                <el-input v-model="performanceForm.coronaBothSides.max" placeholder="最大值" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="单位">
-                <el-input v-model="performanceForm.coronaBothSides.unit" placeholder="dyne" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="判定方式">
-                <el-select v-model="performanceForm.coronaBothSides.judgeMode" style="width:100%">
-                  <el-option label="区间" value="range" />
-                  <el-option label="≥下限" value="min" />
-                  <el-option label="≤上限" value="max" />
-                  <el-option label="标准值" value="value" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="说明">
-                <el-input v-model="performanceForm.coronaBothSides.remark" placeholder="可选" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </template>
-        <template v-else>
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="固含标准值">
-                <el-input v-model="performanceForm.solidContent.standardValue" placeholder="标准值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="固含下限">
-                <el-input v-model="performanceForm.solidContent.min" placeholder="最小值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="固含上限">
-                <el-input v-model="performanceForm.solidContent.max" placeholder="最大值" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="单位">
-                <el-input v-model="performanceForm.solidContent.unit" placeholder="%" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="判定方式">
-                <el-select v-model="performanceForm.solidContent.judgeMode" style="width:100%">
-                  <el-option label="区间" value="range" />
-                  <el-option label="≥下限" value="min" />
-                  <el-option label="≤上限" value="max" />
-                  <el-option label="标准值" value="value" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="说明">
-                <el-input v-model="performanceForm.solidContent.remark" placeholder="可选" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="剥离强度标准值">
-                <el-input v-model="performanceForm.peelStrength.standardValue" placeholder="标准值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="剥离强度下限">
-                <el-input v-model="performanceForm.peelStrength.min" placeholder="最小值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="剥离强度上限">
-                <el-input v-model="performanceForm.peelStrength.max" placeholder="最大值" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="单位">
-                <el-input v-model="performanceForm.peelStrength.unit" placeholder="N/25mm" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="判定方式">
-                <el-select v-model="performanceForm.peelStrength.judgeMode" style="width:100%">
-                  <el-option label="区间" value="range" />
-                  <el-option label="≥下限" value="min" />
-                  <el-option label="≤上限" value="max" />
-                  <el-option label="标准值" value="value" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="说明">
-                <el-input v-model="performanceForm.peelStrength.remark" placeholder="可选" />
+                <el-input v-model="performanceForm[item.key].remark" placeholder="可选" />
               </el-form-item>
             </el-col>
           </el-row>
@@ -563,7 +295,8 @@ export default {
         id: null,
         materialCode: '',
         materialName: '',
-        materialCategory: 'chemical',
+        materialCategory: '化工料',
+        materialCategoryRaw: '化工料',
         materialType: 'resin',
         unit: 'kg',
         spec: '',
@@ -572,24 +305,68 @@ export default {
         status: 1
       }
     },
+    getCategoryMode(category) {
+      const text = String(category || '').trim().toLowerCase()
+      if (!text) return 'chemical'
+      if (text === 'film' || text.includes('原膜') || text.includes('pet膜') || text.includes('bopp膜') || text.includes('薄膜')) {
+        return 'baseFilm'
+      }
+      if (text.includes('离型')) {
+        return 'release'
+      }
+      if (text.includes('管芯')) {
+        return 'core'
+      }
+      if (text === 'chemical' || text.includes('化工')) {
+        return 'chemical'
+      }
+      return 'chemical'
+    },
+    getInspectionSchema(category) {
+      const mode = this.getCategoryMode(category)
+      if (mode === 'baseFilm') {
+        return [
+          { key: 'thickness', label: '厚度', unit: 'μm' },
+          { key: 'coronaValue', label: '电晕值', unit: 'dyne' },
+          { key: 'width', label: '宽度', unit: 'mm' },
+          { key: 'tensileStrength', label: '抗拉强度', unit: 'N/15mm' },
+          { key: 'elongation', label: '伸长率', unit: '%' }
+        ]
+      }
+      if (mode === 'release') {
+        return [
+          { key: 'releaseForceA', label: '离型力A面', unit: 'gf/in' },
+          { key: 'releaseForceB', label: '离型力B面', unit: 'gf/in' },
+          { key: 'thickness', label: '厚度', unit: 'μm' },
+          { key: 'color', label: '颜色', unit: '' }
+        ]
+      }
+      if (mode === 'core') {
+        return [
+          { key: 'innerDiameter', label: '内径', unit: 'mm' },
+          { key: 'outerDiameter', label: '外径', unit: 'mm' },
+          { key: 'wallThickness', label: '壁厚', unit: 'mm' },
+          { key: 'length', label: '长度', unit: 'mm' }
+        ]
+      }
+      return [
+        { key: 'solidContent', label: '固含量', unit: '%' },
+        { key: 'peelStrength', label: '剥离强度', unit: 'N/25mm' }
+      ]
+    },
     createRangeField(unit = '') {
       return { label: '', standardValue: '', min: '', max: '', unit, judgeMode: 'range', remark: '' }
     },
     getDefaultPerformanceForm(category) {
-      if (category === 'film') {
-        return {
-          widthInspection: { ...this.createRangeField('mm'), label: '宽度' },
-          thicknessTensile: { ...this.createRangeField('N/15mm'), label: '厚向抗拉' },
-          transverseTensile: { ...this.createRangeField('N/15mm'), label: '横向抗拉' },
-          thicknessElongation: { ...this.createRangeField('%'), label: '厚向伸长' },
-          transverseElongation: { ...this.createRangeField('%'), label: '横向伸长' },
-          coronaBothSides: { ...this.createRangeField('dyne'), label: '电晕值' }
-        }
-      }
-      return {
-        solidContent: { ...this.createRangeField('%'), label: '固含量' },
-        peelStrength: { ...this.createRangeField('N/25mm'), label: '剥离强度' }
-      }
+      const schema = this.getInspectionSchema(category)
+      const result = {}
+      schema.forEach(item => {
+        result[item.key] = { ...this.createRangeField(item.unit), label: item.label }
+      })
+      return result
+    },
+    getCurrentInspectionFields() {
+      return this.getInspectionSchema(this.form.materialCategory)
     },
     parsePerformanceParams(text) {
       if (!text) return {}
@@ -682,20 +459,12 @@ export default {
     formatPerformanceSummary(row) {
       const parsed = this.parsePerformanceParams(row && row.performanceParams)
       if (!parsed || Object.keys(parsed).length === 0) return '-'
-      if (row && row.materialCategory === 'film') {
-        return [
-          parsed.widthInspection ? `宽度:${this.formatRangeField(parsed.widthInspection)}` : '',
-          parsed.thicknessTensile ? `厚向抗拉:${this.formatRangeField(parsed.thicknessTensile)}` : '',
-          parsed.transverseTensile ? `横向抗拉:${this.formatRangeField(parsed.transverseTensile)}` : '',
-          parsed.thicknessElongation ? `厚向伸长:${this.formatRangeField(parsed.thicknessElongation)}` : '',
-          parsed.transverseElongation ? `横向伸长:${this.formatRangeField(parsed.transverseElongation)}` : '',
-          parsed.coronaBothSides ? `电晕:${this.formatRangeField(parsed.coronaBothSides)}` : ''
-        ].filter(Boolean).join('；') || '-'
-      }
-      return [
-        parsed.solidContent ? `固含:${this.formatRangeField(parsed.solidContent)}` : '',
-        parsed.peelStrength ? `剥离强度:${this.formatRangeField(parsed.peelStrength)}` : ''
-      ].filter(Boolean).join('；') || '-'
+      const category = (row && (row.materialCategoryRaw || row.materialCategory)) || ''
+      const schema = this.getInspectionSchema(category)
+      return schema.map(item => {
+        const val = parsed[item.key]
+        return val ? `${item.label}:${this.formatRangeField(val)}` : ''
+      }).filter(Boolean).join('；') || '-'
     },
     formatType(type) {
       const map = {
@@ -706,7 +475,10 @@ export default {
       }
       return map[type] || type || '-'
     },
-    formatCategory(category) {
+    formatCategory(category, row) {
+      if (row && row.materialCategoryRaw) {
+        return row.materialCategoryRaw
+      }
       const map = {
         film: '薄膜',
         chemical: '化工物料'
@@ -714,27 +486,49 @@ export default {
       return map[category] || category || '-'
     },
     unitOptionsForCategory() {
-      if (this.form.materialCategory === 'film') {
+      const mode = this.getCategoryMode(this.form.materialCategory)
+      if (mode === 'baseFilm') {
         return [
-          { label: 'm²', value: 'm²' },
+          { label: '㎡', value: '㎡' },
+          { label: 'CPS', value: 'CPS' },
+          { label: 'Kg', value: 'kg' },
           { label: '卷', value: '卷' }
         ]
       }
+      if (mode === 'core') {
+        return [
+          { label: 'CPS', value: 'CPS' },
+          { label: '支', value: '支' },
+          { label: '个', value: '个' },
+          { label: '㎡', value: '㎡' },
+          { label: 'Kg', value: 'kg' }
+        ]
+      }
       return [
+        { label: '㎡', value: '㎡' },
+        { label: 'CPS', value: 'CPS' },
         { label: 'Kg', value: 'kg' },
         { label: '桶', value: '桶' }
       ]
     },
     onCategoryChange(value) {
-      if (value === 'film') {
-        this.form.unit = 'm²'
-      } else if (value === 'chemical') {
-        this.form.unit = 'kg'
+      this.form.materialCategoryRaw = value
+      const mode = this.getCategoryMode(value)
+      if (mode === 'baseFilm') {
+        this.form.unit = this.form.unit || '㎡'
+      } else if (mode === 'core') {
+        this.form.unit = this.form.unit || '支'
+      } else {
+        this.form.unit = this.form.unit || 'kg'
       }
       this.performanceForm = this.getDefaultPerformanceForm(value)
     },
     specPlaceholder() {
-      return this.form.materialCategory === 'film' ? '如：50μm × 1200mm × 3000m' : '如：180kg/桶、900kg/桶'
+      const mode = this.getCategoryMode(this.form.materialCategory)
+      if (mode === 'baseFilm') return '如：50μm × 1200mm × 3000m'
+      if (mode === 'core') return '如：3英寸管芯、长度1200mm'
+      if (mode === 'release') return '如：单硅离型纸/双硅离型膜'
+      return '如：180kg/桶、900kg/桶'
     },
     indexMethod(index) {
       return (this.pagination.page - 1) * this.pagination.size + index + 1
@@ -789,7 +583,8 @@ export default {
           id: res.data.id,
           materialCode: res.data.materialCode,
           materialName: res.data.materialName,
-          materialCategory: res.data.materialCategory || 'chemical',
+          materialCategory: res.data.materialCategoryRaw || res.data.materialCategory || '化工料',
+          materialCategoryRaw: res.data.materialCategoryRaw || res.data.materialCategory || '化工料',
           materialType: res.data.materialType || 'resin',
           unit: res.data.unit || 'kg',
           spec: res.data.spec || '',
@@ -809,6 +604,7 @@ export default {
         if (!valid) return
         this.submitting = true
         try {
+          this.form.materialCategoryRaw = this.form.materialCategory
           this.form.performanceParams = JSON.stringify(this.performanceForm || {})
           const api = this.form.id ? updateRawMaterial : createRawMaterial
           const res = await api(this.form)

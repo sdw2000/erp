@@ -77,12 +77,32 @@
     <el-dialog title="新增出库申请（手动选择批次）" :visible.sync="dialogVisible" width="900px" :close-on-click-modal="false">
       <el-form :inline="true" style="margin-bottom: 15px;">
         <el-form-item label="选择料号">
-          <el-input v-model="selectMaterialCode" placeholder="输入料号查询" style="width: 250px" />
+          <el-autocomplete
+            v-model="selectMaterialCode"
+            clearable
+            :fetch-suggestions="querySearchMaterial"
+            placeholder="先搜索并选择研发料号"
+            style="width: 300px"
+            value-key="value"
+            @select="handleMaterialSelect"
+            @input="handleMaterialInputChange"
+          />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="loadStockByMaterial">查询可用批次</el-button>
         </el-form-item>
-      </el-form>      <el-table :data="stockList" border stripe max-height="300" @row-click="selectStock">
+      </el-form>
+      <el-table
+        ref="stockTable"
+        :data="stockList"
+        border
+        stripe
+        max-height="300"
+        row-key="id"
+        @selection-change="handleStockSelectionChange"
+        @row-click="selectStock"
+      >
+        <el-table-column type="selection" width="46" reserve-selection />
         <el-table-column type="index" width="50" />
         <el-table-column prop="qrCode" label="二维码" width="130" />
         <el-table-column prop="batchNo" label="批次号" width="120" />
@@ -105,38 +125,72 @@
         <el-table-column prop="prodDate" label="生产日期" width="110" />
         <el-table-column label="操作" width="80">
           <template slot-scope="scope">
-            <el-button type="text" size="small" @click="selectStock(scope.row)">选择</el-button>
+            <el-button type="text" size="small" @click.stop="selectStock(scope.row)">选择</el-button>
           </template>
         </el-table-column>
       </el-table>
 
       <el-divider />
 
+      <div v-if="selectedStocks.length" style="margin-bottom: 12px;">
+        <div style="margin-bottom: 8px; font-weight: 600;">已选发料明细</div>
+        <el-table :data="selectedStocks" border stripe size="mini" max-height="220">
+          <el-table-column prop="materialCode" label="料号" min-width="150" show-overflow-tooltip />
+          <el-table-column label="规格" min-width="170" show-overflow-tooltip>
+            <template slot-scope="scope">{{ getSpecText(scope.row) }}</template>
+          </el-table-column>
+          <el-table-column prop="batchNo" label="批次号" min-width="130" />
+          <el-table-column prop="totalRolls" label="可用卷数" width="90" align="center" />
+          <el-table-column label="本次出库" width="130" align="center">
+            <template slot-scope="scope">
+              <el-input-number
+                v-model="scope.row.outboundRolls"
+                :min="1"
+                :max="Math.max(1, Number(scope.row.totalRolls || 1))"
+                size="mini"
+                @change="onSelectedRollsChange(scope.row)"
+              />
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
       <el-form ref="form" :model="form" :rules="rules" label-width="100px">
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="已选批次">
-              <el-input :value="form.batchNo" disabled />
+              <el-input :value="selectedStocks.length ? ('已选' + selectedStocks.length + '条') : ''" disabled />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="可用卷数">
-              <el-input :value="selectedStock ? selectedStock.totalRolls : '-'" disabled />
+              <el-input :value="selectedTotalRolls || '-'" disabled />
             </el-form-item>
           </el-col>
         </el-row>
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="出库卷数" prop="rolls">
-              <el-input-number v-model="form.rolls" :min="1" :max="selectedStock ? selectedStock.totalRolls : 9999" style="width: 100%" />
+              <el-input-number v-model="form.rolls" :min="1" style="width: 100%" :disabled="selectedStocks.length > 0" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="申请部门">
-              <el-input v-model="form.applyDept" placeholder="如: 销售部" />
+              <el-select v-model="form.applyDept" placeholder="请选择申请部门" style="width: 100%">
+                <el-option label="包装部" value="包装部" />
+                <el-option label="涂布车间" value="涂布车间" />
+              </el-select>
             </el-form-item>
           </el-col>
         </el-row>
+        <el-alert
+          v-if="selectedStocks.length"
+          :title="`已选总卷数：${selectedTotalRolls}，目标出库卷数：${form.rolls || 0}，总面积：${selectedTotalAreaText}㎡${(form.rolls && selectedTotalRolls < form.rolls) ? '（不足）' : ''}`"
+          :type="(form.rolls && selectedTotalRolls < form.rolls) ? 'warning' : 'success'"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 12px"
+        />
         <el-form-item label="备注">
           <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="用途/去向等" />
         </el-form-item>
@@ -157,7 +211,10 @@
           <el-input-number v-model="fifoForm.totalRolls" :min="1" style="width: 100%" />
         </el-form-item>
         <el-form-item label="申请部门">
-          <el-input v-model="fifoForm.applyDept" placeholder="如: 销售部" />
+          <el-select v-model="fifoForm.applyDept" placeholder="请选择申请部门" style="width: 100%">
+            <el-option label="包装部" value="包装部" />
+            <el-option label="涂布车间" value="涂布车间" />
+          </el-select>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="fifoForm.remark" type="textarea" :rows="2" placeholder="用途/去向等" />
@@ -233,6 +290,8 @@
 
 <script>
 import { getOutboundList, createOutboundRequest, createOutboundRequestFIFO, approveOutbound, approveOutboundByRollCodes, cancelOutbound, getStockByMaterial } from '@/api/tapeStock'
+import { getSpecList } from '@/api/tapeSpec'
+import { getRawMaterialPage } from '@/api/tapeRawMaterial'
 import { mapGetters } from 'vuex'
 import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
@@ -250,16 +309,18 @@ export default {
       dialogVisible: false,
       submitLoading: false,
       selectMaterialCode: '',
+      selectedMaterialCode: '',
       stockList: [],
       selectedStock: null,
-      form: { stockId: null, batchNo: '', rolls: 1, applyDept: '', remark: '' },
+      selectedStocks: [],
+      form: { stockId: null, batchNo: '', rolls: 1, applyDept: '', remark: '订单生产' },
       rules: {
         rolls: [{ required: true, message: '请输入出库卷数', trigger: 'blur' }]
       },
       // FIFO
       fifoDialogVisible: false,
       fifoLoading: false,
-      fifoForm: { materialCode: '', totalRolls: 1, applyDept: '', remark: '' },
+      fifoForm: { materialCode: '', totalRolls: 1, applyDept: '', remark: '订单生产' },
       fifoRules: {
         materialCode: [{ required: true, message: '请输入料号', trigger: 'blur' }],
         totalRolls: [{ required: true, message: '请输入出库卷数', trigger: 'blur' }]
@@ -286,12 +347,81 @@ export default {
     }
   },
   computed: {
-    ...mapGetters(['name'])
+    ...mapGetters(['name']),
+    selectedTotalRolls() {
+      return (this.selectedStocks || []).reduce((sum, item) => {
+        const v = Number(item && item.outboundRolls)
+        return sum + (Number.isFinite(v) && v > 0 ? v : 0)
+      }, 0)
+    },
+    selectedTotalArea() {
+      return (this.selectedStocks || []).reduce((sum, item) => {
+        const qty = Math.max(1, Number(item && item.outboundRolls) || 1)
+        const perRollArea = this.getPerRollArea(item)
+        return sum + (perRollArea * qty)
+      }, 0)
+    },
+    selectedTotalAreaText() {
+      return (Math.round(this.selectedTotalArea * 100) / 100).toFixed(2)
+    }
   },
   created() {
     this.fetchData()
   },
   methods: {
+    async querySearchMaterial(queryString, cb) {
+      const keyword = queryString ? String(queryString).trim() : ''
+      if (!keyword) {
+        cb([])
+        return
+      }
+      try {
+        const [specRes, rawRes] = await Promise.all([
+          getSpecList({ page: 1, size: 20, materialCode: keyword }),
+          getRawMaterialPage({ page: 1, size: 20, materialCode: keyword, status: 1 })
+        ])
+
+        const list = []
+        const pushUnique = (materialCode, productName, sourceType) => {
+          const code = materialCode ? String(materialCode).trim() : ''
+          if (!code) return
+          if (list.some(x => x.materialCode === code)) return
+          const name = productName ? String(productName).trim() : ''
+          list.push({
+            value: name ? `${code} - ${name}` : code,
+            materialCode: code,
+            productName: name,
+            sourceType
+          })
+        }
+
+        const specRecords = (((specRes || {}).data || {}).records) || (((specRes || {}).data || {}).list) || []
+        specRecords.forEach(item => pushUnique(item && item.materialCode, item && (item.productName || item.materialName), '胶带规格'))
+
+        const rawRecords = (((rawRes || {}).data || {}).records) || (((rawRes || {}).data || {}).list) || []
+        rawRecords.forEach(item => pushUnique(item && item.materialCode, item && item.materialName, '原材料'))
+
+        cb(list)
+      } catch (e) {
+        cb([])
+      }
+    },
+    handleMaterialInputChange(val) {
+      const input = val ? String(val).trim() : ''
+      if (input !== this.selectedMaterialCode) {
+        this.selectedMaterialCode = ''
+        this.stockList = []
+        this.selectedStock = null
+        this.selectedStocks = []
+      }
+    },
+    async handleMaterialSelect(item) {
+      const code = item && item.materialCode ? String(item.materialCode).trim() : ''
+      if (!code) return
+      this.selectedMaterialCode = code
+      this.selectMaterialCode = code
+      await this.loadStockByMaterial()
+    },
     async fetchData() {
       this.loading = true
       try {
@@ -334,9 +464,11 @@ export default {
     },
     handleAdd() {
       this.selectMaterialCode = ''
+      this.selectedMaterialCode = ''
       this.stockList = []
       this.selectedStock = null
-      this.form = { stockId: null, batchNo: '', rolls: 1, applyDept: '', remark: '' }
+      this.selectedStocks = []
+      this.form = { stockId: null, batchNo: '', rolls: 1, applyDept: '', remark: '订单生产' }
       this.dialogVisible = true
     },
     openBatchScanDialog() {
@@ -345,55 +477,142 @@ export default {
       this.batchDialogVisible = true
     },
     async loadStockByMaterial() {
-      if (!this.selectMaterialCode) {
-        this.$message.warning('请输入料号')
+      const selectedCode = this.selectedMaterialCode ? String(this.selectedMaterialCode).trim() : ''
+      if (!selectedCode) {
+        this.stockList = []
+        this.selectedStock = null
+        this.$message.warning('请先从研发料号列表中选择料号')
         return
       }
       try {
-        const res = await getStockByMaterial(this.selectMaterialCode)
+        const res = await getStockByMaterial(selectedCode)
         if (this.isApiSuccess(res)) {
           this.stockList = res.data || []
+          this.selectedStocks = []
+          this.selectedStock = null
+          this.$nextTick(() => {
+            if (this.$refs.stockTable) {
+              this.$refs.stockTable.clearSelection()
+            }
+          })
           if (this.stockList.length === 0) {
-            this.$message.info('该料号无可用库存')
+            this.selectedStock = null
+            this.$message.info('该料号在仓库无可用库存批次')
           }
         }
       } catch (e) {
         this.$message.error('查询失败')
       }
     },
-    selectStock(row) {
-      this.selectedStock = row
-      this.form.stockId = row.id
-      this.form.batchNo = row.batchNo
-      this.form.rolls = 1
-    },
-    async handleSubmit() {
-      if (!this.form.stockId) {
-        this.$message.warning('请先选择一个批次')
-        return
-      }
-      this.$refs.form.validate(async(valid) => {
-        if (!valid) return
-        this.submitLoading = true
-        try {
-          this.form.applicant = this.name
-          const res = await createOutboundRequest(this.form)
-          if (this.isApiSuccess(res)) {
-            this.$message.success('申请提交成功')
-            this.dialogVisible = false
-            this.fetchData()
-          } else {
-            this.$message.error(res.msg || '提交失败')
-          }
-        } catch (e) {
-          this.$message.error('提交失败')
-        } finally {
-          this.submitLoading = false
+    handleStockSelectionChange(rows) {
+      const previous = Array.isArray(this.selectedStocks) ? this.selectedStocks : []
+      const next = (rows || []).map(row => {
+        const existed = previous.find(one => one.id === row.id)
+        const max = Math.max(1, Number(row.totalRolls || 1))
+        const outboundRolls = existed && existed.outboundRolls ? Number(existed.outboundRolls) : 1
+        return {
+          ...row,
+          outboundRolls: Math.min(Math.max(1, outboundRolls), max)
         }
       })
+      this.selectedStocks = next
+      this.selectedStock = next.length ? next[0] : null
+      this.form.batchNo = next.map(item => item.batchNo).filter(Boolean).join(',')
+      this.form.rolls = this.selectedTotalRolls || (next.length ? next.length : 1)
+    },
+    selectStock(row) {
+      if (!this.$refs.stockTable) return
+      this.$refs.stockTable.toggleRowSelection(row)
+    },
+    onSelectedRollsChange(row) {
+      if (!row) return
+      const max = Math.max(1, Number(row.totalRolls || 1))
+      const val = Number(row.outboundRolls || 1)
+      row.outboundRolls = Math.min(Math.max(1, val), max)
+      this.form.rolls = this.selectedTotalRolls || 1
+    },
+    getPerRollArea(row) {
+      if (!row) return 0
+      const availableArea = Number(row.availableArea)
+      const totalRolls = Number(row.totalRolls)
+      if (Number.isFinite(availableArea) && availableArea > 0 && Number.isFinite(totalRolls) && totalRolls > 0) {
+        return availableArea / totalRolls
+      }
+
+      const width = Number(row.width)
+      const length = Number(row.currentLength != null ? row.currentLength : row.length)
+      if (Number.isFinite(width) && width > 0 && Number.isFinite(length) && length > 0) {
+        return (width * length) / 1000
+      }
+      return 0
+    },
+    getSpecText(row) {
+      if (!row) return '-'
+      const t = row.thickness != null ? row.thickness : ''
+      const w = row.width != null ? row.width : ''
+      const l = row.currentLength != null ? row.currentLength : row.length
+      if (t !== '' || w !== '' || l !== '') {
+        return `${t}μm×${w}mm×${l}m`
+      }
+      return row.specDesc || '-'
+    },
+    async submitSingleOutboundRequest(stockRow) {
+      const payload = {
+        stockId: stockRow.id,
+        rolls: 1,
+        applyDept: this.form.applyDept,
+        remark: this.form.remark,
+        applicant: this.name
+      }
+      return createOutboundRequest(payload)
+    },
+    async handleSubmit() {
+      if (!this.selectedStocks.length) {
+        this.$message.warning('请先选择至少一个批次')
+        return
+      }
+      const target = Number(this.form.rolls || 0)
+      if (target > 0 && this.selectedTotalRolls < target) {
+        this.$message.warning(`当前已选${this.selectedTotalRolls}卷，小于目标${target}卷`)
+        return
+      }
+
+      this.submitLoading = true
+      try {
+        const failures = []
+        let successCount = 0
+
+        for (const row of this.selectedStocks) {
+          const qty = Math.max(1, Number(row.outboundRolls || 1))
+          for (let i = 0; i < qty; i++) {
+            try {
+              const res = await this.submitSingleOutboundRequest(row)
+              if (this.isApiSuccess(res)) {
+                successCount++
+              } else {
+                failures.push(`${row.batchNo || row.id}: ${res.msg || '提交失败'}`)
+              }
+            } catch (e) {
+              failures.push(`${row.batchNo || row.id}: 提交失败`)
+            }
+          }
+        }
+
+        if (successCount > 0) {
+          this.$message.success(`提交成功 ${successCount} 条`)
+          this.dialogVisible = false
+          this.fetchData()
+        }
+        if (failures.length > 0) {
+          this.$message.error(`失败 ${failures.length} 条，请重试`)
+          console.error('批量提交出库申请失败明细:', failures)
+        }
+      } finally {
+        this.submitLoading = false
+      }
     },
     handleAddFIFO() {
-      this.fifoForm = { materialCode: '', totalRolls: 1, applyDept: '', remark: '' }
+      this.fifoForm = { materialCode: '', totalRolls: 1, applyDept: '', remark: '订单生产' }
       this.fifoDialogVisible = true
     },
     async handleFIFOSubmit() {
@@ -479,10 +698,6 @@ export default {
       }
     },
     async confirmApprove() {
-      if (this.approveAction && !this.scanRollCode) {
-        this.$message.warning('请先扫码卷号')
-        return
-      }
       this.approveLoading = true
       try {
         const res = await approveOutbound(this.approveRow.id, this.approveAction, this.name, this.auditRemark, this.scanRollCode)

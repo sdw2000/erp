@@ -10,6 +10,16 @@ NProgress.configure({ showSpinner: false }) // NProgress Configuration
 
 const whiteList = ['/login', '/auth-redirect'] // no redirect whitelist
 
+function isCoatingRestrictedUser(roles) {
+  const normalizedRoles = (roles || []).map(role => String(role || '').trim().toLowerCase()).filter(Boolean)
+  return normalizedRoles.includes('coating') && !normalizedRoles.includes('admin')
+}
+
+function canCoatingRestrictedAccess(path) {
+  if (!path) return false
+  return path === '/production-management' || path === '/production-management/coating-home' || path === '/production-management/coating'
+}
+
 router.beforeEach(async(to, from, next) => {
   // start progress bar
   NProgress.start()
@@ -29,6 +39,10 @@ router.beforeEach(async(to, from, next) => {
       // determine whether the user has obtained his permission roles through getInfo
       const hasRoles = store.getters.roles && store.getters.roles.length > 0
       if (hasRoles) {
+        if (isCoatingRestrictedUser(store.getters.roles) && !canCoatingRestrictedAccess(to.path)) {
+          next({ path: '/production-management/coating-home', replace: true })
+          return
+        }
         next()
       } else {
         try {
@@ -44,7 +58,11 @@ router.beforeEach(async(to, from, next) => {
 
           // hack method to ensure that addRoutes is complete
           // set the replace: true, so the navigation will not leave a history record
-          next({ ...to, replace: true })
+          if (isCoatingRestrictedUser(roles) && !canCoatingRestrictedAccess(to.path)) {
+            next({ path: '/production-management/coating-home', replace: true })
+          } else {
+            next({ ...to, replace: true })
+          }
         } catch (error) {
           // remove token and go to login page to re-login
           await store.dispatch('user/resetToken')

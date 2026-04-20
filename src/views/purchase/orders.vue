@@ -45,7 +45,11 @@
 
       <el-table v-loading="loading" class="orders-table" :data="orders" style="width:100%" stripe>
         <el-table-column type="index" label="序号" width="60" align="center" />
-        <el-table-column prop="supplier" label="供应商" width="180" />
+        <el-table-column label="供应商" width="180">
+          <template slot-scope="scope">
+            {{ getOrderSupplierShortName(scope.row) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="orderNo" label="采购单号" width="208" class-name="order-no-col" />
         <el-table-column prop="supplierOrderNo" label="供应商单号" width="160" />
         <el-table-column label="对账状态" width="110">
@@ -82,8 +86,9 @@
         />
       </div>
 
-      <el-dialog title="采购订单打印预览" :visible.sync="printVisible" width="980px" top="4vh">
-        <div v-if="currentPrint" id="purchasePrintArea" class="purchase-print-sheet">
+      <el-dialog title="采购订单打印预览" :visible.sync="printVisible" width="auto" top="1vh" custom-class="purchase-print-dialog">
+        <div class="purchase-print-preview-wrap">
+          <div v-if="currentPrint" id="purchasePrintArea" class="purchase-print-sheet">
           <div class="purchase-print-header">
             <div class="purchase-print-header-top">
               <div class="purchase-logo-wrap">
@@ -109,19 +114,32 @@
           </div>
 
           <table class="purchase-print-table">
+            <colgroup>
+              <col :style="printColStyle('code')">
+              <col :style="printColStyle('name')">
+              <col :style="printColStyle('spec')">
+              <col :style="printColStyle('unit')">
+              <col v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle()">
+              <col v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle()">
+              <col v-if="shouldShowPrintRollColumn()" :style="printColStyle('roll')">
+              <col v-if="shouldShowPurchasePrintQuantityColumn()" :style="printColStyle('qty')">
+              <col :style="printColStyle('price')">
+              <col :style="printColStyle('amount')">
+              <col :style="printColStyle('date')">
+            </colgroup>
             <thead>
               <tr>
-                <th style="width: 110px;">物料编码</th>
-                <th style="width: 170px;">物料名称</th>
-                <th style="width: 190px;">{{ getPurchasePrintSpecHeaderLabel() }}</th>
-                <th style="width: 50px;">单位</th>
-                <th v-if="shouldShowFilmDimensionColumns()" style="width: 44px;">长</th>
-                <th v-if="shouldShowFilmDimensionColumns()" style="width: 44px;">宽</th>
-                <th v-if="shouldShowFilmDimensionColumns()" style="width: 44px;">卷</th>
-                <th style="width: 72px;">数量</th>
-                <th style="width: 60px;">单价</th>
-                <th style="width: 88px;">金额</th>
-                <th style="width: 90px;">到货日期</th>
+                <th :style="printColStyle('code')">物料编码</th>
+                <th :style="printColStyle('name')">物料名称</th>
+                <th :style="printColStyle('spec')">{{ getPurchasePrintSpecHeaderLabel() }}</th>
+                <th :style="printColStyle('unit')">单位</th>
+                <th v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle()">宽/mm</th>
+                <th v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle()">长/m</th>
+                <th v-if="shouldShowPrintRollColumn()" :style="printColStyle('roll')">{{ getPurchasePrintRollHeaderLabel() }}</th>
+                <th v-if="shouldShowPurchasePrintQuantityColumn()" :style="printColStyle('qty')">数量/㎡</th>
+                <th :style="printColStyle('price')">{{ getPurchasePrintPriceHeaderLabel() }}</th>
+                <th :style="printColStyle('amount')">{{ getPurchasePrintAmountHeaderLabel() }}</th>
+                <th :style="printColStyle('date')">到货日期</th>
               </tr>
             </thead>
             <tbody>
@@ -130,24 +148,38 @@
                 <td class="text-left">{{ item.materialName || '' }}</td>
                 <td class="text-left">{{ getPurchasePrintSpec(item) }}</td>
                 <td>{{ getPurchasePrintUnit(item) }}</td>
-                <td v-if="shouldShowFilmDimensionColumns()">{{ isPurchaseFilmItem(item) ? (item.lengthDisplay || item.length || '') : '' }}</td>
                 <td v-if="shouldShowFilmDimensionColumns()">{{ isPurchaseFilmItem(item) ? (item.width || '') : '' }}</td>
-                <td v-if="shouldShowFilmDimensionColumns()">{{ isPurchaseFilmItem(item) ? (item.rolls || '') : '' }}</td>
-                <td>{{ getPurchasePrintQuantity(item) }}</td>
+                <td v-if="shouldShowFilmDimensionColumns()">{{ isPurchaseFilmItem(item) ? (item.lengthDisplay || item.length || '') : '' }}</td>
+                <td v-if="shouldShowPrintRollColumn()">{{ getPurchasePrintRollValue(item) }}</td>
+                <td v-if="shouldShowPurchasePrintQuantityColumn()">{{ getPurchasePrintQuantity(item) }}</td>
                 <td>{{ formatPurchaseMoney(item.unitPrice) }}</td>
                 <td>{{ formatPurchaseMoney(getPurchasePrintAmount(item)) }}</td>
                 <td>{{ formatPurchasePrintDate(currentPrint.deliveryDate) }}</td>
               </tr>
               <tr class="purchase-print-total-row">
-                <template v-if="shouldShowFilmDimensionColumns()">
-                  <td colspan="7" class="text-right">数量：</td>
+                <template v-if="shouldShowFilmDimensionColumns() && shouldShowPurchasePrintQuantityColumn()">
+                  <td colspan="7" class="text-right">{{ getPurchasePrintTotalQtyLabel() }}</td>
+                  <td>{{ formatPurchaseMoney(getPurchasePrintTotalQty()) }}</td>
+                  <td class="text-right">金额：</td>
+                  <td>{{ formatPurchaseMoney(getPurchasePrintTotalAmount()) }}</td>
+                  <td />
+                </template>
+                <template v-else-if="isCountPrintTemplate()">
+                  <td colspan="4" class="text-right">{{ getPurchasePrintTotalQtyLabel() }}</td>
+                  <td>{{ formatPurchaseMoney(getPurchasePrintTotalQty()) }}</td>
+                  <td class="text-right">金额：</td>
+                  <td>{{ formatPurchaseMoney(getPurchasePrintTotalAmount()) }}</td>
+                  <td />
+                </template>
+                <template v-else-if="isChemicalPrintTemplate()">
+                  <td colspan="5" class="text-right">{{ getPurchasePrintTotalQtyLabel() }}</td>
                   <td>{{ formatPurchaseMoney(getPurchasePrintTotalQty()) }}</td>
                   <td class="text-right">金额：</td>
                   <td>{{ formatPurchaseMoney(getPurchasePrintTotalAmount()) }}</td>
                   <td />
                 </template>
                 <template v-else>
-                  <td colspan="4" class="text-right">数量：</td>
+                  <td colspan="4" class="text-right">{{ getPurchasePrintTotalQtyLabel() }}</td>
                   <td>{{ formatPurchaseMoney(getPurchasePrintTotalQty()) }}</td>
                   <td class="text-right">金额：</td>
                   <td>{{ formatPurchaseMoney(getPurchasePrintTotalAmount()) }}</td>
@@ -175,6 +207,7 @@
             <div>确认人：</div>
           </div>
           <div class="purchase-print-footer">第1页 共1页</div>
+          </div>
         </div>
         <span slot="footer">
           <el-button @click="printVisible = false">关闭</el-button>
@@ -360,7 +393,15 @@
 
           <div style="margin-top:10px">
             <div style="display:flex; align-items:center; justify-content:space-between">
-              <div><strong>物料明细</strong></div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <strong>物料明细</strong>
+                <el-tag
+                  v-for="tag in currentRecognitionTags()"
+                  :key="tag.value"
+                  size="mini"
+                  :type="tag.type"
+                >{{ tag.label }}</el-tag>
+              </div>
               <el-button type="primary" size="mini" @click="addItem">新增明细行</el-button>
             </div>
             <el-table v-if="editForm.materialMode !== 'raw'" :data="editForm.filmItems" stripe style="width:100%; margin-top:10px;">
@@ -374,7 +415,8 @@
                     v-model="scope.row.materialCode"
                     filterable
                     allow-create
-                    placeholder="选择或输入"
+                    :disabled="!editForm.supplierId"
+                    :placeholder="materialCodePlaceholder()"
                     size="mini"
                     style="width: 100%"
                     @change="onMaterialCodeChange(scope.row, $event)"
@@ -399,36 +441,45 @@
                   <span v-else>{{ scope.row.colorCode || '-' }}</span>
                 </template>
               </el-table-column>
-              <el-table-column width="200">
+              <el-table-column v-if="!isCountPricingFilmMode()" width="200">
                 <template slot="header">
                   <div style="text-align: center; line-height: 1.3;">
-                    <div>规格</div>
+                    <div>厚度*宽度*长度</div>
                     <div style="font-size: 11px; color: #909399;">(厚度μm*宽度mm*长度m)</div>
                   </div>
                 </template>
                 <template slot-scope="scope">
                   <div v-if="isRowEditable(scope.row)" style="display:flex; gap:4px;">
-                    <el-input v-model="scope.row.thicknessDisplay" class="small-input" type="text" placeholder="厚度" style="width:60px;" />
+                    <el-input v-model="scope.row.thicknessDisplay" class="small-input" type="text" placeholder="厚度" style="width:60px;" @input="onFilmEstimatedFieldInput(scope.row)" />
                     <span style="line-height: 28px;">*</span>
-                    <el-input v-model="scope.row.width" class="small-input" type="text" placeholder="宽度" style="width:60px;" />
+                    <el-input v-model="scope.row.width" class="small-input" type="text" placeholder="宽度" style="width:60px;" @input="onFilmEstimatedFieldInput(scope.row)" />
                     <span style="line-height: 28px;">*</span>
-                    <el-input v-model="scope.row.lengthDisplay" class="small-input" type="text" placeholder="长度" style="width:60px;" />
+                    <el-input v-model="scope.row.lengthDisplay" class="small-input" type="text" placeholder="长度" style="width:60px;" @input="onFilmEstimatedFieldInput(scope.row)" />
                   </div>
                   <span v-else>{{ [scope.row.thicknessDisplay || scope.row.thickness, scope.row.width, scope.row.lengthDisplay || scope.row.length].filter(v => v !== null && v !== undefined && String(v).trim() !== '').join('*') || '-' }}</span>
                 </template>
               </el-table-column>
-              <el-table-column label="卷数" width="70">
+              <el-table-column :label="filmRollLabel()" width="70">
                 <template slot-scope="scope">
-                  <el-input v-if="isRowEditable(scope.row)" v-model="scope.row.rolls" class="small-input" type="text" placeholder="卷数" />
+                  <el-input v-if="isRowEditable(scope.row)" v-model="scope.row.rolls" class="small-input" type="text" :placeholder="filmRollLabel()" @input="onFilmEstimatedFieldInput(scope.row)" />
                   <span v-else>{{ scope.row.rolls || '-' }}</span>
                 </template>
               </el-table-column>
-              <el-table-column label="平米数" width="90">
+              <el-table-column v-if="!isCountPricingFilmMode()" label="平米数" width="90">
                 <template slot-scope="scope">{{ calcSqm(scope.row) }}</template>
+              </el-table-column>
+              <el-table-column v-if="!isCountPricingFilmMode() && shouldShowFilmChargeQtyColumn()" label="预估数量(Kg)" width="110">
+                <template slot-scope="scope">{{ calcFilmChargeQtyForDisplay(scope.row) }}</template>
+              </el-table-column>
+              <el-table-column v-if="!isCountPricingFilmMode() && shouldShowFilmOrderKgColumn()" label="实际数量(Kg)" width="120">
+                <template slot-scope="scope">
+                  <el-input v-if="isRowEditable(scope.row) && isFilmWeightPricedRow(scope.row)" v-model="scope.row.actualQty" class="small-input" type="text" placeholder="按kg填写实际数量" @input="onFilmActualQtyInput(scope.row)" />
+                  <span v-else>{{ isFilmWeightPricedRow(scope.row) ? (scope.row.actualQty || scope.row.priceQty || '-') : '-' }}</span>
+                </template>
               </el-table-column>
               <el-table-column label="单价" width="90">
                 <template slot-scope="scope">
-                  <el-input v-if="isRowEditable(scope.row)" v-model="scope.row.unitPrice" class="small-input" type="text" placeholder="单价" />
+                  <el-input v-if="isRowEditable(scope.row)" v-model="scope.row.unitPrice" class="small-input" type="text" placeholder="单价" :disabled="isUnitPriceLocked(scope.row)" />
                   <span v-else>{{ scope.row.unitPrice || '-' }}</span>
                 </template>
               </el-table-column>
@@ -471,7 +522,8 @@
                     v-model="scope.row.materialCode"
                     filterable
                     allow-create
-                    placeholder="选择或输入"
+                    :disabled="!editForm.supplierId"
+                    :placeholder="materialCodePlaceholder()"
                     size="mini"
                     style="width: 100%"
                     @change="onMaterialCodeChange(scope.row, $event)"
@@ -508,10 +560,11 @@
                     clearable
                     class="small-input"
                     placeholder="选择或输入数字"
+                    @visible-change="onRawSpecDropdownVisibleChange(scope.row, $event)"
                     @change="onRawSpecChange(scope.row, $event)"
                   >
                     <el-option
-                      v-for="opt in rawSpecOptions"
+                      v-for="opt in getRawSpecOptionsForRow(scope.row)"
                       :key="opt"
                       :label="opt"
                       :value="opt"
@@ -520,9 +573,9 @@
                   <span v-else>{{ scope.row.rawSpec || '-' }}</span>
                 </template>
               </el-table-column>
-              <el-table-column label="数量" width="90">
+              <el-table-column :label="getRawQtyHeaderLabelForEdit()" width="90">
                 <template slot-scope="scope">
-                  <el-input v-if="isRowEditable(scope.row)" v-model="scope.row.quantity" class="small-input" type="text" placeholder="数量" />
+                  <el-input v-if="isRowEditable(scope.row)" v-model="scope.row.quantity" class="small-input" type="text" :placeholder="getRawQtyHeaderLabelForEdit()" />
                   <span v-else>{{ scope.row.quantity || '-' }}</span>
                 </template>
               </el-table-column>
@@ -574,7 +627,7 @@
 </template>
 
 <script>
-import { getPurchaseOrders, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, downloadPurchaseTemplate, importPurchaseOrders, exportPurchaseOrders, getPurchaseOrderDetail, getPurchaseOrderReconciliation, generatePurchaseOrderNo } from '@/api/purchase'
+import { getPurchaseOrders, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, downloadPurchaseTemplate, importPurchaseOrders, exportPurchaseOrders, getPurchaseOrderDetail, getPurchaseOrderReconciliation, getPurchaseOrderRawSpecHistory, generatePurchaseOrderNo } from '@/api/purchase'
 import { listPurchaseQuotations, getPurchaseQuotationDetail } from '@/api/purchaseQuotation'
 import { listSuppliers } from '@/api/purchaseSupplier'
 import { getAllEnabledSpecs } from '@/api/tapeSpec'
@@ -607,7 +660,9 @@ export default {
       rawMaterials: [],
       supplierFilteredMaterials: [],
       latestQuoteByCode: {},
-      rawSpecOptions: ['900Kg/桶', '180Kg/桶', '25Kg/桶', '18Kg/桶'],
+      rawSpecOptions: ['900', '180', '175', '165', '160', '25', '20', '18', '1'],
+      rawSpecHistoryCache: {},
+      rawSpecHistoryLoadingMap: {},
       supplierRemarkOptions: [],
       selectedRemarkTemplate: '',
       materialSearchKeyword: '',
@@ -766,6 +821,8 @@ export default {
       this.editForm = this.emptyForm()
       this.supplierFilteredMaterials = []
       this.latestQuoteByCode = {}
+      this.rawSpecHistoryCache = {}
+      this.rawSpecHistoryLoadingMap = {}
       this.supplierRemarkOptions = []
       this.selectedRemarkTemplate = ''
       this.materialSearchKeyword = ''
@@ -788,6 +845,8 @@ export default {
       const res = await getPurchaseOrderDetail(row.orderNo)
       if (res && (res.code === 200 || res.code === 20000)) {
         this.editForm = this.normalizeEditForm(res.data || row)
+        this.rawSpecHistoryCache = {}
+        this.rawSpecHistoryLoadingMap = {}
         await this.syncSupplierContextByForm()
         this.selectedRemarkTemplate = ''
         this.editVisible = true
@@ -828,8 +887,8 @@ export default {
         contactName: order.contactName,
         contactPhone: order.contactPhone,
         orderNo: order.orderNo,
-        orderDate: order.orderDate,
-        deliveryDate: order.deliveryDate,
+        orderDate: this.normalizeDateOnly(order.orderDate),
+        deliveryDate: this.normalizeDateOnly(order.deliveryDate),
         deliveryAddress: order.deliveryAddress,
         status: order.status || 'pending',
         remark: order.remark,
@@ -841,13 +900,47 @@ export default {
         const filmItems = []
         const rawItems = []
         order.items.forEach(item => {
-          const isFilm = item.width !== null && item.width !== undefined && item.length !== null && item.length !== undefined
+          const rawMat = this.getRawMaterialByCode(item.materialCode)
+          const filmSpecText = item.filmSpecRaw || item.rawSpec || item.specifications || (rawMat && rawMat.spec) || ''
+          const rowForDetect = {
+            materialCode: item.materialCode,
+            materialName: item.materialName,
+            rawSpec: filmSpecText,
+            filmSpecRaw: filmSpecText,
+            width: item.width,
+            length: item.length,
+            pricingMode: item.pricingMode,
+            priceUomCode: item.priceUomCode,
+            purchaseUomCode: item.purchaseUomCode,
+            materialCategory: rawMat && (rawMat.materialCategory || rawMat.materialCategoryRaw || rawMat.materialMajor),
+            materialType: rawMat && rawMat.materialType
+          }
+          const byMetaFilm = this.isFilmByMeta(this.getRawMaterialMetaByRow(rowForDetect))
+          const countPriced = this.isCountPricedRow(rowForDetect)
+          const hasFilmDimension = item.width !== null && item.width !== undefined && item.length !== null && item.length !== undefined
+          const isFilm = !countPriced && (byMetaFilm || hasFilmDimension || this.isLikelyFilmRow(rowForDetect))
           if (isFilm) {
+            const specParts = this.splitFilmSpecToParts(filmSpecText)
+            const thicknessFromText = this.inferFilmThicknessFromText({
+              ...rowForDetect,
+              filmSpecRaw: filmSpecText,
+              rawSpec: filmSpecText
+            })
             filmItems.push({
               ...item,
-              thicknessDisplay: item.thickness,
-              lengthDisplay: item.length,
+              filmSpecRaw: filmSpecText || [item.thickness, item.width, item.length].filter(v => v !== null && v !== undefined && String(v).trim() !== '').join('*'),
+              thicknessDisplay: item.thickness || specParts.thickness || thicknessFromText || '',
+              width: item.width || specParts.width || '',
+              lengthDisplay: item.length || specParts.length || '',
+              pricingMode: this.normalizeFilmPricingMode(item.pricingMode || item.priceUomCode || item.purchaseUomCode) || '',
+              actualQty: this.normalizeFilmPricingMode(item.pricingMode || item.priceUomCode || item.purchaseUomCode) === 'kg'
+                ? (item.priceQty || item.sqm || '')
+                : '',
+              __actualQtyManual: this.normalizeFilmPricingMode(item.pricingMode || item.priceUomCode || item.purchaseUomCode) === 'kg'
+                ? (this.toDecimalNumber(item.priceQty || item.sqm) > 0)
+                : false,
               unitPrice: item.unitPrice,
+              unitPriceLocked: false,
               rolls: item.rolls,
               __editing: false
             })
@@ -856,7 +949,7 @@ export default {
             const tubeParts = this.splitTubeSpecToParts(item.rawSpec || (rawMat && rawMat.spec) || '')
             rawItems.push({
               ...item,
-              quantity: item.rolls,
+              quantity: item.rolls || item.quantity,
               totalWeight: item.sqm,
               rawSpec: item.rawSpec || (rawMat && rawMat.spec) || '',
               tubeThickness: tubeParts.thickness,
@@ -869,9 +962,22 @@ export default {
         })
         form.filmItems = filmItems
         form.rawItems = rawItems
+        form.filmItems.forEach(row => {
+          if (!row) return
+          if ((row.thicknessDisplay === null || row.thicknessDisplay === undefined || String(row.thicknessDisplay).trim() === '') && row.filmSpecRaw) {
+            this.applyFilmSpecParts(row, row.filmSpecRaw)
+          }
+        })
         form.materialMode = filmItems.length > 0 ? 'film' : (rawItems.length > 0 ? 'raw' : '')
       }
       return form
+    },
+    isCountPricingFilmMode() {
+      const rows = (this.editForm && this.editForm.filmItems) || []
+      return rows.some(row => this.isCountPricedRow(row))
+    },
+    filmRollLabel() {
+      return this.isCountPricingFilmMode() ? '个数' : '卷数'
     },
     async onSupplierChange(id) {
       const supplier = this.suppliers.find(s => s.id === id)
@@ -887,9 +993,11 @@ export default {
           this.editForm.deliveryAddress = supplier.contactAddress
         }
         this.materialSearchKeyword = ''
+        this.rawSpecHistoryCache = {}
+        this.rawSpecHistoryLoadingMap = {}
+        await this.reloadSupplierMaterialContext(supplier)
         this.syncDetailRowsBySupplier(supplier)
-        this.reloadSupplierMaterialContext(supplier)
-        this.loadSupplierRemarkOptions(supplier)
+        await this.loadSupplierRemarkOptions(supplier)
       }
     },
     onSelectRemarkTemplate(value) {
@@ -937,7 +1045,7 @@ export default {
       }
     },
     syncDetailRowsBySupplier(supplier) {
-      const matched = this.filterMaterialsBySupplier(supplier)
+      const matched = this.supplierFilteredMaterials || []
       const hasFilm = (matched || []).some(item => this.isFilmMaterial(item))
       const hasRaw = (matched || []).some(item => !this.isFilmMaterial(item))
 
@@ -945,7 +1053,7 @@ export default {
       if (!nextMode) {
         if (hasRaw && !hasFilm) nextMode = 'raw'
         else if (hasFilm && !hasRaw) nextMode = 'film'
-        else nextMode = 'raw'
+        else nextMode = 'film'
       }
 
       this.editForm.materialMode = nextMode
@@ -966,19 +1074,197 @@ export default {
         this.editForm.filmItems = [{
           materialCode: '',
           materialName: '',
+          filmSpecRaw: '',
           colorCode: '',
           thicknessDisplay: '',
           width: '',
           lengthDisplay: '',
           rolls: '',
+          pricingMode: '',
+          actualQty: '',
+          __actualQtyManual: false,
           unitPrice: '',
+          unitPriceLocked: false,
           remark: ''
         }]
       }
     },
     async reloadSupplierMaterialContext(supplier) {
-      this.supplierFilteredMaterials = this.filterMaterialsBySupplier(supplier)
       this.latestQuoteByCode = await this.fetchLatestQuotationMapBySupplier(supplier)
+      this.supplierFilteredMaterials = this.buildSupplierMaterialsFromQuotations(this.latestQuoteByCode)
+      this.applyQuotePricingModeToFilmRows()
+      if (this.editForm && this.editForm.supplierId && (!this.supplierFilteredMaterials || !this.supplierFilteredMaterials.length)) {
+        this.$message.warning('该供应商在报价单中暂无可用物料，请先维护供应商报价单')
+      }
+    },
+    applyQuotePricingModeToFilmRows() {
+      const rows = (this.editForm && this.editForm.filmItems) || []
+      rows.forEach(row => {
+        if (!row || this.isCountPricedRow(row)) return
+        row.pricingMode = this.resolveFilmPricingMode(row)
+        const code = String(row.materialCode || '').trim()
+        const latestQuote = code ? this.latestQuoteByCode[code] : null
+        if (latestQuote && latestQuote.unitPrice !== null && latestQuote.unitPrice !== undefined) {
+          row.unitPrice = latestQuote.unitPrice
+          row.unitPriceLocked = true
+        }
+        if (row.pricingMode === 'kg') {
+          this.syncFilmActualQtyWithEstimated(row)
+        } else {
+          row.actualQty = ''
+          row.__actualQtyManual = false
+        }
+      })
+    },
+    buildSupplierMaterialsFromQuotations(quoteMap) {
+      const map = quoteMap || {}
+      const codes = Object.keys(map)
+      if (!codes.length) return []
+      return codes.map(code => {
+        const quote = map[code] || {}
+        const raw = (this.rawMaterials || []).find(r => r.materialCode === code) || {}
+        return {
+          ...raw,
+          materialCode: code,
+          materialName: raw.materialName || quote.materialName || '',
+          spec: raw.spec || quote.specifications || '',
+          quotedUnitPrice: quote.unitPrice,
+          quotedPricingMode: quote.pricingMode || quote.priceUomCode || quote.purchaseUomCode
+        }
+      })
+    },
+    materialCodePlaceholder() {
+      return this.editForm && this.editForm.supplierId ? '选择或输入' : '请先选择供应商'
+    },
+    getRawSpecHistoryCacheKey(materialCode) {
+      const code = String(materialCode || '').trim()
+      if (!code) return ''
+      const supplierKey = String(this.editForm.supplierId || this.editForm.supplier || '').trim()
+      if (!supplierKey) return ''
+      return `${supplierKey}__${code}`
+    },
+    getRawSpecOptionsForRow(row) {
+      const code = String((row && row.materialCode) || '').trim()
+      const key = this.getRawSpecHistoryCacheKey(code)
+      const historyOptions = key ? (this.rawSpecHistoryCache[key] || []) : []
+      const current = String((row && row.rawSpec) || '').trim()
+      const merged = []
+      ;[...historyOptions, ...this.rawSpecOptions, current].forEach(v => {
+        const text = String(v || '').trim()
+        if (!text) return
+        if (!merged.includes(text)) merged.push(text)
+      })
+      return merged
+    },
+    pushRawSpecHistoryOption(materialCode, specValue, row = null) {
+      const cacheKey = this.getRawSpecHistoryCacheKey(materialCode)
+      if (!cacheKey) return
+      const normalized = this.normalizeRawSpecValue(specValue, row)
+      const text = String(normalized || '').trim()
+      if (!text) return
+      const exists = Array.isArray(this.rawSpecHistoryCache[cacheKey]) ? this.rawSpecHistoryCache[cacheKey] : []
+      if (!exists.includes(text)) {
+        this.$set(this.rawSpecHistoryCache, cacheKey, [text, ...exists])
+      }
+    },
+    async onRawSpecDropdownVisibleChange(row, visible) {
+      if (!visible) return
+      await this.loadRawSpecHistoryForRow(row)
+    },
+    async loadRawSpecHistoryForRow(row) {
+      const code = String((row && row.materialCode) || '').trim()
+      const supplierKeyword = String(this.editForm.supplier || '').trim()
+      const cacheKey = this.getRawSpecHistoryCacheKey(code)
+      if (!code || !supplierKeyword || !cacheKey) return
+      if (Array.isArray(this.rawSpecHistoryCache[cacheKey])) return
+
+      const loadingTask = this.rawSpecHistoryLoadingMap[cacheKey]
+      if (loadingTask) {
+        await loadingTask
+        return
+      }
+
+      const task = (async() => {
+        const specList = []
+        const appendSpec = (specValue) => {
+          const normalized = this.normalizeRawSpecValue(specValue, row)
+          const text = String(normalized || '').trim()
+          if (!text) return
+          if (!specList.includes(text)) specList.push(text)
+        }
+
+        try {
+          const quote = this.latestQuoteByCode[code]
+          if (quote && quote.specifications) {
+            appendSpec(quote.specifications)
+          }
+
+          const historyRes = await getPurchaseOrderRawSpecHistory({ supplier: supplierKeyword, materialCode: code })
+          if (historyRes && (historyRes.code === 200 || historyRes.code === 20000)) {
+            const historyList = Array.isArray(historyRes.data) ? historyRes.data : []
+            historyList.forEach(appendSpec)
+          }
+
+          // 后端接口为空时，兜底走前端聚合（兼容未重启后端的场景）
+          if (specList.length > 0) {
+            this.$set(this.rawSpecHistoryCache, cacheKey, specList)
+            return
+          }
+
+          const pageSize = 100
+          let pageNum = 1
+          let loaded = 0
+          let total = 0
+          const orderNos = []
+
+          while (pageNum <= 5) {
+            const res = await getPurchaseOrders({ pageNum, pageSize, supplier: supplierKeyword })
+            if (!(res && (res.code === 200 || res.code === 20000) && res.data)) break
+            const pageData = res.data
+            const records = pageData.records || []
+            total = Number(pageData.total || records.length)
+
+            records.forEach(order => {
+              if (order && order.orderNo) orderNos.push(order.orderNo)
+              const orderItems = (order && order.items) || []
+              orderItems.forEach(item => {
+                if (String(item.materialCode || '').trim() === code) {
+                  appendSpec(item.rawSpec || item.specifications || item.filmSpecRaw)
+                }
+              })
+            })
+
+            loaded += records.length
+            if (!records.length || loaded >= total) break
+            pageNum += 1
+          }
+
+          if (orderNos.length) {
+            const detailOrderNos = Array.from(new Set(orderNos)).slice(0, 80)
+            const detailList = await Promise.all(detailOrderNos.map(async(orderNo) => {
+              const detailRes = await getPurchaseOrderDetail(orderNo)
+              return detailRes && (detailRes.code === 200 || detailRes.code === 20000) ? (detailRes.data || null) : null
+            }))
+
+            detailList.forEach(detail => {
+              const items = (detail && detail.items) || []
+              items.forEach(item => {
+                if (String(item.materialCode || '').trim() === code) {
+                  appendSpec(item.rawSpec || item.specifications || item.filmSpecRaw)
+                }
+              })
+            })
+          }
+        } catch (e) {
+          console.error('加载历史规格失败', e)
+        }
+
+        this.$set(this.rawSpecHistoryCache, cacheKey, specList)
+      })()
+
+      this.$set(this.rawSpecHistoryLoadingMap, cacheKey, task)
+      await task
+      this.$delete(this.rawSpecHistoryLoadingMap, cacheKey)
     },
     filterMaterialsBySupplier(supplier) {
       const all = this.rawMaterials || []
@@ -986,17 +1272,104 @@ export default {
       const keywords = [supplier.supplierCode, supplier.supplierName, supplier.shortName]
         .map(v => String(v || '').trim())
         .filter(Boolean)
-      if (!keywords.length) return all
+      if (!keywords.length) return []
       const matched = all.filter(item => {
-        const spec = String(item.spec || '')
-        return keywords.some(k => spec.includes(k))
+        const supplierCode = String(item.supplierCode || '').trim()
+        const supplierNameInSpec = String(item.spec || '')
+        return keywords.some(k => {
+          if (!k) return false
+          if (supplierCode && (supplierCode === k || supplierCode.includes(k) || k.includes(supplierCode))) {
+            return true
+          }
+          return supplierNameInSpec.includes(k)
+        })
       })
-      return matched.length ? matched : all
+      return matched
     },
     isTubeSupplierName(text) {
       const v = String(text || '').trim()
       if (!v) return false
       return /纸管|纸品|纸筒|纸芯/i.test(v)
+    },
+    getRawMaterialByCode(materialCode) {
+      const code = String(materialCode || '').trim()
+      if (!code) return null
+      return (this.rawMaterials || []).find(r => String(r.materialCode || '').trim() === code) || null
+    },
+    getRawMaterialMetaByRow(row) {
+      if (!row) return { category: '', type: '' }
+      const raw = this.getRawMaterialByCode(row.materialCode)
+      const category = String((row.materialCategory || row.materialCategoryRaw || row.materialMajor || (raw && (raw.materialCategory || raw.materialCategoryRaw || raw.materialMajor))) || '').trim()
+      const type = String((row.materialType || (raw && raw.materialType)) || '').trim()
+      return { category, type }
+    },
+    isFilmByMeta(meta) {
+      const category = String((meta && meta.category) || '').toLowerCase()
+      const categoryText = String((meta && meta.category) || '')
+      const typeText = String((meta && meta.type) || '')
+      if (!category && !typeText) return false
+      if (category === 'film') return true
+      return /原膜|离型材料|薄膜|泡棉|film/i.test(categoryText) || /膜|离型|foam|泡棉/i.test(typeText)
+    },
+    isPackagingByMeta(meta) {
+      const categoryText = String((meta && meta.category) || '')
+      return /包辅材/i.test(categoryText)
+    },
+    isChemicalByMeta(meta) {
+      const categoryText = String((meta && meta.category) || '')
+      const typeText = String((meta && meta.type) || '')
+      return /化工料|chemical/i.test(categoryText) || /胶水|固化剂|溶剂|色浆|树脂|助剂|离型剂|阻燃剂|导电剂|电解液|硅油/i.test(typeText)
+    },
+    isTubeByMeta(meta) {
+      const typeText = String((meta && meta.type) || '')
+      return /纸管|纸筒|纸芯|胶管|管材|pe管/i.test(typeText)
+    },
+    isCartonByMeta(meta) {
+      const typeText = String((meta && meta.type) || '')
+      return /纸箱|纸盒|carton|ctn/i.test(typeText)
+    },
+    hasCountPricedRawItems() {
+      const rows = (this.editForm && this.editForm.rawItems) || []
+      return rows.some(row => this.isCountPricedRow(row))
+    },
+    hasTubeRawItems() {
+      const rows = (this.editForm && this.editForm.rawItems) || []
+      return rows.some(row => this.isTubeRow(row))
+    },
+    isChemicalRow(row) {
+      if (!row) return false
+      const meta = this.getRawMaterialMetaByRow(row)
+      if (this.isChemicalByMeta(meta)) return true
+      const name = String(row.materialName || '').trim()
+      const code = String(row.materialCode || '').trim()
+      return /胶水|固化剂|溶剂|色浆|树脂|助剂|离型剂|阻燃剂|导电剂|电解液|硅油/i.test(`${name} ${code}`)
+    },
+    classifyRowKind(row) {
+      if (!row) return 'unknown'
+      const meta = this.getRawMaterialMetaByRow(row)
+      if (this.isCartonByMeta(meta) || this.isCartonRow(row)) return 'carton'
+      if (this.isTubeByMeta(meta) || this.isTubeRow(row) || this.isPeTubeRow(row)) return 'tube'
+      if (this.isChemicalByMeta(meta) || this.isChemicalRow(row)) return 'chemical'
+      if (this.isFilmByMeta(meta) || this.isLikelyFilmRow(row)) return 'film'
+      return 'raw'
+    },
+    currentRecognitionTags() {
+      const mode = this.editForm && this.editForm.materialMode
+      const rows = mode === 'raw' ? ((this.editForm && this.editForm.rawItems) || []) : ((this.editForm && this.editForm.filmItems) || [])
+      if (!rows.length) return [{ value: 'empty', label: '识别: 未选择物料', type: 'info' }]
+      const set = new Set(rows.map(row => this.classifyRowKind(row)))
+      const tags = []
+      if (set.has('film')) tags.push({ value: 'film', label: '识别: 薄膜', type: 'success' })
+      if (set.has('chemical')) tags.push({ value: 'chemical', label: '识别: 化工料(胶水逻辑)', type: 'warning' })
+      if (set.has('carton')) tags.push({ value: 'carton', label: '识别: 纸箱', type: '' })
+      if (set.has('tube')) tags.push({ value: 'tube', label: '识别: 纸管/胶管', type: '' })
+      if (set.has('raw')) tags.push({ value: 'raw', label: '识别: 其他原料', type: 'info' })
+      return tags.length ? tags : [{ value: 'unknown', label: '识别: 未知', type: 'info' }]
+    },
+    isCountPriceSupplierName(text) {
+      const v = String(text || '').trim()
+      if (!v) return false
+      return /纸管|纸品|纸筒|纸芯|纸箱|纸盒|pe管|管材|胶管|carton|ctn/i.test(v)
     },
     isTubeSupplierActive() {
       if (this.isTubeSupplierName(this.editForm.supplier)) return true
@@ -1004,8 +1377,17 @@ export default {
       if (!supplier) return false
       return this.isTubeSupplierName(supplier.supplierName) || this.isTubeSupplierName(supplier.shortName) || this.isTubeSupplierName(supplier.supplierCode)
     },
+    isCountPriceSupplierActive() {
+      if (this.isCountPriceSupplierName(this.editForm.supplier)) return true
+      const supplier = this.suppliers.find(s => s.id === this.editForm.supplierId)
+      if (!supplier) return false
+      return this.isCountPriceSupplierName(supplier.supplierName) || this.isCountPriceSupplierName(supplier.shortName) || this.isCountPriceSupplierName(supplier.supplierCode)
+    },
     isTubeRow(row) {
       if (!row) return this.isTubeSupplierActive()
+      const meta = this.getRawMaterialMetaByRow(row)
+      if (this.isTubeByMeta(meta)) return true
+      if (this.isCartonByMeta(meta) || this.isFilmByMeta(meta)) return false
       const name = String(row.materialName || '').trim()
       const code = String(row.materialCode || '').trim()
       const spec = String(row.rawSpec || '').trim()
@@ -1013,14 +1395,125 @@ export default {
       if (/^\s*\d+(?:\.\d+)?\s*[xX×*]\s*\d+(?:\.\d+)?\s*[xX×*]\s*\d+(?:\.\d+)?\s*(mm|厘米|cm|m)?\s*$/i.test(spec)) return true
       return this.isTubeSupplierActive()
     },
+    isCartonRow(row) {
+      if (!row) return this.isCountPriceSupplierActive()
+      const meta = this.getRawMaterialMetaByRow(row)
+      if (this.isCartonByMeta(meta)) return true
+      if (this.isTubeByMeta(meta) || this.isFilmByMeta(meta)) return false
+      const name = String(row.materialName || '').trim()
+      const code = String(row.materialCode || '').trim()
+      const spec = String(row.rawSpec || '').trim()
+      if (/纸箱|纸盒|carton|ctn|箱规/i.test(name)) return true
+      if (/^ZX/i.test(code) || /箱/.test(code)) return true
+      if (/纸箱|纸盒|箱规/i.test(spec)) return true
+      return this.isCountPriceSupplierActive() && !this.isTubeRow(row)
+    },
+    isPeTubeRow(row) {
+      if (!row) return false
+      const meta = this.getRawMaterialMetaByRow(row)
+      if (this.isTubeByMeta(meta) && /胶管|pe管|管材/i.test(String(meta.type || ''))) return true
+      if (this.isCartonByMeta(meta) || this.isFilmByMeta(meta)) return false
+      const name = String(row.materialName || '').trim()
+      const code = String(row.materialCode || '').trim()
+      const spec = String(row.rawSpec || row.filmSpecRaw || '').trim()
+      return /pe管|管材|胶管/i.test(name) || /^PEG/i.test(code) || /pe管/i.test(spec)
+    },
+    isCountPricedRow(row) {
+      return this.isTubeRow(row) || this.isCartonRow(row) || this.isPeTubeRow(row)
+    },
+    normalizeFilmPricingMode(value) {
+      const text = String(value || '').trim().toLowerCase()
+      if (!text) return ''
+      if (text === 'kg' || text.includes('kg') || text.includes('重量')) return 'kg'
+      if (text === 'sqm' || text.includes('㎡') || text.includes('平米') || text.includes('m2') || text.includes('m²') || text.includes('面积')) return 'sqm'
+      return ''
+    },
+    formatUnitDisplay(unit) {
+      if (!unit && unit !== 0) return ''
+      const text = String(unit || '').trim()
+      if (!text) return ''
+      const lower = text.toLowerCase()
+      // 平米统一显示为 ㎡
+      if (lower === '平米' || lower === 'm2' || lower === '㎡' || lower === 'm²' || lower === 'sqm' || lower === 'm²/m2') return '㎡'
+      if (lower === 'pcs' || lower === 'pc' || lower === '件') return 'pcs'
+      if (lower === 'kg' || lower === 'kilogram' || lower === '公斤') return 'kg'
+      // keep original if unknown
+      return text
+    },
+    resolveFilmPricingMode(row) {
+      if (!row) return 'kg'
+      const code = String(row.materialCode || '').trim()
+      const latestQuote = code ? this.latestQuoteByCode[code] : null
+      const fromQuote = this.normalizeFilmPricingMode(latestQuote && (latestQuote.pricingMode || latestQuote.priceUomCode || latestQuote.purchaseUomCode))
+      if (fromQuote) return fromQuote
+      const raw = code ? (this.rawMaterials || []).find(r => r.materialCode === code) : null
+      const fromRawUnit = this.normalizeFilmPricingMode(raw && raw.unit)
+      if (fromRawUnit) return fromRawUnit
+      const fromRow = this.normalizeFilmPricingMode(row.pricingMode)
+      if (fromRow) return fromRow
+      return this.isPeFoamMaterial(row) ? 'sqm' : 'kg'
+    },
+    isFilmWeightPricedRow(row) {
+      return this.resolveFilmPricingMode(row) === 'kg'
+    },
+    shouldShowFilmChargeQtyColumn() {
+      const rows = (this.editForm && this.editForm.filmItems) || []
+      return rows.some(row => !this.isCountPricedRow(row) && this.isFilmWeightPricedRow(row))
+    },
+    shouldShowFilmOrderKgColumn() {
+      const rows = (this.editForm && this.editForm.filmItems) || []
+      return rows.some(row => !this.isCountPricedRow(row) && this.isFilmWeightPricedRow(row))
+    },
+    syncFilmActualQtyWithEstimated(row, force = false) {
+      if (!row) return
+      if (!this.isFilmWeightPricedRow(row)) return
+      const manual = !!row.__actualQtyManual
+      if (manual && !force) return
+      const estimatedKg = this.calcFilmWeightKg(row)
+      row.actualQty = estimatedKg && estimatedKg !== '0' ? estimatedKg : ''
+      if (force) {
+        row.__actualQtyManual = false
+      }
+    },
+    onFilmEstimatedFieldInput(row) {
+      this.syncFilmActualQtyWithEstimated(row)
+    },
+    onFilmActualQtyInput(row) {
+      if (!row) return
+      const actual = this.toDecimalNumber(row.actualQty)
+      if (actual && actual > 0) {
+        row.__actualQtyManual = true
+        return
+      }
+      row.__actualQtyManual = false
+      this.syncFilmActualQtyWithEstimated(row)
+    },
+    calcFilmActualQtyKg(row) {
+      const qty = this.toDecimalNumber((row && (row.actualQty !== undefined && row.actualQty !== null && row.actualQty !== '' ? row.actualQty : row.priceQty)) || null)
+      return qty && qty > 0 ? qty.toFixed(2) : '0'
+    },
+    calcFilmAmountQty(row) {
+      if (this.isFilmWeightPricedRow(row)) {
+        return Number(this.calcFilmActualQtyKg(row))
+      }
+      return Number(this.calcSqm(row))
+    },
+    isUnitPriceLocked(row) {
+      return !!(row && row.unitPriceLocked)
+    },
     getRawSpecHeaderLabelForEdit() {
-      return this.isTubeSupplierActive() ? '规格(厚度*内径*长度)' : '规格(Kg/桶)'
+      if (this.hasTubeRawItems()) return '规格(厚度*内径*长度)'
+      if (this.hasCountPricedRawItems()) return '规格(箱规/型号)'
+      return '规格'
     },
     getRawTotalHeaderLabelForEdit() {
-      return this.isTubeSupplierActive() ? '总数量' : '总重(kg)'
+      return this.hasCountPricedRawItems() ? '总数量' : '总数量(kg)'
+    },
+    getRawQtyHeaderLabelForEdit() {
+      return this.hasCountPricedRawItems() ? '数量' : '数量(桶)'
     },
     getRawPriceHeaderLabelForEdit() {
-      return this.isTubeSupplierActive() ? '单价(元/支)' : '单价(元/kg)'
+      return this.hasCountPricedRawItems() ? '单价(元/个)' : '单价'
     },
     splitTubeSpecToParts(specText) {
       const text = String(specText || '').trim().replace(/[×xX]/g, '*')
@@ -1047,13 +1540,134 @@ export default {
       if (!row) return
       row.rawSpec = this.buildTubeSpecValue(row)
     },
+    splitFilmSpecToParts(specText) {
+      const text = String(specText || '').trim().replace(/[×xX]/g, '*')
+      if (!text) return { thickness: '', width: '', length: '' }
+      const parts = text.split('*').map(v => String(v || '').trim()).filter(Boolean)
+      if (parts.length >= 3) {
+        return {
+          thickness: parts[0] || '',
+          width: parts[1] || '',
+          length: parts[2] || ''
+        }
+      }
+      if (parts.length === 2) {
+        return {
+          thickness: '',
+          width: parts[0] || '',
+          length: parts[1] || ''
+        }
+      }
+      const nums = text.match(/\d+(?:\.\d+)?/g) || []
+      if (nums.length >= 2 && nums.length < 3) {
+        return {
+          thickness: '',
+          width: nums[0] || '',
+          length: nums[1] || ''
+        }
+      }
+      if (nums.length < 3) return { thickness: '', width: '', length: '' }
+      return {
+        thickness: nums[0] || '',
+        width: nums[1] || '',
+        length: nums[2] || ''
+      }
+    },
+    applyFilmSpecParts(row, specText) {
+      if (!row) return
+      const parts = this.splitFilmSpecToParts(specText)
+      if (parts.thickness) row.thicknessDisplay = parts.thickness
+      if (parts.width) row.width = parts.width
+      if (parts.length) row.lengthDisplay = parts.length
+    },
+    buildFilmSpecRaw(row) {
+      if (!row) return ''
+      const t = String(row.thicknessDisplay || row.thickness || '').trim()
+      const w = String(row.width || '').trim()
+      const l = String(row.lengthDisplay || row.length || '').trim()
+      const vals = [t, w, l]
+      if (vals.some(Boolean) && vals.every(Boolean)) {
+        return `${t}*${w}*${l}`
+      }
+      return String(row.filmSpecRaw || '').trim()
+    },
+    onFilmSpecRawChange(row) {
+      if (!row) return
+      this.applyFilmSpecParts(row, row.filmSpecRaw)
+    },
+    toDecimalNumber(value) {
+      if (value === null || value === undefined) return null
+      if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : null
+      }
+      const text = String(value).trim()
+      if (!text) return null
+      const matched = text.match(/-?\d+(?:\.\d+)?/)
+      if (!matched || matched[0] === undefined) return null
+      const n = Number(matched[0])
+      return Number.isFinite(n) ? n : null
+    },
+    inferFilmDensity(row) {
+      const text = `${(row && row.materialCode) || ''} ${(row && row.materialName) || ''} ${(row && row.filmSpecRaw) || ''}`.toUpperCase()
+      if (text.includes('BOPP')) return 0.9
+      if (text.includes('PS')) return 1.05
+      if (text.includes('PET') || text.includes('PI')) return 1.4
+      return 1.4
+    },
+    inferFilmThicknessFromText(row) {
+      const text = `${(row && row.materialName) || ''} ${(row && row.filmSpecRaw) || ''} ${(row && row.rawSpec) || ''}`
+      const code = String((row && row.materialCode) || '')
+      const umMatched = text.match(/(\d+(?:\.\d+)?)\s*(?:μm|um|µm)/i)
+      if (umMatched && umMatched[1] !== undefined) return umMatched[1]
+      const codeT = code.match(/(?:^|[^0-9])T(\d+(?:\.\d+)?)(?:[^0-9]|$)/i)
+      if (codeT && codeT[1] !== undefined) return codeT[1]
+      return ''
+    },
+    isPeFoamMaterial(row) {
+      const text = `${(row && row.materialCode) || ''} ${(row && row.materialName) || ''} ${(row && row.filmSpecRaw) || ''}`.toLowerCase()
+      return /泡棉|foam|epe/.test(text)
+    },
+    calcFilmChargeQty(row) {
+      if (this.isPeTubeRow(row)) {
+        const qty = Number((row && row.rolls) || 0)
+        return Number.isFinite(qty) && qty > 0 ? qty.toFixed(2) : '0'
+      }
+      const mode = this.resolveFilmPricingMode(row)
+      if (mode === 'sqm') return this.calcSqm(row)
+      return this.calcFilmWeightKg(row)
+    },
+    calcFilmChargeQtyForDisplay(row) {
+      if (!this.isFilmWeightPricedRow(row)) return ''
+      return this.calcFilmWeightKg(row)
+    },
+    calcFilmWeightKg(row) {
+      const specParts = this.splitFilmSpecToParts((row && (row.filmSpecRaw || row.rawSpec)) || '')
+      const inferredThickness = this.inferFilmThicknessFromText(row)
+      const thickness = this.toDecimalNumber((row && (row.thicknessDisplay || row.thickness || specParts.thickness || inferredThickness)) || null)
+      const width = this.toDecimalNumber((row && (row.width || specParts.width)) || null)
+      const length = this.toDecimalNumber((row && (row.lengthDisplay || row.length || specParts.length)) || null)
+      const rolls = this.toDecimalNumber((row && row.rolls) || null)
+      if (!(thickness > 0) || !(width > 0) || !(length > 0) || !(rolls > 0)) return '0'
+      const density = this.inferFilmDensity(row)
+      // Kg = 厚度(μm) * 宽度(mm) * 长度(m) * 卷数 * 密度 / 1,000,000
+      const kg = thickness * width * length * rolls * density / 1000000
+      return Number.isFinite(kg) ? kg.toFixed(2) : '0'
+    },
     isFilmMaterial(item) {
       if (!item) return false
+      const meta = this.getRawMaterialMetaByRow(item)
+      if (this.isFilmByMeta(meta)) return true
+      if (this.isPackagingByMeta(meta)) return false
+      const code = String(item.materialCode || '')
       const unitRaw = String(item.unit || '')
       const unit = unitRaw.toLowerCase()
       const spec = String(item.spec || '')
+      const rawText = `${code} ${String(item.materialName || '')} ${spec}`.toLowerCase()
+      if (/pe管|管材|胶管|纸管|纸筒|纸芯|纸箱|纸盒|carton|ctn/.test(rawText)) return false
+      if ((this.specs || []).some(s => s.materialCode === code)) return true
       if (unit.includes('m') || unit.includes('㎡') || unit.includes('m²') || unit.includes('m2')) return true
-      return /薄膜|离型膜|原膜|PET膜|平方|㎡|m²|m2/i.test(spec)
+      if (/^PET/i.test(code) || /膜/i.test(code)) return true
+      return /薄膜|离型膜|离型纸|原膜|PET膜|平方|㎡|m²|m2/i.test(spec)
     },
     filmMaterialOptions() {
       return this.getSupplierBaseMaterials().filter(item => this.isFilmMaterial(item))
@@ -1062,6 +1676,9 @@ export default {
       return this.getSupplierBaseMaterials().filter(item => !this.isFilmMaterial(item))
     },
     getSupplierBaseMaterials() {
+      if (this.editForm && this.editForm.supplierId) {
+        return this.supplierFilteredMaterials || []
+      }
       if (this.supplierFilteredMaterials && this.supplierFilteredMaterials.length) {
         return this.supplierFilteredMaterials
       }
@@ -1086,30 +1703,86 @@ export default {
     },
     detectMaterialModeByCode(code) {
       const raw = (this.rawMaterials || []).find(r => r.materialCode === code)
+      if ((this.specs || []).some(s => s.materialCode === code)) {
+        if (!raw) return 'film'
+      }
       if (!raw) return this.editForm.materialMode || 'film'
+      const rawText = `${raw.materialCode || ''} ${raw.materialName || ''} ${raw.spec || ''}`.toLowerCase()
+      if (/pe管|管材|胶管/.test(rawText) || /^peg/i.test(String(raw.materialCode || ''))) {
+        return 'raw'
+      }
       return this.isFilmMaterial(raw) ? 'film' : 'raw'
+    },
+    buildSupplierMatchTokens(supplier) {
+      const base = [supplier && supplier.supplierName, supplier && supplier.shortName, supplier && supplier.supplierCode]
+        .map(v => String(v || '').trim())
+        .filter(Boolean)
+      const set = new Set(base)
+      base.forEach(text => {
+        const normalized = text
+          .replace(/有限公司|有限责任公司|股份有限公司|新材料科技|新材料|科技|材料/g, '')
+          .replace(/[()（）\-\s]/g, '')
+          .trim()
+        if (normalized.length >= 2) {
+          set.add(normalized)
+          set.add(normalized.substring(0, 2))
+        }
+        if (normalized.length >= 3) {
+          set.add(normalized.substring(0, 3))
+        }
+      })
+      return Array.from(set).filter(v => v && v.length >= 2)
     },
     async fetchLatestQuotationMapBySupplier(supplier) {
       try {
-        const keywords = [supplier && supplier.supplierName, supplier && supplier.shortName, supplier && supplier.supplierCode]
-          .map(v => String(v || '').trim())
-          .filter(Boolean)
-        if (!keywords.length) return {}
+        const tokens = this.buildSupplierMatchTokens(supplier)
+        if (!tokens.length) return {}
 
-        let listRes = await listPurchaseQuotations({ page: 1, size: 300, status: 'accepted' })
-        let records = (listRes && listRes.data && listRes.data.records) ? listRes.data.records : []
+        const normalizeRecords = (res) => {
+          const data = res && res.data
+          if (!data) return []
+          if (Array.isArray(data)) return data
+          if (Array.isArray(data.records)) return data.records
+          if (Array.isArray(data.list)) return data.list
+          return []
+        }
 
-        const matchByKeyword = (q) => {
+        const fetchBySupplierKeyword = async(keyword, status) => {
+          if (!keyword) return []
+          const res = await listPurchaseQuotations({ page: 1, size: 500, supplier: keyword, status })
+          return normalizeRecords(res)
+        }
+
+        const uniqMap = new Map()
+        for (const keyword of tokens) {
+          const accepted = await fetchBySupplierKeyword(keyword, 'accepted')
+          accepted.forEach(q => {
+            const key = q && (q.id || q.quotationNo)
+            if (key !== undefined && key !== null && !uniqMap.has(String(key))) {
+              uniqMap.set(String(key), q)
+            }
+          })
+        }
+        if (!uniqMap.size) {
+          for (const keyword of tokens) {
+            const allStatus = await fetchBySupplierKeyword(keyword, '')
+            allStatus.forEach(q => {
+              const key = q && (q.id || q.quotationNo)
+              if (key !== undefined && key !== null && !uniqMap.has(String(key))) {
+                uniqMap.set(String(key), q)
+              }
+            })
+          }
+        }
+
+        const matched = Array.from(uniqMap.values()).filter(q => {
           const supplierText = String((q && q.supplier) || '').toLowerCase()
-          return keywords.some(k => supplierText.includes(String(k).toLowerCase()))
-        }
-
-        let matched = (records || []).filter(matchByKeyword)
-        if (!matched.length) {
-          listRes = await listPurchaseQuotations({ page: 1, size: 300 })
-          records = (listRes && listRes.data && listRes.data.records) ? listRes.data.records : []
-          matched = (records || []).filter(matchByKeyword)
-        }
+          if (!supplierText) return false
+          return tokens.some(k => {
+            const text = String(k || '').toLowerCase()
+            return supplierText.includes(text) || text.includes(supplierText)
+          })
+        })
         if (!matched.length) return {}
 
         const sorted = matched.sort((a, b) => {
@@ -1133,7 +1806,10 @@ export default {
             latestMap[code] = {
               unitPrice: item.unitPrice,
               specifications: item.specifications,
-              materialName: item.materialName
+              materialName: item.materialName,
+              pricingMode: item.pricingMode,
+              priceUomCode: item.priceUomCode,
+              purchaseUomCode: item.purchaseUomCode
             }
           })
         })
@@ -1143,7 +1819,7 @@ export default {
         return {}
       }
     },
-    onMaterialCodeChange(row, code) {
+    async onMaterialCodeChange(row, code) {
       const mode = this.detectMaterialModeByCode(code)
       if (!this.editForm.materialMode) {
         this.editForm.materialMode = mode
@@ -1152,7 +1828,7 @@ export default {
         this.editForm.materialMode = mode
         if (mode === 'film') {
           this.editForm.rawItems = []
-          this.editForm.filmItems = [{ materialCode: code, materialName: '', colorCode: '', thicknessDisplay: '', width: '', lengthDisplay: '', rolls: '', unitPrice: '', remark: '' }]
+          this.editForm.filmItems = [{ materialCode: code, materialName: '', filmSpecRaw: '', colorCode: '', thicknessDisplay: '', width: '', lengthDisplay: '', rolls: '', pricingMode: '', actualQty: '', __actualQtyManual: false, unitPrice: '', unitPriceLocked: false, remark: '' }]
           row = this.editForm.filmItems[0]
         } else {
           this.editForm.filmItems = []
@@ -1174,12 +1850,33 @@ export default {
           row.thicknessDisplay = spec.totalThickness
           row.width = spec.width
           row.lengthDisplay = spec.length
+          row.filmSpecRaw = this.buildFilmSpecRaw(row)
+        } else if (latestQuote && latestQuote.specifications) {
+          row.filmSpecRaw = String(latestQuote.specifications || '').trim()
+          this.applyFilmSpecParts(row, row.filmSpecRaw)
+        } else if (raw && raw.spec) {
+          row.filmSpecRaw = String(raw.spec || '').trim()
+          this.applyFilmSpecParts(row, row.filmSpecRaw)
         }
         if (latestQuote && latestQuote.unitPrice !== null && latestQuote.unitPrice !== undefined) {
           row.unitPrice = latestQuote.unitPrice
+          row.unitPriceLocked = true
+        } else {
+          row.unitPriceLocked = false
+        }
+        row.pricingMode = this.resolveFilmPricingMode({ ...row, materialCode: code })
+        if (row.pricingMode !== 'kg') {
+          row.actualQty = ''
+          row.__actualQtyManual = false
+        } else {
+          this.syncFilmActualQtyWithEstimated(row)
         }
       } else {
         row.rawSpec = this.normalizeRawSpecValue((latestQuote && latestQuote.specifications) || (raw && raw.spec) || row.rawSpec || '', row)
+        this.pushRawSpecHistoryOption(code, row.rawSpec, row)
+        if (latestQuote && latestQuote.specifications) {
+          this.pushRawSpecHistoryOption(code, latestQuote.specifications, row)
+        }
         if (this.isTubeRow(row)) {
           const tubeParts = this.splitTubeSpecToParts(row.rawSpec)
           row.tubeThickness = tubeParts.thickness
@@ -1189,6 +1886,7 @@ export default {
         if (latestQuote && latestQuote.unitPrice !== null && latestQuote.unitPrice !== undefined) {
           row.unitPrice = latestQuote.unitPrice
         }
+        await this.loadRawSpecHistoryForRow(row)
       }
     },
     addFilmItem(setMode = true) {
@@ -1198,12 +1896,17 @@ export default {
       this.editForm.filmItems.push({
         materialCode: '',
         materialName: '',
+        filmSpecRaw: '',
         colorCode: '',
         thicknessDisplay: '',
         width: '',
         lengthDisplay: '',
         rolls: '',
+        pricingMode: '',
+        actualQty: '',
+        __actualQtyManual: false,
         unitPrice: '',
+        unitPriceLocked: false,
         remark: '',
         __editing: true
       })
@@ -1287,16 +1990,27 @@ export default {
         }
         return text
       }
+      if (this.isCartonRow(row)) {
+        return text
+      }
+      const hasKgBucketText = /(kg|公斤|千克|桶)/i.test(text)
+      if (hasKgBucketText) {
+        const kg = this.parseSpecKg(text)
+        if (kg && kg > 0) {
+          return `${this.formatPurchaseSpecNumber(kg)}Kg/桶`
+        }
+      }
       const firstNum = text.match(/([0-9]+(?:\.[0-9]+)?)/)
       if (!firstNum || firstNum[1] === undefined) return text
       const n = Number(firstNum[1])
       if (!Number.isFinite(n) || n <= 0) return text
       const normalized = Number.isInteger(n) ? String(n) : String(n)
-      return `${normalized}Kg/桶`
+      return normalized
     },
     onRawSpecChange(row, value) {
       if (!row) return
       row.rawSpec = this.normalizeRawSpecValue(value, row)
+      this.pushRawSpecHistoryOption(row.materialCode, row.rawSpec, row)
       if (this.isTubeRow(row)) {
         const tubeParts = this.splitTubeSpecToParts(row.rawSpec)
         row.tubeThickness = tubeParts.thickness
@@ -1307,61 +2021,115 @@ export default {
     parseSpecKg(spec) {
       if (!spec) return null
       const text = String(spec).trim()
-      // 1) 标准写法: 180Kg/桶、180 kg/桶、180KG/桶
-      const withUnit = text.match(/([0-9]+(?:\.[0-9]+)?)\s*(kg|KG|Kg)?\s*(\/|每)?\s*桶?/)
-      if (withUnit && withUnit[1] !== undefined) {
-        const v = Number(withUnit[1])
+      // 1) 严格匹配: 180Kg/桶、180 kg/桶、180公斤/桶、180千克/桶
+      const kgPerBucket = text.match(/([0-9]+(?:\.[0-9]+)?)\s*(kg|KG|Kg|公斤|千克)\s*(\/|每)\s*桶/i)
+      if (kgPerBucket && kgPerBucket[1] !== undefined) {
+        const v = Number(kgPerBucket[1])
         if (Number.isFinite(v) && v > 0) return v
       }
-      // 2) 兼容纯数字: 180
+      // 2) 次级匹配: 180Kg、180公斤、180千克
+      const kgOnly = text.match(/([0-9]+(?:\.[0-9]+)?)\s*(kg|KG|Kg|公斤|千克)/i)
+      if (kgOnly && kgOnly[1] !== undefined) {
+        const v = Number(kgOnly[1])
+        if (Number.isFinite(v) && v > 0) return v
+      }
+      // 3) 兼容纯数字: 180
       const plain = Number(text)
       if (Number.isFinite(plain) && plain > 0) return plain
-      // 3) 兜底: 抽取第一个数字
-      const firstNum = text.match(/([0-9]+(?:\.[0-9]+)?)/)
-      if (firstNum && firstNum[1] !== undefined) {
-        const v = Number(firstNum[1])
-        if (Number.isFinite(v) && v > 0) return v
-      }
       return null
     },
+    formatPurchaseSpecNumber(value) {
+      const n = Number(value)
+      if (!Number.isFinite(n) || n <= 0) return ''
+      if (Number.isInteger(n)) return String(n)
+      return String(Number(n.toFixed(3))).replace(/\.0+$/, '')
+    },
+    isPurchasePrintChemicalItem(item) {
+      if (!item || this.isPurchaseFilmItem(item) || this.isCountPricedRow(item)) return false
+      const raw = (this.rawMaterials || []).find(r => r.materialCode === item.materialCode)
+      const text = [
+        item.materialCode,
+        item.materialName,
+        item.rawSpec,
+        raw && raw.materialName,
+        raw && raw.spec
+      ].map(v => String(v || '').trim()).join(' ').toLowerCase()
+      return /胶水|固化剂|树脂|色浆|溶剂|阻燃剂/.test(text)
+    },
+    isPurchasePrintKgPricedItem(item) {
+      if (!item || this.isPurchaseFilmItem(item) || this.isCountPricedRow(item)) return false
+      const raw = (this.rawMaterials || []).find(r => r.materialCode === item.materialCode)
+      const mode = this.normalizeFilmPricingMode(item.pricingMode || item.priceUomCode || item.purchaseUomCode || item.quotedPricingMode || (raw && raw.unit))
+      if (mode === 'kg') return true
+      const unitText = [item.priceUomCode, item.purchaseUomCode, item.pricingMode, raw && raw.unit]
+        .map(v => String(v || '').trim().toLowerCase())
+        .join(' ')
+      return unitText.includes('kg') || unitText.includes('公斤') || unitText.includes('千克')
+    },
     calcRawTotalWeight(row) {
-      if (this.isTubeRow(row)) {
-        const qty = Number(row.quantity)
-        if (Number.isFinite(qty) && qty > 0) {
-          return qty.toFixed(2)
+      const qty = this.toDecimalNumber(row && row.quantity)
+      if (!(qty > 0)) return '0'
+      if (this.isCountPricedRow(row)) {
+        return qty.toFixed(2)
+      }
+      if (this.isChemicalRow(row)) {
+        const kgPerBucket = this.parseSpecKg(row && row.rawSpec)
+        if (kgPerBucket && kgPerBucket > 0) {
+          return (qty * kgPerBucket).toFixed(2)
         }
-        return '0'
       }
-      const perBucket = this.parseSpecKg(row.rawSpec)
-      const qty = Number(row.quantity)
-      if (perBucket && Number.isFinite(qty) && qty > 0) {
-        return (perBucket * qty).toFixed(2)
+      const kgPerBucket = this.parseSpecKg(row && row.rawSpec)
+      if (kgPerBucket && kgPerBucket > 0) {
+        return (qty * kgPerBucket).toFixed(2)
       }
-      // 兼容历史数据：若规格无法解析，回退显示已存总重
-      const explicit = Number(row.totalWeight)
-      if (Number.isFinite(explicit) && explicit > 0) {
-        return explicit.toFixed(2)
-      }
-      return '0'
+      return qty.toFixed(2)
     },
     calcRawAmount(row) {
-      const weight = this.isTubeRow(row) ? Number(row.quantity || 0) : Number(this.calcRawTotalWeight(row))
+      const weight = Number(this.calcRawTotalWeight(row) || 0)
       const price = Number(row.unitPrice || 0)
       if (!weight || !price) return '0'
       return (weight * price).toFixed(2)
     },
     calcSqm(row) {
-      // 优先使用后端返回的已计算面积字段（ sqm 或 area ）
+      if (!row) return '0'
+      const width = this.toDecimalNumber(row.width)
+      const length = this.toDecimalNumber(row.lengthDisplay || row.length)
+      const rolls = this.toDecimalNumber(row.rolls)
+      if (width > 0 && length > 0 && rolls > 0) {
+        const sqm = (width / 1000) * length * rolls
+        return Number.isFinite(sqm) ? sqm.toFixed(2) : '0'
+      }
       const backendArea = row.sqm || row.area || row.squareMeter
       if (backendArea !== undefined && backendArea !== null && backendArea !== '') {
         const n = Number(backendArea)
         return Number.isFinite(n) ? n.toFixed(2) : '0'
       }
-      // 如果后端未提供面积，前端不做单位换算，返回 '0' 以避免错算
       return '0'
     },
+    isLikelyFilmRow(row) {
+      if (!row) return false
+      if (this.isCountPricedRow(row)) return false
+      const meta = this.getRawMaterialMetaByRow(row)
+      if (this.isChemicalByMeta(meta) || this.isPackagingByMeta(meta)) return false
+      if (this.isFilmByMeta(meta)) return true
+      const mode = this.normalizeFilmPricingMode(row.pricingMode || row.priceUomCode || row.purchaseUomCode)
+      if (mode === 'sqm') return true
+      const width = this.toDecimalNumber(row.width)
+      const length = this.toDecimalNumber(row.lengthDisplay || row.length)
+      if (width > 0 && length > 0) return true
+      const filmSpecText = String(row.filmSpecRaw || '').trim()
+      if (filmSpecText) {
+        const parts = this.splitFilmSpecToParts(filmSpecText)
+        if ((this.toDecimalNumber(parts.width) > 0 && this.toDecimalNumber(parts.length) > 0) || /mm|μm|um|m\b/i.test(filmSpecText)) {
+          return true
+        }
+      }
+      const code = String(row.materialCode || '').trim()
+      const raw = code ? (this.rawMaterials || []).find(r => r.materialCode === code) : null
+      return !!(raw && this.isFilmMaterial(raw))
+    },
     calcAmount(row) {
-      const isFilm = row.width !== null && row.width !== undefined && row.length !== null && row.length !== undefined
+      const isFilm = this.isLikelyFilmRow(row)
       if (!isFilm) {
         return this.calcRawAmount({
           rawSpec: row.rawSpec,
@@ -1370,10 +2138,10 @@ export default {
           unitPrice: row.unitPrice
         })
       }
-      const sqm = parseFloat(this.calcSqm(row))
+      const filmQty = this.calcFilmAmountQty(row)
       const price = parseFloat(row.unitPrice || 0)
-      if (!sqm || !price) return '0'
-      return (sqm * price).toFixed(2)
+      if (!filmQty || !price) return '0'
+      return (filmQty * price).toFixed(2)
     },
     totalAmount(order) {
       if (!order || !order.items) return 0
@@ -1429,14 +2197,14 @@ export default {
       return items.reduce((sum, item) => {
         const qty = mode === 'raw'
           ? Number(this.calcRawTotalWeight(item))
-          : Number(this.calcSqm(item))
+          : Number(this.calcFilmAmountQty(item))
         return sum + (Number.isFinite(qty) ? qty : 0)
       }, 0).toFixed(2)
     },
     editTotalAmount() {
       const items = this.getEditActiveItems()
       return items.reduce((sum, item) => {
-        const isRaw = this.editForm.materialMode === 'raw' || (item.width === null || item.width === undefined || item.length === null || item.length === undefined)
+        const isRaw = this.editForm.materialMode === 'raw' || !this.isLikelyFilmRow(item)
         const amount = isRaw
           ? Number(this.calcRawAmount(item))
           : Number(this.calcAmount(item))
@@ -1444,6 +2212,7 @@ export default {
       }, 0).toFixed(2)
     },
     formatSpec(item) {
+      if (item && item.filmSpecRaw) return item.filmSpecRaw
       const t = item.thicknessDisplay || item.thickness || ''
       const w = item.width || ''
       const l = item.lengthDisplay || item.length || ''
@@ -1479,17 +2248,43 @@ export default {
         this.$message.warning('请至少添加一条明细')
         return
       }
+      if (currentMode === 'film') {
+        const invalidKgRow = (this.editForm.filmItems || []).find(item => {
+          if (this.isCountPricedRow(item) || !this.isFilmWeightPricedRow(item)) return false
+          const actual = this.toDecimalNumber(item.actualQty)
+          return !(actual && actual > 0)
+        })
+        if (invalidKgRow) {
+          this.$message.warning('公斤计价物料请填写实际数量(Kg)')
+          return
+        }
+      }
 
       const filmItems = this.editForm.filmItems.map(item => ({
         id: item.id,
         materialCode: item.materialCode,
         materialName: item.materialName,
+        filmSpecRaw: this.buildFilmSpecRaw(item),
         colorCode: item.colorCode,
-        thickness: item.thicknessDisplay ? Number(item.thicknessDisplay) : null,
-        width: item.width ? Number(item.width) : null,
-        length: item.lengthDisplay ? Number(item.lengthDisplay) : null,
-        rolls: item.rolls ? Number(item.rolls) : null,
-        unitPrice: item.unitPrice ? Number(item.unitPrice) : null,
+        thickness: this.toDecimalNumber(item.thicknessDisplay),
+        width: this.toDecimalNumber(item.width),
+        length: this.toDecimalNumber(item.lengthDisplay),
+        rolls: this.toDecimalNumber(item.rolls),
+        sqm: this.toDecimalNumber(this.calcSqm(item)),
+        purchaseQty: this.isFilmWeightPricedRow(item)
+          ? this.toDecimalNumber(item.actualQty)
+          : this.toDecimalNumber(item.rolls),
+        purchaseUomCode: this.isFilmWeightPricedRow(item) ? 'KG' : 'ROLL',
+        stockQty: this.isFilmWeightPricedRow(item)
+          ? this.toDecimalNumber(item.actualQty)
+          : this.toDecimalNumber(this.calcSqm(item)),
+        stockUomCode: this.isFilmWeightPricedRow(item) ? 'KG' : 'M2',
+        priceQty: this.isFilmWeightPricedRow(item)
+          ? this.toDecimalNumber(item.actualQty)
+          : this.toDecimalNumber(this.calcSqm(item)),
+        priceUomCode: this.isFilmWeightPricedRow(item) ? 'KG' : 'M2',
+        unitPrice: this.toDecimalNumber(item.unitPrice),
+        amount: Number(this.calcAmount(item)),
         remark: item.remark
       }))
 
@@ -1626,16 +2421,130 @@ export default {
       const rows = (this.currentPrint && this.currentPrint.items) || []
       return rows.filter(item => !this.isPurchasePrintRowEmpty(item))
     },
+    isCountPrintTemplate() {
+      const rows = this.getPurchasePrintRows()
+      return rows.length > 0 && rows.every(item => this.isCountPricedRow(item))
+    },
+    isChemicalPrintTemplate() {
+      const rows = this.getPurchasePrintRows()
+      return rows.length > 0 && rows.every(item => !this.isPurchaseFilmItem(item) && !this.isCountPricedRow(item))
+    },
+    isPurchaseFilmWeightPriced(item) {
+      if (!this.isPurchaseFilmItem(item)) return false
+      const mode = this.normalizeFilmPricingMode(item && (item.pricingMode || item.priceUomCode || item.purchaseUomCode))
+      return mode === 'kg'
+    },
+    isFilmWeightPrintTemplate() {
+      const rows = this.getPurchasePrintRows()
+      return rows.length > 0 && rows.every(item => this.isPurchaseFilmItem(item) && this.isPurchaseFilmWeightPriced(item))
+    },
     shouldShowFilmDimensionColumns() {
+      if (this.isCountPrintTemplate()) return false
       return this.getPurchasePrintRows().some(item => this.isPurchaseFilmItem(item))
     },
+    shouldShowPrintRollColumn() {
+      return this.shouldShowFilmDimensionColumns() || this.isCountPrintTemplate() || this.isChemicalPrintTemplate()
+    },
+    shouldShowPurchasePrintQuantityColumn() {
+      return !this.isCountPrintTemplate()
+    },
+    getPurchasePrintRollHeaderLabel() {
+      if (this.isChemicalPrintTemplate()) return '桶数'
+      return this.isCountPrintTemplate() ? '个数' : '数量/R'
+    },
+    getPurchasePrintRollValue(item) {
+      if (!item) return ''
+      if (this.isCountPrintTemplate()) {
+        const qty = item.rolls !== undefined && item.rolls !== null && item.rolls !== '' ? item.rolls : item.quantity
+        return qty === undefined || qty === null || qty === '' ? '' : this.formatPurchaseMoney(qty)
+      }
+      if (this.isPurchaseFilmItem(item)) {
+        return item.rolls || ''
+      }
+      if (this.isChemicalPrintTemplate()) {
+        const raw = this.rawMaterials.find(r => r.materialCode === item.materialCode)
+        const kgPerBucket = this.parseSpecKg(item.rawSpec || (raw && raw.spec))
+        const totalQty = Number(item.sqm !== undefined && item.sqm !== null ? item.sqm : this.calcRawTotalWeight(item))
+        const bucketQty = (kgPerBucket > 0 && totalQty > 0) ? (totalQty / kgPerBucket) : NaN
+        return Number.isFinite(bucketQty) ? this.formatPurchaseMoney(bucketQty) : ''
+      }
+      return ''
+    },
+    getPurchasePrintQuantityHeaderLabel() {
+      if (this.isFilmWeightPrintTemplate()) return '下单重量/Kg'
+      return this.isChemicalPrintTemplate() ? '总数量' : '数量'
+    },
+    isTubeLikePrintRow(item) {
+      return this.isTubeRow(item) || this.isPeTubeRow(item)
+    },
+    formatDimensionSpecWithMm(specText, labels = []) {
+      const text = String(specText || '').trim().replace(/[×xX]/g, '*')
+      if (!text) return ''
+      const nums = text.match(/\d+(?:\.\d+)?/g) || []
+      if (nums.length >= 3) {
+        const [a, b, c] = nums
+        const [la, lb, lc] = labels
+        return `${la || ''}${a}mm*${lb || ''}${b}mm*${lc || ''}${c}mm`
+      }
+      return text
+    },
     getPurchasePrintSpecHeaderLabel() {
-      const hasTube = this.getPurchasePrintRows().some(item => !this.isPurchaseFilmItem(item) && this.isTubeRow(item))
+      const rows = this.getPurchasePrintRows()
+      const hasTube = rows.some(item => !this.isPurchaseFilmItem(item) && this.isTubeLikePrintRow(item))
+      const allTube = rows.length > 0 && rows.every(item => !this.isPurchaseFilmItem(item) && this.isTubeLikePrintRow(item))
+      const allCarton = rows.length > 0 && rows.every(item => !this.isPurchaseFilmItem(item) && this.isCartonRow(item))
       if (this.shouldShowFilmDimensionColumns()) return '规格型号'
-      return hasTube ? '规格(厚度*内径*长度)' : '规格(Kg/桶)'
+      if (this.isCountPrintTemplate()) {
+        if (allTube) return '规格(厚度mm*内径mm*长mm)'
+        if (allCarton) return '规格(长mm*宽mm*高mm)'
+        return hasTube ? '规格(厚度mm*内径mm*长mm)' : '规格(长mm*宽mm*高mm)'
+      }
+      return hasTube ? '规格(厚度mm*内径mm*长mm)' : '规格'
     },
     getPurchasePrintColumnCount() {
+      if (this.isChemicalPrintTemplate()) return 9
+      if (this.isCountPrintTemplate()) return 8
       return this.shouldShowFilmDimensionColumns() ? 11 : 8
+    },
+    getPurchasePrintPriceHeaderLabel() {
+      if (this.isCountPrintTemplate()) return '单价/元/pcs'
+      if (this.isFilmWeightPrintTemplate()) return '单价/元/Kg'
+      if (this.isChemicalPrintTemplate()) return '单价/元/kg'
+      return '单价/元/㎡'
+    },
+    getPurchasePrintAmountHeaderLabel() {
+      return '金额/元'
+    },
+    printFilmDimensionColStyle() {
+      return 'width: 52px;'
+    },
+    printColStyle(col) {
+      if (this.isCountPrintTemplate()) {
+        const map = {
+          code: 'width: 90px;',
+          name: 'width: 165px;',
+          spec: 'width: 105px;',
+          unit: 'width: 58px;',
+          roll: 'width: 74px;',
+          qty: 'width: 72px;',
+          price: 'width: 74px;',
+          amount: 'width: 109px;',
+          date: 'width: 114px;'
+        }
+        return map[col] || ''
+      }
+      const map = {
+        code: 'width: 118px;',
+        name: 'width: 136px;',
+        spec: 'width: 152px;',
+        unit: 'width: 58px;',
+        roll: 'width: 60px;',
+        qty: 'width: 80px;',
+        price: 'width: 68px;',
+        amount: 'width: 96px;',
+        date: 'width: 98px;'
+      }
+      return map[col] || ''
     },
     isPurchasePrintRowEmpty(item) {
       if (!item) return true
@@ -1671,32 +2580,99 @@ export default {
       if (!order) return ''
       return this.resolveSupplierFullName(order.supplier, order.supplierId)
     },
+    resolveSupplierShortName(supplierText, supplierId) {
+      if (supplierId) {
+        const byId = this.suppliers.find(s => s.id === supplierId)
+        if (byId) {
+          return byId.shortName || byId.supplierName || byId.supplierCode || ''
+        }
+      }
+      const text = String(supplierText || '').trim()
+      if (!text) return ''
+      const matched = this.suppliers.find(s => {
+        const values = [s.supplierName, s.shortName, s.supplierCode].map(v => String(v || '').trim())
+        return values.some(v => v && (v === text || text.includes(v) || v.includes(text)))
+      })
+      return (matched && (matched.shortName || matched.supplierName || matched.supplierCode)) || text
+    },
+    getOrderSupplierShortName(order) {
+      if (!order) return ''
+      return this.resolveSupplierShortName(order.supplier, order.supplierId)
+    },
     isPurchaseFilmItem(item) {
-      return item && item.width !== null && item.width !== undefined && item.length !== null && item.length !== undefined
+      if (!item) return false
+      if (this.isCountPricedRow(item)) return false
+      if (item.width !== null && item.width !== undefined && item.length !== null && item.length !== undefined) return true
+      return !!String(item.filmSpecRaw || '').trim()
+    },
+    ensurePurchaseFilmDimUnit(value, unit) {
+      const text = String(value == null ? '' : value).trim()
+      if (!text) return ''
+      if (/[a-zA-Zμ㎡㎜]/.test(text)) return text
+      return `${text}${unit}`
+    },
+    normalizePurchaseFilmSpecWithUnit(specText) {
+      const raw = String(specText || '').trim()
+      if (!raw) return ''
+      const normalized = raw.replace(/[×xX]/g, '*')
+      const parts = normalized.split('*').map(s => String(s || '').trim()).filter(Boolean)
+      if (parts.length < 3) return raw
+      const p0 = this.ensurePurchaseFilmDimUnit(parts[0], 'μm')
+      const p1 = this.ensurePurchaseFilmDimUnit(parts[1], 'mm')
+      const p2 = this.ensurePurchaseFilmDimUnit(parts[2], 'm')
+      return `${p0}*${p1}*${p2}`
     },
     getPurchasePrintSpec(item) {
       if (!item) return ''
+      const raw = this.rawMaterials.find(r => r.materialCode === item.materialCode)
+      if (this.isCountPricedRow(item)) {
+        return item.rawSpec || (raw && raw.spec) || ''
+      }
+      if (item.filmSpecRaw) return this.normalizePurchaseFilmSpecWithUnit(item.filmSpecRaw)
       const filmSpec = [item.thicknessDisplay || item.thickness || '', item.width || '', item.lengthDisplay || item.length || '']
         .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
         .join('*')
-      if (filmSpec) return filmSpec
-      const raw = this.rawMaterials.find(r => r.materialCode === item.materialCode)
-      return item.rawSpec || (raw && raw.spec) || ''
+      if (filmSpec) return this.normalizePurchaseFilmSpecWithUnit(filmSpec)
+      const baseSpec = item.rawSpec || (raw && raw.spec) || ''
+      if (this.isPurchasePrintChemicalItem(item) || this.isPurchasePrintKgPricedItem(item)) {
+        const kg = this.parseSpecKg(baseSpec)
+        if (kg && kg > 0) {
+          return `${this.formatPurchaseSpecNumber(kg)}Kg/桶`
+        }
+      }
+      return baseSpec
     },
     getPurchasePrintUnit(item) {
       if (!item) return ''
+      if (this.isCountPricedRow(item)) return this.formatUnitDisplay('pcs')
       if (this.isPurchaseFilmItem(item)) {
-        return '㎡'
+        if (this.isPurchaseFilmWeightPriced(item)) return this.formatUnitDisplay('kg')
+        return this.formatUnitDisplay('㎡')
       }
       const raw = this.rawMaterials.find(r => r.materialCode === item.materialCode)
-      return (raw && raw.unit) || item.purchaseUomCode || item.priceUomCode || 'KG'
+      const unit = (raw && raw.unit) || item.purchaseUomCode || item.priceUomCode || 'KG'
+      return this.formatUnitDisplay(unit)
     },
     getPurchasePrintQuantity(item) {
       if (!item) return ''
+      if (this.isCountPrintTemplate()) return ''
       if (this.isPurchaseFilmItem(item)) {
+        if (this.isPurchaseFilmWeightPriced(item)) {
+          const qty = item.priceQty !== undefined && item.priceQty !== null && item.priceQty !== ''
+            ? item.priceQty
+            : (item.purchaseQty !== undefined && item.purchaseQty !== null && item.purchaseQty !== ''
+                ? item.purchaseQty
+                : item.sqm)
+          return this.formatPurchaseMoney(qty)
+        }
         return this.formatPurchaseMoney(item.sqm !== undefined && item.sqm !== null ? item.sqm : this.calcSqm(item))
       }
       return this.formatPurchaseMoney(item.sqm !== undefined && item.sqm !== null ? item.sqm : this.calcRawTotalWeight(item))
+    },
+    getPurchasePrintTotalQtyLabel() {
+      if (this.isFilmWeightPrintTemplate()) return '下单重量(Kg)：'
+      if (this.isChemicalPrintTemplate()) return '总数量：'
+      return this.isCountPrintTemplate() ? '个数：' : '数量：'
     },
     getPurchasePrintAmount(item) {
       if (!item) return 0
@@ -1705,6 +2681,22 @@ export default {
         : Number(this.calcAmount(item))
     },
     getPurchasePrintTotalQty() {
+      if (this.isCountPrintTemplate()) {
+        return this.getPurchasePrintRows().reduce((sum, item) => {
+          const qty = Number(item.rolls !== undefined && item.rolls !== null && item.rolls !== '' ? item.rolls : item.quantity)
+          return sum + (Number.isFinite(qty) ? qty : 0)
+        }, 0)
+      }
+      if (this.isFilmWeightPrintTemplate()) {
+        return this.getPurchasePrintRows().reduce((sum, item) => {
+          const qty = Number(item.priceQty !== undefined && item.priceQty !== null && item.priceQty !== ''
+            ? item.priceQty
+            : (item.purchaseQty !== undefined && item.purchaseQty !== null && item.purchaseQty !== ''
+                ? item.purchaseQty
+                : item.sqm))
+          return sum + (Number.isFinite(qty) ? qty : 0)
+        }, 0)
+      }
       return this.getPurchasePrintRows().reduce((sum, item) => {
         const qty = Number(this.isPurchaseFilmItem(item)
           ? (item.sqm !== undefined && item.sqm !== null ? item.sqm : this.calcSqm(item))
@@ -1745,27 +2737,32 @@ export default {
             <meta charset="utf-8" />
             <title>采购订单打印</title>
             <style>
-              body { font-family: 'SimSun', Arial, sans-serif; margin: 0; padding: 10px 14px; color: #000; }
-              .purchase-print-sheet { width: 100%; }
+              body { font-family: 'SimSun', Arial, sans-serif; margin: 0; padding: 4px 6px; color: #000; }
+              .purchase-print-sheet { width: 100%; margin: 0 auto; box-sizing: border-box; }
               .purchase-print-header-top { display:flex; justify-content:space-between; align-items:flex-start; }
               .purchase-logo-wrap { width: 300px; }
               .purchase-print-logo { width: 280px; height: auto; }
               .purchase-company-info { text-align:right; font-size:12px; line-height:1.6; font-weight:600; }
               .purchase-company-name { font-size: 16pt; font-family: 'Microsoft YaHei', '微软雅黑', sans-serif; font-weight: 700; margin-bottom: 2px; }
               .purchase-print-title { text-align:center; color:#1f3fbf; font-size:24px; font-weight:700; margin: 8px 0 10px; letter-spacing: 2px; }
-              .purchase-print-meta { display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px; }
-              .purchase-print-supplier-row { font-size:12px; margin-bottom:4px; }
-              .purchase-print-table { width:100%; border-collapse:collapse; table-layout:fixed; }
-              .purchase-print-table th, .purchase-print-table td { border:1px solid #000; padding:4px 3px; font-size:11px; text-align:center; word-break:break-all; }
+              .purchase-print-meta { display:flex; justify-content:space-between; font-size:16px; margin-bottom:6px; }
+              .purchase-print-supplier-row { font-size:16px; margin-bottom:4px; }
+              .purchase-print-table { width:100%; max-width:100%; border-collapse:collapse; table-layout:fixed; }
+              .purchase-print-table th, .purchase-print-table td { border:1px solid #000; padding:5px 4px; font-size:15px; line-height:1.5; text-align:center; word-break:break-word; overflow-wrap:anywhere; }
               .purchase-print-table th { color:#0b47c1; font-weight:700; background:#fff; }
               .purchase-print-table .text-left { text-align:left; }
               .purchase-print-table .text-right { text-align:right; }
               .purchase-print-total-row td { font-weight:700; }
-              .purchase-print-remark-row td { white-space:pre-wrap; line-height:1.5; }
-              .purchase-print-terms { margin-top:8px; font-size:11px; line-height:1.8; }
-              .purchase-print-signature { margin-top:10px; display:flex; justify-content:space-between; font-size:12px; }
-              .purchase-print-footer { text-align:center; margin-top:6px; font-size:11px; }
-              @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+              .purchase-print-remark-row td { white-space:pre-wrap; line-height:1.7; font-size:15px; word-break:break-word; overflow-wrap:anywhere; }
+              .purchase-print-terms { margin-top:8px; font-size:15px; line-height:1.95; white-space:normal; word-break:break-word; overflow-wrap:anywhere; }
+              .purchase-print-signature { margin-top:10px; display:flex; justify-content:space-between; font-size:16px; gap: 12px; flex-wrap: wrap; padding-right: 64px; box-sizing: border-box; }
+              .purchase-print-signature > div { white-space:normal; word-break:break-word; overflow-wrap:anywhere; }
+              .purchase-print-footer { text-align:center; margin-top:6px; font-size:15px; white-space:normal; word-break:break-word; overflow-wrap:anywhere; }
+              @media print {
+                @page { size: auto; margin: 4mm; }
+                body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                .purchase-print-sheet { width: 100%; margin: 0; }
+              }
             </style>
           </head>
           <body>
@@ -1810,6 +2807,21 @@ export default {
 .purchase-orders {
   padding: 10px;
 }
+.purchase-orders >>> .purchase-print-dialog {
+  width: fit-content !important;
+  max-width: 98vw;
+}
+.purchase-orders >>> .purchase-print-dialog .el-dialog__header {
+  padding: 12px 14px 8px;
+}
+.purchase-orders >>> .purchase-print-dialog .el-dialog__body {
+  padding: 4px 10px 6px;
+  max-height: none;
+  overflow: visible;
+}
+.purchase-orders >>> .purchase-print-dialog .el-dialog__footer {
+  padding: 10px 14px 14px;
+}
 .search-area {
   margin-bottom: 12px;
 }
@@ -1843,8 +2855,39 @@ export default {
   width: 100%;
 }
 .purchase-print-sheet {
-  padding: 4px 6px;
+  padding: 6px 8px;
   color: #000;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.purchase-print-preview-wrap {
+  display: inline-block;
+  width: max-content;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  padding: 6px;
+  background: #f5f7fa;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  text-align: left;
+  zoom: 0.96;
+}
+.purchase-print-preview-wrap .purchase-print-sheet {
+  display: block;
+  width: max-content;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+}
+.purchase-print-preview-wrap .purchase-print-table {
+  width: auto;
+  max-width: none;
 }
 .purchase-print-header-top {
   display: flex;
@@ -1861,7 +2904,7 @@ export default {
 .purchase-company-info {
   text-align: right;
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.6;
   font-weight: 600;
 }
 .purchase-company-name {
@@ -1873,33 +2916,36 @@ export default {
 .purchase-print-title {
   text-align: center;
   color: #1f3fbf;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
-  margin: 6px 0 8px;
+  margin: 8px 0 10px;
   letter-spacing: 2px;
 }
 .purchase-print-meta {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
-  margin-bottom: 4px;
+  font-size: 16px;
+  margin-bottom: 6px;
 }
 .purchase-print-supplier-row {
-  font-size: 12px;
+  font-size: 16px;
   margin-bottom: 4px;
 }
 .purchase-print-table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
 .purchase-print-table th,
 .purchase-print-table td {
   border: 1px solid #000;
-  padding: 3px 2px;
-  font-size: 11px;
+  padding: 5px 4px;
+  font-size: 15px;
+  line-height: 1.5;
   text-align: center;
-  word-break: break-all;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .purchase-print-table th {
   color: #0b47c1;
@@ -1917,24 +2963,41 @@ export default {
 }
 .purchase-print-remark-row td {
   padding: 3px 6px;
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.7;
   white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .purchase-print-terms {
-  margin-top: 6px;
-  font-size: 11px;
-  line-height: 1.7;
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.95;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .purchase-print-signature {
-  margin-top: 8px;
+  margin-top: 10px;
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-right: 64px;
+  box-sizing: border-box;
+}
+.purchase-print-signature > div {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .purchase-print-footer {
   text-align: center;
-  margin-top: 4px;
-  font-size: 11px;
+  margin-top: 6px;
+  font-size: 15px;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 </style>

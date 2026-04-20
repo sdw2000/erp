@@ -11,7 +11,7 @@
       </div>
 
       <el-alert
-        title="规则：设备状态=normal 且 日状态=OPEN 且 当日到岗人数>=最低需求，才允许进入手动排程机台候选"
+        title="规则：设备状态=normal 且 日状态=OPEN，才允许进入手动排程机台候选（当前不启用人员到岗门槛）"
         type="info"
         :closable="false"
         style="margin-bottom: 12px;"
@@ -152,7 +152,7 @@
       </el-table>
     </el-card>
 
-    <el-card style="margin-top: 14px;">
+    <el-card v-if="staffPlanningEnabled" style="margin-top: 14px;">
       <div slot="header" class="clearfix">
         <span>设备人员排班（{{ assignmentTitle }}）</span>
         <div class="header-actions">
@@ -417,6 +417,7 @@ export default {
       },
       loadingAssignment: false,
       savingAssignment: false,
+      staffPlanningEnabled: false,
       shiftList: [],
       staffOptions: [],
       scheduleConfigMap: {}
@@ -495,7 +496,9 @@ export default {
               effectiveEndDate: row.effectiveEndDate || range[1]
             }))
           }
-          await this.refreshAvailableStaffCountByAssignments()
+          if (this.staffPlanningEnabled) {
+            await this.refreshAvailableStaffCountByAssignments()
+          }
           if (this.assignment.equipmentId) {
             const row = this.dailyStatusList.find(r => Number(r.equipmentId) === Number(this.assignment.equipmentId))
             if (row) {

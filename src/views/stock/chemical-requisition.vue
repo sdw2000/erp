@@ -58,8 +58,12 @@
     <el-dialog
       :title="`请购单明细 - ${currentDetailRequestNo || ''}`"
       :visible.sync="detailVisible"
+      :show-close="true"
+      :close-on-click-modal="true"
+      :close-on-press-escape="true"
       width="1080px"
       custom-class="chemical-detail-dialog"
+      @close="handleCloseDetail"
     >
       <div class="chemical-detail-toolbar">
         <div>
@@ -126,6 +130,10 @@
           <el-button v-if="canReceiveCurrent" type="primary" size="small" @click="handleReceiveCurrent">提交本次到货</el-button>
         </div>
       </div>
+
+      <span slot="footer" class="dialog-footer">
+        <el-button size="small" @click="detailVisible = false">关闭</el-button>
+      </span>
     </el-dialog>
   </div>
 </template>
@@ -355,6 +363,9 @@ export default {
     handlePageChange(page) {
       this.current = page
       this.fetchPage()
+    },
+    handleCloseDetail() {
+      this.detailVisible = false
     }
   }
 }

@@ -3,7 +3,7 @@
     <el-card>
       <div slot="header" class="returns-header">
         <span class="card-title">销售退货</span>
-        <el-button type="primary" size="small" icon="el-icon-plus" @click="openCreate">新增退货单</el-button>
+        <el-button v-if="!isWarehouseReadonly" type="primary" size="small" icon="el-icon-plus" @click="openCreate">新增退货单</el-button>
       </div>
 
       <div class="search-area">
@@ -67,11 +67,18 @@
         <el-table-column label="操作" width="242" align="center">
           <template slot-scope="scope">
             <div class="op-btns">
+              <el-button
+                v-if="canCreateInbound(scope.row)"
+                type="text"
+                size="mini"
+                style="color: #67c23a"
+                @click="createInboundFromReturn(scope.row)"
+              >转入库</el-button>
               <el-button type="text" size="mini" @click="viewDetail(scope.row)">详情</el-button>
-              <el-button type="text" size="mini" @click="openEdit(scope.row)">编辑</el-button>
+              <el-button v-if="!isWarehouseReadonly" type="text" size="mini" @click="openEdit(scope.row)">编辑</el-button>
               <el-button type="text" size="mini" @click="openAudit(scope.row)">审计</el-button>
               <el-button type="text" size="mini" class="op-print" @click="printReturn(scope.row)">打印</el-button>
-              <el-button type="text" size="mini" class="op-danger" @click="confirmDelete(scope.row)">删除</el-button>
+              <el-button v-if="!isWarehouseReadonly" type="text" size="mini" class="op-danger" @click="confirmDelete(scope.row)">删除</el-button>
             </div>
           </template>
         </el-table-column>
@@ -413,10 +420,11 @@
 </template>
 
 <script>
-import { getSalesReturns, createSalesReturn, updateSalesReturn, deleteSalesReturn, getSalesReturnDetail, generateSalesReturnNo, getReturnableOrderItems, getSalesReturnAuditLogs } from '@/api/salesReturn'
+import { getSalesReturns, createSalesReturn, updateSalesReturn, deleteSalesReturn, getSalesReturnDetail, generateSalesReturnNo, getReturnableOrderItems, getSalesReturnAuditLogs, createInboundRequestsFromReturn } from '@/api/salesReturn'
 import { getCustomerList } from '@/api/customer'
 import { searchSalesOrders } from '@/api/sales'
 import { getSpecByMaterialCode } from '@/api/tapeSpec'
+import { mapGetters } from 'vuex'
 import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
 export default {
@@ -451,6 +459,15 @@ export default {
       selectItemsVisible: false,
       selectableOrderItems: [],
       selectedOrderItems: []
+    }
+  },
+  computed: {
+    ...mapGetters(['roles']),
+    isWarehouseReadonly() {
+      const roles = Array.isArray(this.roles) ? this.roles : []
+      const canEdit = roles.some(r => ['admin', 'sales', 'finance'].includes(r))
+      const hasWarehouse = roles.includes('warehouse')
+      return hasWarehouse && !canEdit
     }
   },
   created() {
@@ -537,6 +554,10 @@ export default {
       }
       return map[status] || ''
     },
+    canCreateInbound(row) {
+      if (!row) return false
+      return String(row.status || '').toLowerCase() === 'confirmed'
+    },
     getCustomerDisplay(customerCode) {
       if (!customerCode) return '-'
       const customer = (this.customers || []).find(item => item.customerCode === customerCode)
@@ -597,6 +618,10 @@ export default {
       return this.formatNumber(total)
     },
     async openCreate() {
+      if (this.isWarehouseReadonly) {
+        this.$message.warning('仓库角色仅可查看退货信息，请由销售/财务创建退货单')
+        return
+      }
       this.isEditing = false
       this.form = this.emptyForm()
       const d = new Date()
@@ -605,6 +630,10 @@ export default {
       this.editVisible = true
     },
     async openEdit(row) {
+      if (this.isWarehouseReadonly) {
+        this.$message.warning('仓库角色仅可查看退货信息，不可编辑')
+        return
+      }
       try {
         const res = await getSalesReturnDetail(row.returnNo)
         if (!res || res.code !== 200) return this.$message.error('获取详情失败')
@@ -646,6 +675,28 @@ export default {
       } catch (e) {
         console.error('加载打印数据失败', e)
         this.$message.error('获取退货单详情失败，无法预览打印')
+      }
+    },
+    async createInboundFromReturn(row) {
+      if (!row || !row.returnNo) return
+      try {
+        await this.$confirm(`确认将退货单 ${row.returnNo} 生成入库申请并进入退货专仓吗？`, '提示', { type: 'warning' })
+      } catch (e) {
+        return
+      }
+      try {
+        const res = await createInboundRequestsFromReturn(row.returnNo)
+        if (res && (res.code === 200 || res.code === 20000)) {
+          const data = res.data || {}
+          const created = Number(data.createdCount || 0)
+          const skipped = Number(data.skippedCount || 0)
+          const location = data.location || '退货专仓'
+          this.$message.success(`已处理：新增入库申请${created}条，跳过${skipped}条，目标仓位：${location}`)
+        } else {
+          this.$message.error((res && (res.msg || res.message)) || '生成入库申请失败')
+        }
+      } catch (e) {
+        this.$message.error('生成入库申请失败')
       }
     },
     getAuditActionText(actionType) {
@@ -768,6 +819,10 @@ export default {
       }, 300)
     },
     confirmDelete(row) {
+      if (this.isWarehouseReadonly) {
+        this.$message.warning('仓库角色仅可查看退货信息，不可删除')
+        return
+      }
       this.$confirm(`确认删除退货单 ${row.returnNo} 吗？`, '提示', { type: 'warning' }).then(async() => {
         const res = await deleteSalesReturn(row.returnNo)
         if (res && res.code === 200) {
@@ -1087,6 +1142,10 @@ export default {
       return (sqm * unit).toFixed(2)
     },
     async save() {
+      if (this.isWarehouseReadonly) {
+        this.$message.warning('仓库角色仅可查看退货信息，不可保存')
+        return
+      }
       if (!this.form.returnNo) return this.$message.error('请填写退货单号')
       if (!this.form.customer) return this.$message.error('请选择客户')
       const payload = JSON.parse(JSON.stringify(this.form))

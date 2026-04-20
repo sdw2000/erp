@@ -6,6 +6,7 @@
           <i class="el-icon-box" /> 原材料总仓
         </span>
         <div style="float: right">
+          <el-button size="small" type="primary" @click="goTapeStock">胶带仓导入</el-button>
           <el-button size="small" @click="goLegacy('film')">薄膜旧页面</el-button>
           <el-button size="small" @click="goLegacy('chemical')">化工旧页面</el-button>
           <el-button size="small" @click="goLegacy('chemical-requisition')">化工请购</el-button>
@@ -221,6 +222,9 @@ export default {
         return
       }
       this.$message.info('该分类暂无独立旧页面')
+    },
+    goTapeStock() {
+      this.$router.push({ path: '/stock/index' })
     },
     formatNumber(value) {
       const num = Number(value || 0)

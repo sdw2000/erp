@@ -70,3 +70,10 @@ export function getSalesReturnAuditLogs(params) {
     params
   })
 }
+
+export function createInboundRequestsFromReturn(returnNo) {
+  return request({
+    url: `/sales/returns/${encodeURIComponent(returnNo)}/create-inbound-requests`,
+    method: 'post'
+  })
+}

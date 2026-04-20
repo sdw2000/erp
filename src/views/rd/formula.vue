@@ -222,6 +222,21 @@
           </el-table-column>
         </el-table>
         <el-button type="primary" size="small" icon="el-icon-plus" @click="addItem">添加原料</el-button>
+        <el-button
+          type="success"
+          size="small"
+          icon="el-icon-camera"
+          style="margin-left: 8px"
+          :loading="ocrLoading"
+          @click="handleOcrPageClick"
+        >单页识别录入BOM</el-button>
+        <input
+          ref="ocrPageFile"
+          type="file"
+          accept="image/*,.xlsx,.xls"
+          style="display:none"
+          @change="handleOcrPageChange"
+        >
         <span style="margin-left: 20px; font-weight: bold;">
           总重量: {{ calculateTotalWeight() }} kg
         </span>
@@ -353,6 +368,7 @@ import {
   downloadTemplate, importFormula, exportAllFormula
 } from '@/api/tapeFormula'
 import { getRawMaterialList } from '@/api/tapeRawMaterial'
+import * as XLSX from 'xlsx'
 
 export default {
   name: 'TapeFormulaManagement',
@@ -373,6 +389,8 @@ export default {
       dialogVisible: false,
       dialogTitle: '新增配方',
       submitting: false,
+      ocrLoading: false,
+      tesseractReady: false,
       form: this.getEmptyForm(),
       rules: {
         materialCode: [{ required: true, message: '请输入产品料号', trigger: 'blur' }],
@@ -602,7 +620,284 @@ export default {
         if (item.weight) total += parseFloat(item.weight) || 0
       })
       return total.toFixed(4)
-    }, formatDate(date) {
+    },
+    async ensureTesseractLoaded() {
+      if (window.Tesseract) {
+        this.tesseractReady = true
+        return
+      }
+      await new Promise((resolve, reject) => {
+        const existing = document.getElementById('tesseract-cdn-script')
+        if (existing) {
+          existing.addEventListener('load', () => resolve())
+          existing.addEventListener('error', () => reject(new Error('加载OCR脚本失败')))
+          return
+        }
+        const script = document.createElement('script')
+        script.id = 'tesseract-cdn-script'
+        script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'
+        script.async = true
+        script.onload = () => resolve()
+        script.onerror = () => reject(new Error('加载OCR脚本失败'))
+        document.body.appendChild(script)
+      })
+      if (!window.Tesseract) {
+        throw new Error('OCR引擎不可用')
+      }
+      this.tesseractReady = true
+    },
+    handleOcrPageClick() {
+      this.$refs.ocrPageFile && this.$refs.ocrPageFile.click()
+    },
+    extractField(text, labels = []) {
+      const escaped = labels.map(v => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      if (!escaped.length) return ''
+      const reg = new RegExp(`(?:${escaped.join('|')})[：:\\s]*([^\\n\\r]{1,120})`, 'i')
+      const m = text.match(reg)
+      return m && m[1] ? m[1].trim() : ''
+    },
+    parseOcrItems(text) {
+      const lines = String(text || '')
+        .split(/\r?\n/)
+        .map(v => String(v || '').trim())
+        .filter(Boolean)
+      const result = []
+      for (const line of lines) {
+        if (/总重量|编制|审核|批准|备注|物料代码|kg\/桶|比例/i.test(line)) continue
+        const codeMatch = line.match(/^([A-Za-z0-9\-]{4,}(?:\s*\([^\)]*\))?)/)
+        if (!codeMatch || !codeMatch[1]) continue
+        const materialCode = codeMatch[1].replace(/\s+/g, ' ').trim()
+        const raw = (this.rawMaterials || []).find(r => String(r.materialCode || '').trim().toUpperCase() === materialCode.toUpperCase())
+
+        const ratioMatch = line.match(/([0-9]+(?:\.[0-9]+)?)\s*%/)
+        const nums = line.match(/\d+(?:\.\d+)?/g) || []
+        const weight = nums.length ? Number(nums[0]) : null
+        const ratio = ratioMatch && ratioMatch[1] ? Number(ratioMatch[1]) : (nums.length > 1 ? Number(nums[1]) : null)
+
+        if (!Number.isFinite(weight)) continue
+        result.push({
+          materialCode,
+          materialName: raw ? raw.materialName : '',
+          weight,
+          ratio: Number.isFinite(ratio) ? ratio : null,
+          remark: ''
+        })
+      }
+      return result
+    },
+    parseOcrToForm(text) {
+      const all = String(text || '')
+      const main = {
+        productName: this.extractField(all, ['产品名称']),
+        materialCode: this.extractField(all, ['产品型号', '产品料号']),
+        glueModel: this.extractField(all, ['胶水型号']),
+        colorCode: this.extractField(all, ['颜色', '色']),
+        solidContent: this.extractField(all, ['固含量']),
+        processRemark: this.extractField(all, ['备注'])
+      }
+      const coatingThickness = this.extractField(all, ['涂胶厚度', '涂布厚度'])
+      const glueDensity = this.extractField(all, ['胶水密度'])
+      const coatingArea = this.extractField(all, ['涂布数量'])
+      const toNum = (v) => {
+        const m = String(v || '').match(/\d+(?:\.\d+)?/)
+        return m ? Number(m[0]) : null
+      }
+      main.coatingThickness = toNum(coatingThickness)
+      main.glueDensity = toNum(glueDensity)
+      main.coatingArea = toNum(coatingArea)
+
+      const items = this.parseOcrItems(all)
+      return { main, items }
+    },
+    async parseExcelPage(file) {
+      const buf = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = () => reject(new Error('读取Excel失败'))
+        reader.readAsArrayBuffer(file)
+      })
+      const workbook = XLSX.read(buf, { type: 'array' })
+      const sheetName = workbook.SheetNames && workbook.SheetNames.length ? workbook.SheetNames[0] : null
+      if (!sheetName) return { main: {}, items: [] }
+      const sheet = workbook.Sheets[sheetName]
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+
+      const findRightValue = (labels = []) => {
+        for (const r of rows) {
+          for (let i = 0; i < r.length; i++) {
+            const cell = String(r[i] || '').trim()
+            if (!cell) continue
+            if (labels.some(l => cell.includes(l))) {
+              for (let j = i + 1; j < r.length; j++) {
+                const v = String(r[j] || '').trim()
+                if (v) return v
+              }
+            }
+          }
+        }
+        return ''
+      }
+      const toNum = (v) => {
+        const m = String(v || '').match(/\d+(?:\.\d+)?/)
+        return m ? Number(m[0]) : null
+      }
+
+      const main = {
+        productName: findRightValue(['产品名称']),
+        materialCode: findRightValue(['产品型号', '产品料号']),
+        glueModel: findRightValue(['胶水型号']),
+        colorCode: findRightValue(['颜色', '色']),
+        solidContent: findRightValue(['固含量']),
+        processRemark: findRightValue(['备注']),
+        coatingThickness: toNum(findRightValue(['涂胶厚度', '涂布厚度'])),
+        glueDensity: toNum(findRightValue(['胶水密度'])),
+        coatingArea: toNum(findRightValue(['涂布数量']))
+      }
+
+      const items = []
+      const norm = (v) => String(v || '').replace(/\s+/g, '').replace(/[（(]/g, '(').replace(/[）)]/g, ')').toUpperCase()
+      const toPercent = (v) => {
+        if (v === null || v === undefined || v === '') return null
+        const s = String(v).trim()
+        if (!s) return null
+        if (s.includes('%')) {
+          const m = s.match(/\d+(?:\.\d+)?/)
+          return m ? Number(m[0]) : null
+        }
+        const n = Number(s)
+        if (!Number.isFinite(n)) {
+          const m = s.match(/\d+(?:\.\d+)?/)
+          if (!m) return null
+          const x = Number(m[0])
+          return Number.isFinite(x) ? (x <= 1 ? x * 100 : x) : null
+        }
+        return n <= 1 ? n * 100 : n
+      }
+
+      let headerRow = -1
+      for (let i = 0; i < rows.length; i++) {
+        const rowText = norm((rows[i] || []).join(' '))
+        const hasCode = rowText.includes('物料代码') || rowText.includes('物料编码')
+        const hasWeight = rowText.includes('KG/桶') || rowText.includes('KG桶') || rowText.includes('重量')
+        if (hasCode && hasWeight) {
+          headerRow = i
+          break
+        }
+      }
+
+      if (headerRow >= 0) {
+        const header = rows[headerRow] || []
+        const findCol = (keys = []) => {
+          for (let i = 0; i < header.length; i++) {
+            const t = norm(header[i])
+            if (!t) continue
+            if (keys.some(k => t.includes(norm(k)))) return i
+          }
+          return -1
+        }
+
+        let codeCol = findCol(['物料代码', '物料编码', '原料代码'])
+        let weightCol = findCol(['KG/桶', '重量', 'KG'])
+        let ratioCol = findCol(['比例'])
+        let remarkCol = findCol(['备注'])
+
+        if (codeCol < 0) codeCol = 0
+        if (weightCol < 0) weightCol = codeCol + 1
+        if (ratioCol < 0) ratioCol = weightCol + 1
+        if (remarkCol < 0) remarkCol = ratioCol + 1
+
+        for (let i = headerRow + 1; i < rows.length; i++) {
+          const r = rows[i] || []
+          const rowTextRaw = (r || []).map(v => String(v || '')).join(' ').trim()
+          const rowText = norm(rowTextRaw)
+          if (!rowText) continue
+          if (rowText.includes('总重量') || rowText.includes('编制') || rowText.includes('审核') || rowText.includes('批准')) break
+
+          let code = String(r[codeCol] || '').trim()
+          if (!code) {
+            for (const cell of r) {
+              const t = String(cell || '').trim()
+              if (!t) continue
+              if (/^\d+(?:\.\d+)?%?$/.test(t)) continue
+              if (/^(\/|-|—)$/.test(t)) continue
+              if (/物料|重量|比例|备注/.test(t)) continue
+              if (/^[A-Za-z0-9\-\/]+(?:\s*\([^\)]*\))?$/.test(t)) {
+                code = t
+                break
+              }
+            }
+          }
+          if (!code) continue
+
+          let weight = toNum(r[weightCol])
+          if (!Number.isFinite(weight)) {
+            const nums = r
+              .map(v => toNum(v))
+              .filter(v => Number.isFinite(v) && v > 0)
+            weight = nums.length ? nums[0] : null
+          }
+          if (!Number.isFinite(weight)) continue
+
+          let ratio = toPercent(r[ratioCol])
+          if (!Number.isFinite(ratio)) {
+            const ratioCell = r.find(v => /%/.test(String(v || '')))
+            ratio = toPercent(ratioCell)
+          }
+
+          const remark = String(r[remarkCol] || '').trim()
+          const raw = (this.rawMaterials || []).find(x => String(x.materialCode || '').trim().toUpperCase() === code.toUpperCase())
+          items.push({
+            materialCode: code,
+            materialName: raw ? raw.materialName : '',
+            weight,
+            ratio: Number.isFinite(ratio) ? ratio : null,
+            remark
+          })
+        }
+      }
+      return { main, items }
+    },
+    async handleOcrPageChange(e) {
+      const file = e.target.files[0]
+      if (!file) return
+      this.ocrLoading = true
+      try {
+        const isExcel = /\.(xlsx|xls)$/i.test(String(file.name || ''))
+        let parsed
+        if (isExcel) {
+          parsed = await this.parseExcelPage(file)
+        } else {
+          await this.ensureTesseractLoaded()
+          const result = await window.Tesseract.recognize(file, 'chi_sim+eng')
+          const text = result && result.data ? result.data.text : ''
+          if (!text || !text.trim()) {
+            this.$message.warning('未识别到有效内容，请上传更清晰的单页图片')
+            return
+          }
+          parsed = this.parseOcrToForm(text)
+        }
+        Object.keys(parsed.main).forEach(k => {
+          const val = parsed.main[k]
+          if (val !== null && val !== undefined && String(val).trim() !== '') {
+            this.$set(this.form, k, val)
+          }
+        })
+        if (parsed.items && parsed.items.length) {
+          this.form.items = parsed.items
+          this.form.totalWeight = this.calculateTotalWeight()
+          this.$message.success(`识别完成，已填充 ${parsed.items.length} 条BOM，请核对后保存`) 
+        } else {
+          this.$message.warning('主信息已尝试填充，但未识别到BOM明细，请手工补充')
+        }
+      } catch (err) {
+        console.error('OCR识别失败', err)
+        this.$message.error('OCR识别失败，请检查网络或图片清晰度')
+      } finally {
+        this.ocrLoading = false
+        if (this.$refs.ocrPageFile) this.$refs.ocrPageFile.value = ''
+      }
+    },
+    formatDate(date) {
       if (!date) return ''
       const d = new Date(date)
       return d.toLocaleDateString()

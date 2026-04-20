@@ -226,7 +226,31 @@
         </el-row>
 
         <el-divider content-position="left">发货明细</el-divider>
-        <el-table :data="currentNotice.items" border style="width: 100%">
+        <div style="margin-bottom: 10px; display: flex; gap: 8px;">
+          <el-button v-if="$canImportExport()" size="mini" type="warning" icon="el-icon-upload2" @click="triggerDetailItemsImport">导入明细</el-button>
+          <el-button v-if="$canImportExport()" size="mini" type="info" icon="el-icon-download" @click="exportDetailItems">导出明细</el-button>
+          <el-button v-if="$canImportExport()" size="mini" @click="downloadDetailItemsTemplate">下载模板</el-button>
+          <input ref="detailItemsImportInput" type="file" accept=".xlsx,.xls" style="display:none" @change="handleDetailItemsImportChange">
+        </div>
+        <div style="margin-bottom: 10px; display: flex; gap: 8px; align-items: center;">
+          <el-input
+            v-model="detailFilter.materialCode"
+            size="small"
+            clearable
+            placeholder="表头搜索：按料号筛选"
+            style="width: 260px"
+          />
+          <el-input
+            v-model="detailFilter.spec"
+            size="small"
+            clearable
+            placeholder="表头搜索：按规格筛选"
+            style="width: 260px"
+          />
+          <el-button size="small" @click="resetDetailFilter">清空筛选</el-button>
+          <span style="color: #909399; font-size: 12px;">显示 {{ filteredCurrentNoticeItems.length }} / {{ (currentNotice.items || []).length }} 条</span>
+        </div>
+        <el-table :data="filteredCurrentNoticeItems" border style="width: 100%">
           <el-table-column prop="materialCode" label="物料代码" width="180">
             <template slot-scope="scope">
               <el-input v-if="!scope.row.orderItemId" v-model="scope.row.materialCode" size="small" placeholder="输入物料代码" />
@@ -243,6 +267,11 @@
             <template slot-scope="scope">
               <el-input v-if="!scope.row.orderItemId" v-model="scope.row.spec" size="small" placeholder="输入规格" />
               <span v-else>{{ formatSpecDisplay(scope.row) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="批次号" width="180">
+            <template slot-scope="scope">
+              <el-input v-model="scope.row.batchNo" size="small" placeholder="输入批次号" />
             </template>
           </el-table-column>
           <el-table-column label="发货数量(卷)" width="140">
@@ -277,7 +306,7 @@
           </el-table-column>
           <el-table-column label="操作" width="80" align="center">
             <template slot-scope="scope">
-              <el-button type="text" style="color: #F56C6C;" @click="handleRemoveItem(scope.$index)">移除</el-button>
+              <el-button type="text" style="color: #F56C6C;" @click="handleRemoveItem(scope.$index, scope.row)">移除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -453,12 +482,12 @@
 
         <div class="print-main-up-30">
           <!-- 头部信息表格 -->
-          <table class="header-table">
+          <table :class="['header-table', { 'header-table-dongchi': isDongchiTemplate(selectedPrintTemplateKey) }]">
             <tr>
               <td class="label">收货单位：</td>
               <td class="value">{{ getPrintCustomerFullName() }}</td>
-              <td class="label">送货单号：</td>
-              <td class="value">{{ currentPrint.noticeNo }}</td>
+              <td class="label delivery-no-label">送货单号：</td>
+              <td class="value delivery-no-value">{{ currentPrint.noticeNo }}</td>
             </tr>
             <tr>
               <td class="label">收货地址：</td>
@@ -468,9 +497,9 @@
             </tr>
             <tr>
               <td class="label">收货人/电话：</td>
-              <td class="value">{{ getPrintReceiverText() }}</td>
-              <td class="label">送货日期：</td>
-              <td class="value">{{ getPrintDeliveryDate() }}</td>
+              <td class="value receiver-phone-value">{{ getPrintReceiverText() }}</td>
+              <td class="label delivery-date-label">送货日期：</td>
+              <td class="value delivery-date-value">{{ getPrintDeliveryDate() }}</td>
             </tr>
             <tr>
               <td class="label">承运公司：</td>
@@ -481,12 +510,12 @@
           </table>
 
           <!-- 明细表格 -->
-          <table :class="['items-table', { 'items-table-mapped': shouldUseMappedPrintData(selectedPrintTemplateKey), 'items-table-no-material-code': !shouldShowMaterialCode(selectedPrintTemplateKey) }]">
+          <table :class="['items-table', { 'items-table-mapped': shouldUseMappedPrintData(selectedPrintTemplateKey), 'items-table-no-material-code': !shouldShowMaterialCode(selectedPrintTemplateKey), 'items-table-dongchi': isDongchiTemplate(selectedPrintTemplateKey), 'items-table-wanbao': isWanbaoTemplate(selectedPrintTemplateKey) }]">
             <thead>
               <tr>
                 <th v-if="shouldShowMaterialCode(selectedPrintTemplateKey)">产品代码</th>
                 <th>产品名称</th>
-                <th>产品规格<br>(厚度*宽度*长度)</th>
+                <th>产品规格<br>{{ isDongchiTemplate(selectedPrintTemplateKey) ? '(宽度*厚度)' : '(厚度*宽度*长度)' }}</th>
                 <th>数量<br>(卷)</th>
                 <th v-if="shouldShowMappedMaterialNo(selectedPrintTemplateKey)" class="col-material-no">物料编号</th>
                 <th v-if="currentPrintTemplateConfig.showItemArea">平方<br>(m²)</th>
@@ -496,14 +525,14 @@
             </thead>
             <tbody>
               <tr v-for="(item, index) in currentPrint.items" :key="index">
-                <td v-if="shouldShowMaterialCode(selectedPrintTemplateKey)">{{ item.materialCode }}</td>
+                <td v-if="shouldShowMaterialCode(selectedPrintTemplateKey)">{{ getPrintItemMaterialCode(item) }}</td>
                 <td>{{ item.materialName }}</td>
                 <td>{{ formatSpecDisplay(item) }}</td>
                 <td>{{ item.quantity }}</td>
                 <td v-if="shouldShowMappedMaterialNo(selectedPrintTemplateKey)" class="col-material-no">{{ item.customerMaterialNo || item._mappedMaterialNo || '-' }}</td>
                 <td v-if="currentPrintTemplateConfig.showItemArea">{{ item.areaSize }}</td>
                 <td v-if="currentPrintTemplateConfig.showItemBox">{{ item.boxCount }}</td>
-                <td v-if="currentPrintTemplateConfig.showItemRemark" class="col-remark">{{ shouldUseOrderNoRemark(selectedPrintTemplateKey) ? (currentPrint.customerOrderNo || currentPrint.orderNo || '-') : (item.remark || '-') }}</td>
+                <td v-if="currentPrintTemplateConfig.showItemRemark" class="col-remark">{{ getPrintItemRemark(item) }}</td>
               </tr>
               <tr class="total-row">
                 <td :colspan="shouldShowMaterialCode(selectedPrintTemplateKey) ? 3 : 2" style="text-align: right; padding-right: 10px;">合计：</td>
@@ -652,6 +681,7 @@ import {
   getDeliveryPrintTemplateData
 } from '@/api/labelPrintConfig'
 import elTableAutoLayout from '@/mixins/elTableAutoLayout'
+import * as XLSX from 'xlsx'
 
 export default {
   name: 'DeliveryNotice',
@@ -675,6 +705,8 @@ export default {
       },
       tableData: [],
       loading: false,
+      fromOrdersEntry: false,
+      fromOrdersOrderNo: '',
 
       // 订单搜索
       orderOptions: [],
@@ -733,6 +765,10 @@ export default {
         carrierPhone: '',
         remark: '',
         items: []
+      },
+      detailFilter: {
+        materialCode: '',
+        spec: ''
       },
 
       rules: {
@@ -822,6 +858,20 @@ export default {
     },
     currentPrintTemplateConfig() {
       return this.getPrintTemplateConfig()
+    },
+    filteredCurrentNoticeItems() {
+      const items = Array.isArray(this.currentNotice && this.currentNotice.items) ? this.currentNotice.items : []
+      const materialKw = this.normalizeSearchKeyword(this.detailFilter && this.detailFilter.materialCode).toUpperCase()
+      const specKw = this.normalizeSearchKeyword(this.detailFilter && this.detailFilter.spec).toUpperCase()
+      if (!materialKw && !specKw) return items
+
+      return items.filter(item => {
+        const materialCode = this.normalizeSearchKeyword(item && item.materialCode).toUpperCase()
+        const specText = this.normalizeSearchKeyword(this.formatSpecDisplay(item)).toUpperCase()
+        const materialMatched = !materialKw || materialCode.includes(materialKw)
+        const specMatched = !specKw || specText.includes(specKw)
+        return materialMatched && specMatched
+      })
     }
   },
   created() {
@@ -830,8 +880,45 @@ export default {
     this.fetchCompanyInfo()
     this.fetchCarriers()
     this.fetchCustomers()
+    this.handleRouteOrderEntry(this.$route, true)
+  },
+  beforeRouteUpdate(to, from, next) {
+    this.handleRouteOrderEntry(to, true)
+    next()
   },
   methods: {
+    handleRouteOrderEntry(route, autoOpen = false) {
+      const query = (route && route.query) || {}
+      const fromOrders = String(query.fromOrders || '').trim() === '1'
+      const orderNo = this.normalizeSearchKeyword(query.orderNo)
+      this.fromOrdersEntry = !!(fromOrders && orderNo)
+      this.fromOrdersOrderNo = this.fromOrdersEntry ? orderNo : ''
+      if (!this.fromOrdersEntry) return
+
+      this.searchQuery.orderNo = orderNo
+      this.page.current = 1
+      this.fetchNotices()
+
+      if (autoOpen) {
+        const shouldOpen = String(query.autoOpen || '').trim() === '1'
+        if (shouldOpen) {
+          this.openNoticeFromOrder(orderNo)
+        }
+      }
+    },
+    async openNoticeFromOrder(orderNo) {
+      this.handleCreateNotice()
+      this.currentNotice.orderNo = orderNo
+      await this.searchOrders(orderNo)
+      await this.fetchOrderDetails()
+    },
+    navigateBackToOrdersFromDelivery() {
+      const orderNo = this.normalizeSearchKeyword(this.fromOrdersOrderNo)
+      this.$router.push({
+        path: '/sales/orders',
+        query: orderNo ? { orderNo } : {}
+      })
+    },
     getPrintTemplateConfig() {
       const current = (this.printTemplateOptions || []).find(t => t.value === this.selectedPrintTemplateKey)
       return this.normalizeTemplateConfig((current && current.config) || { compact: false })
@@ -1361,6 +1448,7 @@ export default {
     handleCreateNotice() {
       this.isEdit = false
       this.dialogTitle = '新增发货通知'
+      this.resetDetailFilter()
       this.currentNotice = {
         orderId: null,
         orderNo: '',
@@ -1384,7 +1472,17 @@ export default {
     async searchOrders(query) {
       this.orderSearchLoading = true
       try {
-        const keyword = this.normalizeSearchKeyword(query)
+        let keyword = this.normalizeSearchKeyword(query)
+        if (!keyword) {
+          const selectedOrderNo = this.normalizeSearchKeyword(this.currentNotice && this.currentNotice.orderNo)
+          if (selectedOrderNo) {
+            keyword = selectedOrderNo
+          }
+        }
+        if (!keyword) {
+          this.orderOptions = []
+          return
+        }
         const res = await request({
           url: '/sales/orders/search',
           method: 'get',
@@ -1393,7 +1491,21 @@ export default {
           }
         })
         if (res.code === 200 || res.code === 20000) {
-          this.orderOptions = res.data || []
+          const list = res.data || []
+          const dedupMap = new Map()
+          list.forEach(item => {
+            const key = String((item && item.orderNo) || '').trim()
+            if (!key) return
+            if (!dedupMap.has(key)) dedupMap.set(key, item)
+          })
+          const normalizedList = Array.from(dedupMap.values())
+          if (keyword) {
+            const upperKeyword = String(keyword).toUpperCase()
+            const exact = normalizedList.filter(o => String(o.orderNo || '').toUpperCase() === upperKeyword)
+            this.orderOptions = exact.length ? exact : normalizedList
+          } else {
+            this.orderOptions = normalizedList
+          }
         }
       } catch (e) {
         console.error('搜索订单失败', e)
@@ -1516,6 +1628,7 @@ export default {
     async handleEdit(row) {
       this.isEdit = true
       this.dialogTitle = '编辑发货通知'
+      this.resetDetailFilter()
       if (!this.carrierOptions || this.carrierOptions.length === 0) {
         await this.fetchCarriers()
       }
@@ -1720,15 +1833,183 @@ export default {
     },
 
     handleOrderFocus() {
-      if (!this.orderOptions || this.orderOptions.length === 0) {
-        this.searchOrders('')
+      const selectedOrderNo = this.normalizeSearchKeyword(this.currentNotice && this.currentNotice.orderNo)
+      if (selectedOrderNo) {
+        this.searchOrders(selectedOrderNo)
       }
     },
 
     handleOrderDropdown(visible) {
-      if (visible && (!this.orderOptions || this.orderOptions.length === 0)) {
-        this.searchOrders('')
+      if (!visible) return
+      const selectedOrderNo = this.normalizeSearchKeyword(this.currentNotice && this.currentNotice.orderNo)
+      if (selectedOrderNo) {
+        this.searchOrders(selectedOrderNo)
       }
+    },
+
+    triggerDetailItemsImport() {
+      if (this.$refs.detailItemsImportInput) {
+        this.$refs.detailItemsImportInput.value = ''
+        this.$refs.detailItemsImportInput.click()
+      }
+    },
+
+    normalizeImportHeaderText(value) {
+      return String(value == null ? '' : value)
+        .trim()
+        .replace(/[：:（）()\s]/g, '')
+        .toLowerCase()
+    },
+
+    pickImportCellValue(row, keys = []) {
+      if (!row || !keys || !keys.length) return ''
+      const normalizedKeys = keys.map(k => this.normalizeImportHeaderText(k))
+      const rowKeys = Object.keys(row)
+      for (const rawKey of rowKeys) {
+        const nk = this.normalizeImportHeaderText(rawKey)
+        if (normalizedKeys.includes(nk)) {
+          return row[rawKey]
+        }
+      }
+      return ''
+    },
+
+    toSafeNumber(value, defaultValue = 0) {
+      if (value === null || value === undefined || value === '') return defaultValue
+      const n = Number(value)
+      return Number.isFinite(n) ? n : defaultValue
+    },
+
+    toSafeInteger(value, defaultValue = 0) {
+      const n = this.toSafeNumber(value, defaultValue)
+      return Math.trunc(n)
+    },
+
+    async handleDetailItemsImportChange(e) {
+      const file = e && e.target && e.target.files ? e.target.files[0] : null
+      if (!file) return
+      try {
+        const rows = await this.readExcelRows(file)
+        if (!rows.length) {
+          this.$message.warning('导入文件无数据')
+          return
+        }
+
+        const imported = rows.map((row) => {
+          const quantity = this.toSafeInteger(this.pickImportCellValue(row, ['发货数量', '发货数量卷', '数量', 'quantity']), 0)
+          const areaSize = this.toSafeNumber(this.pickImportCellValue(row, ['平方米', '面积', 'areaSize']), 0)
+          const boxCount = this.toSafeInteger(this.pickImportCellValue(row, ['箱数', 'boxCount']), 0)
+          const grossWeight = this.toSafeNumber(this.pickImportCellValue(row, ['每箱毛重', '毛重', 'grossWeight']), 0)
+          const totalWeight = this.toSafeNumber(this.pickImportCellValue(row, ['总毛重', 'totalWeight']), 0)
+          return {
+            materialCode: String(this.pickImportCellValue(row, ['物料代码', '料号', 'materialCode']) || '').trim(),
+            materialName: String(this.pickImportCellValue(row, ['物料名称', '产品名称', 'materialName']) || '').trim(),
+            spec: String(this.pickImportCellValue(row, ['规格', 'spec']) || '').trim(),
+            batchNo: String(this.pickImportCellValue(row, ['批次号', '批号', 'batchNo']) || '').trim(),
+            quantity,
+            areaSize,
+            boxCount,
+            grossWeight,
+            totalWeight,
+            remark: String(this.pickImportCellValue(row, ['备注', 'remark']) || '').trim()
+          }
+        }).filter(item => item.materialCode || item.materialName || item.spec || item.batchNo || Number(item.quantity || 0) > 0)
+
+        if (!imported.length) {
+          this.$message.warning('未识别到有效明细行，请检查模板列名')
+          return
+        }
+
+        if (Array.isArray(this.currentNotice.items) && this.currentNotice.items.length > 0) {
+          await this.$confirm('导入会覆盖当前发货明细，是否继续？', '提示', {
+            type: 'warning',
+            confirmButtonText: '继续导入',
+            cancelButtonText: '取消'
+          })
+        }
+
+        this.currentNotice.items = imported
+        this.$message.success(`导入完成，共 ${imported.length} 条明细`)
+      } catch (error) {
+        if (error !== 'cancel') {
+          this.$message.error('导入失败，请检查Excel格式')
+        }
+      } finally {
+        if (this.$refs.detailItemsImportInput) {
+          this.$refs.detailItemsImportInput.value = ''
+        }
+      }
+    },
+
+    readExcelRows(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (evt) => {
+          try {
+            const data = evt && evt.target ? evt.target.result : null
+            const workbook = XLSX.read(data, { type: 'array' })
+            const firstSheetName = (workbook.SheetNames || [])[0]
+            if (!firstSheetName) {
+              resolve([])
+              return
+            }
+            const sheet = workbook.Sheets[firstSheetName]
+            const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+            resolve(Array.isArray(rows) ? rows : [])
+          } catch (err) {
+            reject(err)
+          }
+        }
+        reader.onerror = reject
+        reader.readAsArrayBuffer(file)
+      })
+    },
+
+    exportDetailItems() {
+      const items = Array.isArray(this.currentNotice.items) ? this.currentNotice.items : []
+      if (!items.length) {
+        this.$message.warning('当前没有可导出的发货明细')
+        return
+      }
+      const rows = items.map((item, idx) => ({
+        序号: idx + 1,
+        物料代码: item.materialCode || '',
+        物料名称: item.materialName || '',
+        规格: item.spec || '',
+        批次号: item.batchNo || '',
+        发货数量卷: this.toSafeInteger(item.quantity, 0),
+        平方米: this.toSafeNumber(item.areaSize, 0),
+        箱数: this.toSafeInteger(item.boxCount, 0),
+        每箱毛重: this.toSafeNumber(item.grossWeight, 0),
+        总毛重: this.toSafeNumber(item.totalWeight, 0),
+        备注: item.remark || ''
+      }))
+      this.downloadDetailItemsWorkbook(rows, `发货通知明细_${new Date().getTime()}.xlsx`)
+      this.$message.success('导出成功')
+    },
+
+    downloadDetailItemsTemplate() {
+      const rows = [{
+        物料代码: '',
+        物料名称: '',
+        规格: '',
+        批次号: '',
+        发货数量卷: '',
+        平方米: '',
+        箱数: '',
+        每箱毛重: '',
+        总毛重: '',
+        备注: ''
+      }]
+      this.downloadDetailItemsWorkbook(rows, '发货通知明细导入模板.xlsx')
+      this.$message.success('模板下载成功')
+    },
+
+    downloadDetailItemsWorkbook(rows, fileName) {
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, '发货明细')
+      XLSX.writeFile(wb, fileName)
     },
 
     handleAddItem() {
@@ -1745,8 +2026,21 @@ export default {
       })
     },
 
-    handleRemoveItem(index) {
-      this.currentNotice.items.splice(index, 1)
+    handleRemoveItem(index, row) {
+      const items = Array.isArray(this.currentNotice.items) ? this.currentNotice.items : []
+      if (!items.length) return
+
+      let removeIndex = Number(index)
+      if (!Number.isInteger(removeIndex) || removeIndex < 0 || removeIndex >= items.length || (row && items[removeIndex] !== row)) {
+        removeIndex = items.findIndex(item => item === row)
+      }
+      if (removeIndex < 0) return
+      items.splice(removeIndex, 1)
+    },
+
+    resetDetailFilter() {
+      this.detailFilter.materialCode = ''
+      this.detailFilter.spec = ''
     },
 
     onQuantityChange(rowIdx, itemIdx, val) {
@@ -1953,13 +2247,15 @@ export default {
           // 物料编号：客户物料编号
           customerMaterialNo: m.customerMaterialCode || item.customerMaterialNo || '',
           _mappedMaterialNo: m.customerMaterialCode || item._mappedMaterialNo || '',
+          // 客户规格文本（用于标签模板直接取值）
+          customerSpec: m.customerSpec || item.customerSpec || '',
           // 需求：规格栏显示客户规格
-          spec: this.buildSpecText(mappedThickness, mappedWidth, mappedLength, item.spec),
+          spec: (m.customerSpec && String(m.customerSpec).trim()) || this.buildSpecText(mappedThickness, mappedWidth, mappedLength, item.spec),
           _orderThickness: mappedThickness,
           _orderWidth: mappedWidth,
           _orderLength: mappedLength,
-          // 备注优先订单明细备注；为空时回退客户产品代码
-          remark: (item.remark && String(item.remark).trim()) || m.customerMaterialCode || ''
+          // 备注优先客户映射备注；为空回退订单明细备注，再回退客户料号
+          remark: (m.remark && String(m.remark).trim()) || (item.remark && String(item.remark).trim()) || m.customerMaterialCode || ''
         }
       })
 
@@ -1974,6 +2270,7 @@ export default {
     },
 
     handleDialogClose() {
+      this.resetDetailFilter()
       this.dialogVisible = false
     },
 
@@ -2079,6 +2376,10 @@ export default {
           if (res.code === 200 || res.code === 20000) {
             this.$message.success('发货确认成功')
             this.fetchNotices()
+            const currentOrderNo = this.normalizeSearchKeyword(row && row.orderNo)
+            if (this.fromOrdersEntry && (!this.fromOrdersOrderNo || this.fromOrdersOrderNo === currentOrderNo)) {
+              this.navigateBackToOrdersFromDelivery()
+            }
           } else {
             this.$message.error(res.msg || '确认发货失败')
           }
@@ -2411,6 +2712,11 @@ export default {
     formatCustomerOrderNoWithOrderNo(row) {
       const customerOrderNo = row && row.customerOrderNo ? String(row.customerOrderNo).trim() : ''
       const orderNo = row && row.orderNo ? String(row.orderNo).trim() : ''
+      const normalizedCustomerOrderNo = customerOrderNo.replace(/\s+/g, '').toUpperCase()
+      const normalizedOrderNo = orderNo.replace(/\s+/g, '').toUpperCase()
+      if (normalizedCustomerOrderNo && normalizedOrderNo && normalizedCustomerOrderNo === normalizedOrderNo) {
+        return customerOrderNo || orderNo || '-'
+      }
       if (customerOrderNo && orderNo) return `${customerOrderNo}\n${orderNo}`
       return customerOrderNo || orderNo || '-'
     },
@@ -2626,6 +2932,14 @@ export default {
       return text.includes('力源') || text.includes('liyuan')
     },
 
+    isWanbaoTemplate(templateKey) {
+      const key = String(templateKey || '').trim().toLowerCase()
+      const current = (this.printTemplateOptions || []).find(t => t.value === templateKey)
+      const label = String((current && current.label) || '').trim().toLowerCase()
+      const text = `${key} ${label}`
+      return text.includes('万宝') || text.includes('wanbao') || text.includes('wangbao')
+    },
+
     isWanbaoCustomer() {
       const raw = this.currentPrint || {}
       const code = String(raw.customerCode || '').trim()
@@ -2641,12 +2955,102 @@ export default {
       return text.includes('力源') || text.includes('liyuan')
     },
 
+    isDongchiTemplate(templateKey) {
+      const key = String(templateKey || '').trim().toLowerCase()
+      const current = (this.printTemplateOptions || []).find(t => t.value === templateKey)
+      const label = String((current && current.label) || '').trim().toLowerCase()
+      const text = `${key} ${label}`
+      return text.includes('东驰') || text.includes('dongchi')
+    },
+
+    extractBatchNoDateValue(batchNo) {
+      const text = String(batchNo || '').trim()
+      if (!text) return 0
+
+      const y8 = text.match(/(20\d{2})([01]\d)([0-3]\d)/)
+      if (y8) {
+        const y = Number(y8[1])
+        const m = Number(y8[2])
+        const d = Number(y8[3])
+        const dt = new Date(y, m - 1, d)
+        return Number.isFinite(dt.getTime()) ? dt.getTime() : 0
+      }
+
+      const y6 = text.match(/(\d{2})([01]\d)([0-3]\d)/)
+      if (y6) {
+        const yy = Number(y6[1])
+        const y = yy >= 70 ? (1900 + yy) : (2000 + yy)
+        const m = Number(y6[2])
+        const d = Number(y6[3])
+        const dt = new Date(y, m - 1, d)
+        return Number.isFinite(dt.getTime()) ? dt.getTime() : 0
+      }
+
+      return 0
+    },
+
+    getLatestBatchNoFromNotice(batchNosText) {
+      const parts = String(batchNosText || '')
+        .split(/[，,]/)
+        .map(x => String(x || '').trim())
+        .filter(Boolean)
+      if (!parts.length) return ''
+
+      let best = parts[0]
+      let bestTs = this.extractBatchNoDateValue(best)
+      parts.slice(1).forEach((one) => {
+        const ts = this.extractBatchNoDateValue(one)
+        if (ts >= bestTs) {
+          best = one
+          bestTs = ts
+        }
+      })
+      return best
+    },
+
+    getPrintItemMaterialCode(item) {
+      if (this.isDongchiTemplate(this.selectedPrintTemplateKey)) {
+        return (item && (item.customerMaterialNo || item._mappedMaterialNo || item.remark || item.materialCode)) || '-'
+      }
+      return (item && item.materialCode) || '-'
+    },
+
+    getItemBatchNo(item) {
+      if (!item) return ''
+      const candidates = [
+        item.batchNo,
+        item.batch_no,
+        item.productionBatchNo,
+        item.production_batch_no,
+        item.parentBatchNo,
+        item.parent_batch_no
+      ]
+      for (let i = 0; i < candidates.length; i++) {
+        const text = String(candidates[i] == null ? '' : candidates[i]).trim()
+        if (text) return text
+      }
+      return ''
+    },
+
+    getPrintItemRemark(item) {
+      if (this.isDongchiTemplate(this.selectedPrintTemplateKey)) {
+        // 东驰模板：备注仅显示“当前明细行批次号”，该行无值则留空
+        const rowBatchNo = this.getItemBatchNo(item)
+        return rowBatchNo || ''
+      }
+      if (this.shouldUseOrderNoRemark(this.selectedPrintTemplateKey)) {
+        return (this.currentPrint && (this.currentPrint.customerOrderNo || this.currentPrint.orderNo)) || '-'
+      }
+      return (item && item.remark) || '-'
+    },
+
     shouldShowMappedMaterialNo(templateKey) {
       const key = String(templateKey || '').trim().toLowerCase()
       const current = (this.printTemplateOptions || []).find(t => t.value === templateKey)
       const label = String((current && current.label) || '').trim().toLowerCase()
       const text = `${key} ${label}`
       const hideForTemplate =
+        this.isDongchiTemplate(templateKey) ||
         this.isLiyuanTemplate(templateKey) ||
         text.includes('万宝') || text.includes('wanbao') || text.includes('wangbao')
       const hideForCustomer = this.isWanbaoCustomer() || this.isLiyuanCustomer()
@@ -2714,24 +3118,29 @@ export default {
       const showItemBox = templateConfig.showItemBox !== false
       const showItemRemark = templateConfig.showItemRemark !== false
       const showFooterNotes = templateConfig.showFooterNotes !== false
-      const orderNoRemark = this.currentPrint.customerOrderNo || this.currentPrint.orderNo || '-'
 
       const items = Array.isArray(this.currentPrint.items) ? this.currentPrint.items : []
-      const rowsHtml = items.map((item) => `
+      const rowsHtml = items.map((item) => {
+        const materialCodeText = this.getPrintItemMaterialCode(item)
+        const remarkText = this.getPrintItemRemark(item)
+        return `
         <tr>
-          ${showMaterialCode ? `<td>${item.materialCode || '-'}</td>` : ''}
+          ${showMaterialCode ? `<td>${materialCodeText || '-'}</td>` : ''}
           <td>${item.materialName || '-'}</td>
           <td>${this.formatSpecDisplay(item) || '-'}</td>
           <td>${item.quantity != null ? item.quantity : '-'}</td>
           ${showMappedMaterialNo ? `<td class="col-material-no">${item.customerMaterialNo || item._mappedMaterialNo || '-'}</td>` : ''}
           ${showItemArea ? `<td>${item.areaSize != null ? item.areaSize : '-'}</td>` : ''}
           ${showItemBox ? `<td>${item.boxCount != null ? item.boxCount : '-'}</td>` : ''}
-          ${showItemRemark ? `<td class="col-remark">${useOrderNoRemark ? orderNoRemark : (item.remark || '-')}</td>` : ''}
+          ${showItemRemark ? `<td class="col-remark">${remarkText || '-'}</td>` : ''}
         </tr>
-      `).join('')
+      `
+      }).join('')
       const itemsTableClass = [
         'items-table',
         useMappedPrintTemplate ? 'items-table-mapped' : '',
+        this.isWanbaoTemplate(this.selectedPrintTemplateKey) ? 'items-table-wanbao' : '',
+        this.isDongchiTemplate(this.selectedPrintTemplateKey) ? 'items-table-dongchi' : '',
         !showMaterialCode ? 'items-table-no-material-code' : ''
       ].filter(Boolean).join(' ')
 
@@ -2760,12 +3169,12 @@ export default {
           <div class="form-id">FE-FR-YW-07</div>
 
           <div class="print-main-up-30">
-            <table class="header-table">
+            <table class="${this.isDongchiTemplate(this.selectedPrintTemplateKey) ? 'header-table header-table-dongchi' : 'header-table'}">
               <tr>
                 <td class="label">收货单位：</td>
                 <td class="value">${this.getPrintCustomerFullName()}</td>
-                <td class="label">送货单号：</td>
-                <td class="value">${this.currentPrint.noticeNo || '-'}</td>
+                <td class="label delivery-no-label">送货单号：</td>
+                <td class="value delivery-no-value">${this.currentPrint.noticeNo || '-'}</td>
               </tr>
               <tr>
                 <td class="label">收货地址：</td>
@@ -2775,9 +3184,9 @@ export default {
               </tr>
               <tr>
                 <td class="label">收货人/电话：</td>
-                <td class="value">${this.getPrintReceiverText()}</td>
-                <td class="label">送货日期：</td>
-                <td class="value">${this.getPrintDeliveryDate()}</td>
+                <td class="value receiver-phone-value">${this.getPrintReceiverText()}</td>
+                <td class="label delivery-date-label">送货日期：</td>
+                <td class="value delivery-date-value">${this.getPrintDeliveryDate()}</td>
               </tr>
               <tr>
                 <td class="label">承运公司：</td>
@@ -2792,7 +3201,7 @@ export default {
                 <tr>
                   ${showMaterialCode ? '<th>产品代码</th>' : ''}
                   <th>产品名称</th>
-                  <th>产品规格<br>(厚度*宽度*长度)</th>
+                  <th>产品规格<br>${this.isDongchiTemplate(this.selectedPrintTemplateKey) ? '(宽度*厚度)' : '(厚度*宽度*长度)'}</th>
                   <th>数量<br>(卷)</th>
                   ${showMappedMaterialNo ? '<th class="col-material-no">物料编号</th>' : ''}
                   ${showItemArea ? '<th>平方<br>(m²)</th>' : ''}
@@ -2921,9 +3330,27 @@ export default {
               .header-table .value.address-value.addr-long { font-size: 13pt; line-height: 1.28; }
               .header-table .value.address-value.addr-very-long { font-size: 13pt; line-height: 1.22; }
               .header-table .value.address-value.addr-super-long { font-size: 13pt; line-height: 1.16; }
-              .header-table td:nth-child(4).value { width: 200px; max-width: 200px; padding-left: 6px; }
-              .header-table td.order-no-label { width: 40px; }
               .header-table td.order-no-value {
+                white-space: normal;
+                overflow: visible;
+                text-overflow: clip;
+                word-break: break-all;
+                overflow-wrap: anywhere;
+                line-height: 1.22;
+              }
+              .header-table td.receiver-phone-value { position: relative; left: 0; transform: translateX(10px); }
+              .header-table.header-table-dongchi td:nth-child(3) { transform: translateX(18px); }
+              .header-table.header-table-dongchi td:nth-child(4) { transform: translateX(46px); }
+              .header-table.header-table-dongchi td:nth-child(2).value { padding-right: 18px; box-sizing: border-box; }
+              .header-table.header-table-dongchi td:nth-child(4).value { width: 200px; max-width: 200px; padding-left: 6px; }
+              .header-table.header-table-dongchi td.order-no-label { width: 40px; }
+              .header-table.header-table-dongchi td.delivery-no-label,
+              .header-table.header-table-dongchi td.order-no-label,
+              .header-table.header-table-dongchi td.delivery-date-label {
+                position: static;
+                transform: none !important;
+              }
+              .header-table.header-table-dongchi td.order-no-value {
                 width: 248px;
                 max-width: 248px;
                 white-space: pre-line;
@@ -2934,7 +3361,15 @@ export default {
                 line-height: 1.25;
                 font-size: 13pt;
               }
-              .header-table td.carrier-phone-value { position: relative; left: 0; transform: translateX(15px); }
+              .header-table.header-table-dongchi td.receiver-phone-value { position: relative; left: 0; transform: translateX(20px); }
+              .header-table.header-table-dongchi td.delivery-no-value,
+              .header-table.header-table-dongchi td.order-no-value,
+              .header-table.header-table-dongchi td.delivery-date-value {
+                position: relative;
+                left: 0;
+                transform: translateX(-10px) !important;
+              }
+              .header-table.header-table-dongchi td.carrier-phone-value { position: relative; left: 0; transform: translateX(15px); }
               
               .items-table { border: 1px solid #333; margin-bottom: 10px; width: calc(100% + 65px); margin-right: 0; table-layout: fixed; font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; }
               .items-table th, .items-table td { border: 1px solid #333; padding: 5px 4px; text-align: center; font-size: 13pt; line-height: 1.65; }
@@ -2986,6 +3421,109 @@ export default {
                 min-width: 170px !important;
                 max-width: 170px !important;
                 white-space: nowrap;
+              }
+              /* 万宝模板：产品代码加倍、产品名称+10、产品规格-30；总宽度不变，差额从备注扣减 */
+              .items-table.items-table-wanbao th:nth-child(1),
+              .items-table.items-table-wanbao td:nth-child(1) {
+                width: calc(100% - 529px) !important;
+                min-width: calc(100% - 529px) !important;
+                max-width: calc(100% - 529px) !important;
+              }
+              .items-table.items-table-wanbao th:nth-child(2),
+              .items-table.items-table-wanbao td:nth-child(2) {
+                width: calc((100% - 425px) / 2 + 44px) !important;
+                min-width: calc((100% - 425px) / 2 + 44px) !important;
+                max-width: calc((100% - 425px) / 2 + 44px) !important;
+              }
+              .items-table.items-table-wanbao th:nth-child(3),
+              .items-table.items-table-wanbao td:nth-child(3) {
+                width: 137px !important;
+                min-width: 137px !important;
+                max-width: 137px !important;
+                white-space: normal !important;
+                word-break: break-all;
+                overflow-wrap: anywhere;
+                line-height: 1.25;
+              }
+              .items-table.items-table-wanbao th.col-remark,
+              .items-table.items-table-wanbao td.col-remark {
+                width: calc(454.5px - 50%) !important;
+                min-width: calc(454.5px - 50%) !important;
+                max-width: calc(454.5px - 50%) !important;
+                white-space: normal !important;
+                word-break: break-all;
+                overflow-wrap: anywhere;
+                line-height: 1.25;
+                text-overflow: clip;
+                overflow: visible;
+              }
+              .items-table.items-table-dongchi th:nth-child(1),
+              .items-table.items-table-dongchi td:nth-child(1) {
+                width: 122px;
+                min-width: 122px;
+                max-width: 122px;
+                white-space: normal;
+                word-break: normal;
+                overflow-wrap: anywhere;
+                line-height: 1.25;
+                padding-left: 4px;
+                padding-right: 4px;
+              }
+              .items-table.items-table-dongchi th:nth-child(2),
+              .items-table.items-table-dongchi td:nth-child(2) {
+                width: 118px;
+                min-width: 118px;
+                max-width: 118px;
+              }
+              .items-table.items-table-dongchi th:nth-child(3),
+              .items-table.items-table-dongchi td:nth-child(3) {
+                width: 150px;
+                min-width: 150px;
+                max-width: 150px;
+              }
+              .items-table.items-table-dongchi th:nth-child(4),
+              .items-table.items-table-dongchi td:nth-child(4) {
+                width: 56px;
+                min-width: 56px;
+                max-width: 56px;
+                white-space: nowrap;
+              }
+              .items-table.items-table-dongchi th:nth-child(5),
+              .items-table.items-table-dongchi td:nth-child(5) {
+                width: 72px;
+                min-width: 72px;
+                max-width: 72px;
+                white-space: nowrap;
+              }
+              .items-table.items-table-dongchi th:nth-child(6),
+              .items-table.items-table-dongchi td:nth-child(6) {
+                width: 56px;
+                min-width: 56px;
+                max-width: 56px;
+                white-space: nowrap;
+              }
+              .items-table.items-table-dongchi th:nth-child(7),
+              .items-table.items-table-dongchi td:nth-child(7) {
+                width: 125px;
+                min-width: 125px;
+                max-width: 125px;
+                white-space: nowrap;
+              }
+              .items-table.items-table-dongchi th.col-remark,
+              .items-table.items-table-dongchi td.col-remark {
+                width: 115px !important;
+                min-width: 115px !important;
+                max-width: 115px !important;
+                white-space: normal !important;
+                word-break: break-all;
+                overflow-wrap: anywhere;
+                line-height: 1.25;
+                font-size: 12pt;
+                text-overflow: clip;
+                overflow: visible;
+              }
+              .items-table.items-table-dongchi {
+                width: calc(100% + 38px) !important;
               }
               .items-table tr > th:first-child, .items-table tr > td:first-child { border-left: 1px solid #333 !important; }
               .items-table { border-left: 1px solid #333 !important; }
@@ -3360,20 +3898,48 @@ export default {
     .value.address-value.addr-long { font-size: 13pt; line-height: 1.28; }
     .value.address-value.addr-very-long { font-size: 13pt; line-height: 1.22; }
     .value.address-value.addr-super-long { font-size: 13pt; line-height: 1.16; }
-    td:nth-child(4).value { width: 200px; max-width: 200px; padding-left: 6px; }
-    td.order-no-label { width: 40px; }
     td.order-no-value {
-      width: 248px;
-      max-width: 248px;
-      white-space: pre-line;
+      white-space: normal;
       overflow: visible;
       text-overflow: clip;
       word-break: break-all;
       overflow-wrap: anywhere;
-      line-height: 1.25;
-      font-size: 13pt;
+      line-height: 1.22;
     }
-    td.carrier-phone-value { position: relative; left: 0; transform: translateX(15px); }
+    td.receiver-phone-value { position: relative; left: 0; transform: translateX(10px); }
+    &.header-table-dongchi {
+      td:nth-child(3) { transform: translateX(18px); }
+      td:nth-child(4) { transform: translateX(46px); }
+      td:nth-child(2).value { padding-right: 18px; box-sizing: border-box; }
+      td:nth-child(4).value { width: 200px; max-width: 200px; padding-left: 6px; }
+      td.order-no-label { width: 40px; }
+      td.delivery-no-label,
+      td.order-no-label,
+      td.delivery-date-label {
+        position: static;
+        transform: none !important;
+      }
+      td.order-no-value {
+        width: 248px;
+        max-width: 248px;
+        white-space: pre-line;
+        overflow: visible;
+        text-overflow: clip;
+        word-break: break-all;
+        overflow-wrap: anywhere;
+        line-height: 1.25;
+        font-size: 13pt;
+      }
+      td.receiver-phone-value { position: relative; left: 0; transform: translateX(20px); }
+      td.delivery-no-value,
+      td.order-no-value,
+      td.delivery-date-value {
+        position: relative;
+        left: 0;
+        transform: translateX(-10px) !important;
+      }
+      td.carrier-phone-value { position: relative; left: 0; transform: translateX(15px); }
+    }
   }
 
   .items-table {
@@ -3398,6 +3964,74 @@ export default {
       th:nth-child(8), td:nth-child(8) { width: 133px; min-width: 133px; max-width: 133px; white-space: nowrap; }
       th.col-material-no, td.col-material-no { width: 95px !important; min-width: 95px !important; max-width: 95px !important; white-space: nowrap; }
       th.col-remark, td.col-remark { width: 170px !important; min-width: 170px !important; max-width: 170px !important; white-space: nowrap; }
+    }
+    &.items-table-wanbao {
+      th:nth-child(1), td:nth-child(1) {
+        width: calc(100% - 529px) !important;
+        min-width: calc(100% - 529px) !important;
+        max-width: calc(100% - 529px) !important;
+      }
+      th:nth-child(2), td:nth-child(2) {
+        width: calc((100% - 425px) / 2 + 44px) !important;
+        min-width: calc((100% - 425px) / 2 + 44px) !important;
+        max-width: calc((100% - 425px) / 2 + 44px) !important;
+      }
+      th:nth-child(3), td:nth-child(3) {
+        width: 137px !important;
+        min-width: 137px !important;
+        max-width: 137px !important;
+        white-space: normal !important;
+        word-break: break-all;
+        overflow-wrap: anywhere;
+        line-height: 1.25;
+      }
+      th.col-remark, td.col-remark {
+        width: calc(454.5px - 50%) !important;
+        min-width: calc(454.5px - 50%) !important;
+        max-width: calc(454.5px - 50%) !important;
+        white-space: normal !important;
+        word-break: break-all;
+        overflow-wrap: anywhere;
+        line-height: 1.25;
+        text-overflow: clip;
+        overflow: visible;
+      }
+    }
+    &.items-table-dongchi {
+      th:nth-child(1), td:nth-child(1) {
+        width: 122px !important;
+        min-width: 122px !important;
+        max-width: 122px !important;
+        white-space: normal;
+        word-break: normal;
+        overflow-wrap: anywhere;
+        line-height: 1.25;
+        padding-left: 4px;
+        padding-right: 4px;
+      }
+      th:nth-child(2), td:nth-child(2) {
+        width: 118px !important;
+        min-width: 118px !important;
+        max-width: 118px !important;
+      }
+      th:nth-child(3), td:nth-child(3) { width: 150px !important; min-width: 150px !important; max-width: 150px !important; }
+      th:nth-child(4), td:nth-child(4) { width: 56px !important; min-width: 56px !important; max-width: 56px !important; white-space: nowrap; }
+      th:nth-child(5), td:nth-child(5) { width: 72px !important; min-width: 72px !important; max-width: 72px !important; white-space: nowrap; }
+      th:nth-child(6), td:nth-child(6) { width: 56px !important; min-width: 56px !important; max-width: 56px !important; white-space: nowrap; }
+      th:nth-child(7), td:nth-child(7) { width: 125px !important; min-width: 125px !important; max-width: 125px !important; white-space: nowrap; }
+      th.col-remark, td.col-remark {
+        width: 115px !important;
+        min-width: 115px !important;
+        max-width: 115px !important;
+        white-space: normal !important;
+        word-break: break-all;
+        overflow-wrap: anywhere;
+        line-height: 1.25;
+        font-size: 12pt;
+        text-overflow: clip;
+        overflow: visible;
+      }
+      width: calc(100% + 38px) !important;
     }
     tr > th:first-child, tr > td:first-child { border-left: 1px solid #333 !important; }
     border-left: 1px solid #333 !important;

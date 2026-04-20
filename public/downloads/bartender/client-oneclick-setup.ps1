@@ -100,6 +100,14 @@ function Build-ConfigJson {
     "SLITTING_PALLET_LABEL": {
       "formatPath": "$(Escape-JsonString $TemplateRewinding)",
       "printer": "$(Escape-JsonString $Printer)"
+    },
+    "RUIPU_PUTONG_GUANXIN": {
+      "formatPath": "$(Escape-JsonString (Join-Path (Join-Path $InstallDir 'templates') 'ruipu_putong_guanxin.btw'))",
+      "printer": "$(Escape-JsonString $Printer)"
+    },
+    "RP01_fenqie_neibiao": {
+      "formatPath": "$(Escape-JsonString (Join-Path (Join-Path $InstallDir 'templates') 'RP01_fenqie_neibiao.btw'))",
+      "printer": "$(Escape-JsonString $Printer)"
     }
   }
 }

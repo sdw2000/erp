@@ -189,7 +189,9 @@ export default {
         if (res && (res.code === 200 || res.code === 20000)) {
           const data = res.data || {}
           this.list = data.records || data.list || []
-          this.page.total = data.total || 0
+          this.page.current = Number(data.current || this.page.current || 1)
+          this.page.size = Number(data.size || this.page.size || 10)
+          this.page.total = Number(data.total || 0)
         } else {
           this.$message.error(res.msg || '加载失败')
         }

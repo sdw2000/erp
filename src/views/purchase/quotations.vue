@@ -2,23 +2,30 @@
   <div class="purchase-quotations">
     <el-card>
       <div slot="header" class="clearfix">
-        <span>采购报价</span>
-        <div style="float:right">
+        <div class="header-bar">
+          <div class="header-left">
+            <span style="font-weight: 600; margin-right: 10px;">采购报价</span>
+            <el-input v-model="filters.supplier" placeholder="供应商" size="small" clearable style="width:180px; margin-right:8px" @keyup.enter.native="handleSearch" @clear="handleSearch" />
+            <el-input v-model="filters.materialCode" placeholder="物料代码" size="small" clearable style="width:170px; margin-right:8px" @keyup.enter.native="handleSearch" @clear="handleSearch" />
+            <el-select v-model="filters.status" placeholder="状态" clearable size="small" style="width:120px; margin-right:8px" @change="handleSearch">
+              <el-option label="草稿" value="draft" />
+              <el-option label="已提交" value="submitted" />
+              <el-option label="已接受" value="accepted" />
+              <el-option label="已拒绝" value="rejected" />
+              <el-option label="已过期" value="expired" />
+            </el-select>
+            <el-button type="primary" size="small" @click="handleSearch">查询</el-button>
+            <el-button size="small" @click="handleReset">重置</el-button>
+          </div>
+          <div class="header-right">
           <el-button type="success" icon="el-icon-download" size="small" @click="handleDownloadTemplate">下载模板</el-button>
           <el-button type="success" plain icon="el-icon-download" size="small" @click="handleDownloadPriceSheetTemplate">初始化模板</el-button>
           <el-button type="primary" icon="el-icon-upload" size="small" @click="triggerImport('init')">报价初始化</el-button>
           <el-button type="warning" icon="el-icon-upload2" size="small" @click="triggerImport('normal')">导入</el-button>
           <el-button type="info" icon="el-icon-download" size="small" @click="handleExport">导出</el-button>
-          <el-select v-model="filters.status" placeholder="状态" clearable size="small" style="width:120px; margin-right:8px" @change="handleSearch">
-            <el-option label="草稿" value="draft" />
-            <el-option label="已提交" value="submitted" />
-            <el-option label="已接受" value="accepted" />
-            <el-option label="已拒绝" value="rejected" />
-            <el-option label="已过期" value="expired" />
-          </el-select>
-          <el-input v-model="filters.supplier" placeholder="供应商" size="small" clearable style="width:200px; margin-right:8px" @keyup.enter.native="handleSearch" @clear="handleSearch" />
           <el-button type="primary" icon="el-icon-plus" size="small" @click="openCreate">新增报价</el-button>
           <input ref="importFile" type="file" accept=".xlsx,.xls" style="display:none" @change="handleImportChange">
+          </div>
         </div>
       </div>
 
@@ -99,7 +106,21 @@
           <el-row :gutter="12">
             <el-col :span="12">
               <el-form-item label="供应商">
-                <el-input v-model="form.supplier" placeholder="供应商名称" />
+                <el-select
+                  v-model="form.supplier"
+                  filterable
+                  clearable
+                  placeholder="请选择供应商"
+                  style="width:100%"
+                  @change="onQuotationSupplierChange"
+                >
+                  <el-option
+                    v-for="supplier in suppliers"
+                    :key="supplier.id"
+                    :label="supplier.supplierName || supplier.shortName || supplier.supplierCode"
+                    :value="supplier.supplierName || supplier.shortName || supplier.supplierCode"
+                  />
+                </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="12">
@@ -211,9 +232,29 @@
                 <span v-else>{{ scope.row.rolls || '-' }}</span>
               </template>
             </el-table-column>
-            <el-table-column :label="priceLabel('film')" width="90">
+            <el-table-column label="计价方式" width="110">
               <template slot-scope="scope">
-                <el-input v-if="scope.row._editing" v-model="scope.row.unitPrice" size="small" :placeholder="priceLabel('film')" />
+                <el-select v-if="scope.row._editing" v-model="scope.row.pricingMode" size="small" style="width:100%">
+                  <el-option label="按㎡计价" value="sqm" />
+                  <el-option label="按kg计价" value="kg" />
+                </el-select>
+                <span v-else>{{ filmPricingText(scope.row.pricingMode) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="总重(kg)" width="100">
+              <template slot-scope="scope">
+                <el-input
+                  v-if="scope.row._editing && scope.row.pricingMode === 'kg'"
+                  v-model="scope.row.filmWeight"
+                  size="small"
+                  placeholder="总重kg"
+                />
+                <span v-else>{{ scope.row.pricingMode === 'kg' ? (scope.row.filmWeight || '0') : '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="单价" width="100">
+              <template slot-scope="scope">
+                <el-input v-if="scope.row._editing" v-model="scope.row.unitPrice" size="small" :placeholder="filmPricePlaceholder(scope.row)" />
                 <span v-else>{{ scope.row.unitPrice || '-' }}</span>
               </template>
             </el-table-column>
@@ -319,6 +360,7 @@
 
 <script>
 import { listPurchaseQuotations, getPurchaseQuotationDetail, createPurchaseQuotation, updatePurchaseQuotation, deletePurchaseQuotation, initializePurchaseQuotationFromPriceSheet } from '@/api/purchaseQuotation'
+import { listSuppliers } from '@/api/purchaseSupplier'
 import { getAllEnabledSpecs } from '@/api/tapeSpec'
 import { getRawMaterialList } from '@/api/tapeRawMaterial'
 
@@ -328,13 +370,14 @@ export default {
     return {
       loading: false,
       records: [],
-      filters: { supplier: '', status: '' },
+      filters: { supplier: '', status: '', materialCode: '' },
       pagination: { page: 1, size: 10, total: 0 },
       importMode: 'normal',
       detailVisible: false,
       editVisible: false,
       isEdit: false,
       current: null,
+      suppliers: [],
       specs: [],
       rawMaterials: [],
       materialSearchKeyword: '',
@@ -343,10 +386,40 @@ export default {
   },
   created() {
     this.fetchList()
+    this.fetchSuppliers()
     this.fetchSpecs()
     this.fetchRawMaterials()
   },
   methods: {
+    async fetchSuppliers() {
+      try {
+        const res = await listSuppliers({ page: 1, size: 1000, keyword: '' })
+        if (res && (res.code === 200 || res.code === 20000)) {
+          const data = res.data
+          if (data && data.records) {
+            this.suppliers = data.records
+          } else if (data && data.list) {
+            this.suppliers = data.list
+          } else if (Array.isArray(data)) {
+            this.suppliers = data
+          } else {
+            this.suppliers = []
+          }
+        }
+      } catch (e) {
+        console.error('获取供应商失败', e)
+      }
+    },
+    onQuotationSupplierChange(value) {
+      const selected = (this.suppliers || []).find(s => (s.supplierName || s.shortName || s.supplierCode) === value || s.supplierName === value)
+      if (!selected) return
+      if (!this.form.contactPerson && selected.primaryContactName) {
+        this.form.contactPerson = selected.primaryContactName
+      }
+      if (!this.form.contactPhone && selected.primaryContactMobile) {
+        this.form.contactPhone = selected.primaryContactMobile
+      }
+    },
     async fetchSpecs() {
       try {
         const res = await getAllEnabledSpecs()
@@ -629,7 +702,13 @@ export default {
     },
     async handleExport() {
       try {
-        const res = await listPurchaseQuotations({ page: 1, size: 100000, supplier: this.filters.supplier, status: this.filters.status })
+        const res = await listPurchaseQuotations({
+          page: 1,
+          size: 100000,
+          supplier: this.filters.supplier,
+          status: this.filters.status,
+          materialCode: this.filters.materialCode
+        })
         if (!(res && (res.code === 200 || res.code === 20000))) {
           this.$message.error('导出失败')
           return
@@ -698,6 +777,8 @@ export default {
         width: '',
         lengthDisplay: '',
         rolls: '',
+        pricingMode: 'sqm',
+        filmWeight: '',
         unitPrice: '',
         remark: '',
         _editing: true
@@ -738,7 +819,13 @@ export default {
     async fetchList() {
       this.loading = true
       try {
-        const res = await listPurchaseQuotations({ page: this.pagination.page, size: this.pagination.size, supplier: this.filters.supplier, status: this.filters.status })
+        const res = await listPurchaseQuotations({
+          page: this.pagination.page,
+          size: this.pagination.size,
+          supplier: this.filters.supplier,
+          status: this.filters.status,
+          materialCode: this.filters.materialCode
+        })
         if (res && (res.code === 200 || res.code === 20000)) {
           const data = res.data
           if (data && data.records) {
@@ -762,6 +849,10 @@ export default {
     handleSearch() {
       this.pagination.page = 1
       this.fetchList()
+    },
+    handleReset() {
+      this.filters = { supplier: '', status: '', materialCode: '' }
+      this.handleSearch()
     },
     onSizeChange(val) {
       this.pagination.size = val
@@ -812,6 +903,8 @@ export default {
             width: item.width,
             lengthDisplay: item.length,
             rolls: item.quantity,
+            pricingMode: String(item.unit || '').toLowerCase() === 'kg' ? 'kg' : 'sqm',
+            filmWeight: String(item.unit || '').toLowerCase() === 'kg' ? item.sqm : '',
             unitPrice: item.unitPrice,
             remark: item.remark,
             _editing: false
@@ -850,10 +943,17 @@ export default {
       return this.isFilmItem(list[0]) ? 'film' : 'raw'
     },
     filmMaterialOptions() {
-      return (this.rawMaterials || []).filter(item => String(item.unit || '').toLowerCase().includes('m'))
+      return (this.rawMaterials || []).filter(item => this.isFilmLikeMaterial(item))
     },
     nonFilmMaterialOptions() {
-      return (this.rawMaterials || []).filter(item => !String(item.unit || '').toLowerCase().includes('m'))
+      return (this.rawMaterials || []).filter(item => !this.isFilmLikeMaterial(item))
+    },
+    isFilmLikeMaterial(item) {
+      if (!item) return false
+      const unitText = String(item.unit || '').toLowerCase()
+      const text = `${item.materialCode || ''} ${item.materialName || ''} ${item.materialType || ''} ${item.materialCategoryRaw || ''} ${item.materialCategory || ''} ${item.spec || ''}`.toLowerCase()
+      if (unitText.includes('m') || unitText.includes('㎡') || unitText.includes('m²')) return true
+      return /膜|离型|pe泡棉|泡棉|pet|bopp|epe|foam/.test(text)
     },
     materialOptionsForCurrentMode() {
       let list = []
@@ -875,11 +975,17 @@ export default {
     detectMaterialModeByCode(code) {
       const raw = (this.rawMaterials || []).find(r => r.materialCode === code)
       if (!raw) return this.form.materialMode || 'film'
+      if (this.isFilmLikeMaterial(raw)) return 'film'
       const unitText = String(raw.unit || '').toLowerCase()
       const nameText = `${raw.materialName || ''}${raw.spec || ''}`
-      if (unitText.includes('m') && !unitText.includes('kg')) return 'film'
       if (unitText.includes('kg') || /胶水|粘合|原料|kg|桶/i.test(nameText)) return 'raw'
       return this.form.materialMode || 'film'
+    },
+    filmPricingText(mode) {
+      return mode === 'kg' ? '按kg计价' : '按㎡计价'
+    },
+    filmPricePlaceholder(row) {
+      return row && row.pricingMode === 'kg' ? '单价(元/kg)' : '单价(元/㎡)'
     },
     formatFilmSpec(item) {
       if (!item) return ''
@@ -957,10 +1063,10 @@ export default {
       return ((w / 1000) * l * r).toFixed(2)
     },
     calcFilmAmount(row) {
-      const sqm = Number(this.calcFilmSqm(row))
+      const base = row && row.pricingMode === 'kg' ? Number(row.filmWeight || 0) : Number(this.calcFilmSqm(row))
       const price = Number(row.unitPrice || 0)
-      if (!(sqm > 0 && price > 0)) return '0'
-      return (sqm * price).toFixed(2)
+      if (!(base > 0 && price > 0)) return '0'
+      return (base * price).toFixed(2)
     },
     calcRawTotalWeight(row) {
       const perBucket = this.parseSpecKg(row.rawSpec)
@@ -997,8 +1103,8 @@ export default {
           width: item.width ? Number(item.width) : null,
           length: item.lengthDisplay ? Number(item.lengthDisplay) : null,
           quantity: item.rolls ? Number(item.rolls) : null,
-          unit: '卷',
-          sqm: Number(this.calcFilmSqm(item)),
+          unit: item.pricingMode === 'kg' ? 'kg' : '㎡',
+          sqm: item.pricingMode === 'kg' ? Number(item.filmWeight || 0) : Number(this.calcFilmSqm(item)),
           unitPrice: item.unitPrice ? Number(item.unitPrice) : null,
           amount: Number(this.calcFilmAmount(item)),
           remark: item.remark
@@ -1069,6 +1175,22 @@ export default {
 </script>
 
 <style scoped>
+.header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.header-left,
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+}
+
 .pager {
   margin-top: 12px;
   text-align: right;

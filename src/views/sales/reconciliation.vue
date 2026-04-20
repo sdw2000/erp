@@ -4,9 +4,13 @@
       <div slot="header" class="page-header">
         <span class="card-title">销售对账单</span>
         <div>
+          <el-button size="small" icon="el-icon-upload2" :disabled="!queryForm.customerCode" @click="triggerImportHistory">导入</el-button>
+          <el-button size="small" icon="el-icon-download" :disabled="!queryForm.customerCode || !queryForm.month" @click="handleExport">导出</el-button>
+          <el-button size="small" icon="el-icon-plus" :disabled="!queryForm.customerCode" @click="openInitDialog">历史初始化</el-button>
           <el-button size="small" icon="el-icon-refresh" @click="handleReset">重置</el-button>
           <el-button type="primary" size="small" icon="el-icon-search" @click="handleSearch">查询</el-button>
           <el-button type="success" size="small" icon="el-icon-printer" :disabled="!statementLoaded" @click="openPrintPreview">打印预览</el-button>
+          <input ref="historyImportFile" type="file" accept=".csv,.txt" style="display:none" @change="handleImportHistoryChange">
         </div>
       </div>
 
@@ -241,12 +245,47 @@
         <el-button type="primary" icon="el-icon-printer" @click="handlePrintBrowser">打印对账单</el-button>
       </span>
     </el-dialog>
+
+    <el-dialog title="历史数据初始化" :visible.sync="initDialogVisible" width="520px">
+      <el-form :model="initForm" label-width="95px" size="small">
+        <el-form-item label="客户">
+          <el-input :value="queryForm.customerCode" disabled />
+        </el-form-item>
+        <el-form-item label="对账月份">
+          <el-date-picker v-model="initForm.statementMonth" type="month" value-format="yyyy-MM" style="width:100%" placeholder="选择月份" />
+        </el-form-item>
+        <el-form-item label="欠款金额">
+          <el-input-number v-model="initForm.unpaidAmount" :precision="2" :controls="false" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="开票金额">
+          <el-input-number v-model="initForm.invoiceAmount" :precision="2" :controls="false" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="开票日期">
+          <el-date-picker v-model="initForm.invoiceDate" type="date" value-format="yyyy-MM-dd" style="width:100%" placeholder="可选" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="initForm.remark" maxlength="200" show-word-limit placeholder="如：历史初始化" />
+        </el-form-item>
+      </el-form>
+      <span slot="footer" class="dialog-footer-actions">
+        <el-button @click="initDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitInitHistory">保存</el-button>
+      </span>
+    </el-dialog>
   </div>
 </template>
 
 <script>
 import { getCustomerList } from '@/api/customer'
-import { confirmSalesReconciliationDetails, deleteSalesReconciliationHistory, getSalesReconciliationStatement, saveSalesReconciliationHistory } from '@/api/salesReconciliation'
+import {
+  confirmSalesReconciliationDetails,
+  deleteSalesReconciliationHistory,
+  exportSalesReconciliationStatement,
+  getSalesReconciliationStatement,
+  importSalesReconciliationHistory,
+  initializeSalesReconciliationHistory,
+  saveSalesReconciliationHistory
+} from '@/api/salesReconciliation'
 import request from '@/utils/request'
 
 export default {
@@ -260,6 +299,14 @@ export default {
       },
       statementLoaded: false,
       printVisible: false,
+      initDialogVisible: false,
+      initForm: {
+        statementMonth: this.getCurrentMonth(),
+        unpaidAmount: 0,
+        invoiceAmount: 0,
+        invoiceDate: '',
+        remark: '历史初始化'
+      },
       companyInfo: {
         companyName: '东莞市方恩电子材料科技有限公司',
         address: '广东省东莞市桥头镇东新路13号2号楼102室',
@@ -345,7 +392,7 @@ export default {
       if (!this.queryForm.customerCode) return this.$message.warning('请先选择客户')
       if (!this.queryForm.month) return this.$message.warning('请选择月份')
       const res = await getSalesReconciliationStatement({ customerCode: this.queryForm.customerCode, month: this.queryForm.month })
-      if (!res || res.code !== 200) {
+      if (!res || (res.code !== 200 && res.code !== 20000)) {
         return this.$message.error((res && (res.msg || res.message)) || '查询失败')
       }
       const data = res.data || {}
@@ -365,6 +412,7 @@ export default {
     handleReset() {
       this.queryForm = { customerCode: '', month: this.getCurrentMonth() }
       this.statementLoaded = false
+      this.initDialogVisible = false
       this.statement = {
         customerCode: '',
         customerName: '',
@@ -379,6 +427,99 @@ export default {
           returnAmount: 0,
           totalAmount: 0
         }
+      }
+      this.initForm = {
+        statementMonth: this.getCurrentMonth(),
+        unpaidAmount: 0,
+        invoiceAmount: 0,
+        invoiceDate: '',
+        remark: '历史初始化'
+      }
+    },
+    triggerImportHistory() {
+      if (!this.queryForm.customerCode) {
+        return this.$message.warning('请先选择客户')
+      }
+      this.$message.info('请导入CSV：月份,欠款金额,开票金额,开票日期,备注')
+      if (this.$refs.historyImportFile) {
+        this.$refs.historyImportFile.value = ''
+        this.$refs.historyImportFile.click()
+      }
+    },
+    async handleImportHistoryChange(event) {
+      const file = event && event.target && event.target.files && event.target.files[0]
+      if (!file) return
+      try {
+        const res = await importSalesReconciliationHistory(this.queryForm.customerCode, file)
+        if (!res || (res.code !== 200 && res.code !== 20000)) {
+          return this.$message.error((res && (res.msg || res.message)) || '导入失败')
+        }
+        const data = res.data || {}
+        this.$message.success(`导入完成：成功${data.successCount || 0}，跳过${data.skipCount || 0}`)
+        if (this.statementLoaded) {
+          await this.handleSearch()
+        }
+      } catch (e) {
+        this.$message.error((e && e.message) || '导入失败')
+      }
+    },
+    async handleExport() {
+      if (!this.queryForm.customerCode || !this.queryForm.month) {
+        return this.$message.warning('请先选择客户和月份')
+      }
+      try {
+        const blob = await exportSalesReconciliationStatement({
+          customerCode: this.queryForm.customerCode,
+          month: this.queryForm.month
+        })
+        const url = window.URL.createObjectURL(new Blob([blob], { type: 'text/csv;charset=utf-8;' }))
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `销售对账单_${this.queryForm.customerCode}_${this.queryForm.month}.csv`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+      } catch (e) {
+        this.$message.error('导出失败')
+      }
+    },
+    openInitDialog() {
+      if (!this.queryForm.customerCode) {
+        return this.$message.warning('请先选择客户')
+      }
+      this.initForm = {
+        statementMonth: this.queryForm.month || this.getCurrentMonth(),
+        unpaidAmount: 0,
+        invoiceAmount: 0,
+        invoiceDate: '',
+        remark: '历史初始化'
+      }
+      this.initDialogVisible = true
+    },
+    async submitInitHistory() {
+      if (!this.queryForm.customerCode) {
+        return this.$message.warning('请先选择客户')
+      }
+      if (!this.initForm.statementMonth) {
+        return this.$message.warning('请选择对账月份')
+      }
+      const payload = {
+        customerCode: this.queryForm.customerCode,
+        statementMonth: this.initForm.statementMonth,
+        unpaidAmount: Number(this.initForm.unpaidAmount) || 0,
+        invoiceAmount: Number(this.initForm.invoiceAmount) || 0,
+        invoiceDate: this.initForm.invoiceDate || null,
+        remark: this.initForm.remark || '历史初始化'
+      }
+      const res = await initializeSalesReconciliationHistory(payload)
+      if (!res || (res.code !== 200 && res.code !== 20000)) {
+        return this.$message.error((res && (res.msg || res.message)) || '初始化失败')
+      }
+      this.$message.success('历史初始化成功')
+      this.initDialogVisible = false
+      if (this.statementLoaded) {
+        await this.handleSearch()
       }
     },
     addHistoryRow() {
@@ -406,7 +547,7 @@ export default {
         invoiceAmount: Number(row.invoiceAmount) || 0
       }
       const res = await saveSalesReconciliationHistory(payload)
-      if (!res || res.code !== 200) {
+      if (!res || (res.code !== 200 && res.code !== 20000)) {
         return this.$message.error((res && (res.msg || res.message)) || '保存失败')
       }
       this.$message.success('保存成功')
@@ -423,7 +564,7 @@ export default {
       }
       await this.$confirm('确认删除该历史记录吗？', '提示', { type: 'warning' }).then(async() => {
         const res = await deleteSalesReconciliationHistory(row.id)
-        if (res && res.code === 200) {
+        if (res && (res.code === 200 || res.code === 20000)) {
           this.$message.success('删除成功')
           this.handleSearch()
         }
@@ -462,7 +603,7 @@ export default {
         return this.$message.warning('无可确认的发货明细')
       }
       const res = await confirmSalesReconciliationDetails(payload)
-      if (!res || res.code !== 200) {
+      if (!res || (res.code !== 200 && res.code !== 20000)) {
         return this.$message.error((res && (res.msg || res.message)) || '确认失败')
       }
       this.$message.success('对账确认成功')

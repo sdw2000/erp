@@ -201,7 +201,7 @@
                       <el-dropdown-item :command="{ action: 'directReport', row: scope.row }">直接报工</el-dropdown-item>
                       <el-dropdown-item :command="{ action: 'materialIssue', row: scope.row }">领料登记</el-dropdown-item>
                       <el-dropdown-item :command="{ action: 'urgentPreempt', row: scope.row }">急单插单抢料</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空重排</el-dropdown-item>
+                      <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空单行数据</el-dropdown-item>
                     </el-dropdown-menu>
                   </el-dropdown>
                 </div>
@@ -245,6 +245,10 @@
             </el-alert>
             <div class="stock-spec-tip">
               需求规格：{{ stockMatchResult.specText }} ｜ 卷数：{{ stockMatchResult.requiredQty }} ｜ 平米数：{{ stockMatchResult.requiredArea }}㎡
+            </div>
+            <div style="margin-bottom: 15px;">
+              <el-switch v-model="includeReturnWarehouse" />
+              <span style="margin-left: 8px;">是否含退货专仓库存</span>
             </div>
 
             <el-form :inline="true" class="stock-scan-form">
@@ -430,6 +434,7 @@
         <el-card shadow="never">
           <div slot="header">
             <span>涂布排程列表</span>
+            <el-button style="float: right; margin-left: 8px" type="warning" size="small" icon="el-icon-printer" @click="openSchedulePrintDialog('coating')">打印</el-button>
             <el-button style="float: right; margin-left: 8px" type="success" size="small" icon="el-icon-plus" @click="handleAddManualCoating">新增手工排程</el-button>
             <el-button style="float: right" type="primary" size="small" icon="el-icon-refresh" @click="loadCoatingSchedules(true)">刷新</el-button>
           </div>
@@ -446,8 +451,10 @@
             style="width: 100%"
             :max-height="tableMaxHeight"
             :row-class-name="coatingRowClassName"
+            @selection-change="handleCoatingPrintSelectionChange"
             @sort-change="handleCoatingSortChange"
           >
+            <el-table-column type="selection" width="40" align="center" />
             <el-table-column prop="schedule_id" label="排程号" width="98" align="center" sortable="custom" column-key="schedule_id">
               <template slot-scope="scope">
                 {{ scope.row.id || scope.row.schedule_id || '-' }}
@@ -518,7 +525,17 @@
             </el-table-column>
             <el-table-column label="涂布速度(米/分)" width="118" align="center" sortable="custom" column-key="coating_speed">
               <template slot-scope="scope">
-                {{ formatCoatingSpeed(scope.row) }}
+                <el-input-number
+                  v-if="scope.row.__editing"
+                  v-model="scope.row.manual_coating_speed"
+                  :min="0"
+                  :step="1"
+                  size="mini"
+                  controls-position="right"
+                  placeholder="可手输"
+                  @change="handleCoatingLengthChange(scope.row)"
+                />
+                <span v-else>{{ formatCoatingSpeed(scope.row) }}</span>
               </template>
             </el-table-column>
             <el-table-column label="计划开始" width="172" align="center" sortable="custom" column-key="coating_schedule_date">
@@ -635,7 +652,7 @@
                     <el-dropdown-menu slot="dropdown">
                       <el-dropdown-item :command="{ action: 'reduce', row: scope.row }">减量</el-dropdown-item>
                       <el-dropdown-item :command="{ action: 'terminate', row: scope.row }" divided>终止</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空重排</el-dropdown-item>
+                      <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空单行数据</el-dropdown-item>
                     </el-dropdown-menu>
                   </el-dropdown>
                 </div>
@@ -661,6 +678,7 @@
         <el-card shadow="never">
           <div slot="header">
             <span>待复卷订单列表（按涂布日期排序）</span>
+            <el-button style="float: right; margin-left: 8px" type="warning" size="small" icon="el-icon-printer" @click="openSchedulePrintDialog('rewinding')">打印</el-button>
             <el-button style="float: right; margin-left: 8px" type="success" size="small" icon="el-icon-plus" @click="handleAddManualRewinding">手动添加</el-button>
             <el-button style="float: right" type="primary" size="small" icon="el-icon-refresh" @click="loadRewindingOrders">刷新</el-button>
           </div>
@@ -683,8 +701,10 @@
             style="width: 100%"
             :max-height="tableMaxHeight"
             :row-class-name="rewindingRowClassName"
+            @selection-change="handleRewindingPrintSelectionChange"
             @sort-change="handleRewindingSortChange"
           >
+            <el-table-column type="selection" width="40" align="center" />
             <el-table-column type="index" label="序号" width="52" align="center" />
             <el-table-column label="排程号" width="102" align="center">
               <template slot-scope="scope">
@@ -769,7 +789,17 @@
             </el-table-column>
             <el-table-column label="复卷速度(米/分)" width="118" align="center" sortable="custom" column-key="rewinding_speed">
               <template slot-scope="scope">
-                {{ formatRewindingSpeed(scope.row) }}
+                <el-input-number
+                  v-if="scope.row.__editing"
+                  v-model="scope.row.manual_rewinding_speed"
+                  :min="0"
+                  :step="1"
+                  size="mini"
+                  controls-position="right"
+                  placeholder="可手输"
+                  @change="handleRewindingDateChange(scope.row)"
+                />
+                <span v-else>{{ formatRewindingSpeed(scope.row) }}</span>
               </template>
             </el-table-column>
             <el-table-column label="计划开始" width="170" sortable="custom" column-key="rewinding_date">
@@ -841,7 +871,7 @@
                       <el-dropdown-item :command="{ action: 'report', row: scope.row, processType: 'REWINDING' }">报工</el-dropdown-item>
                       <el-dropdown-item :command="{ action: 'reduce', row: scope.row }">减量</el-dropdown-item>
                       <el-dropdown-item :command="{ action: 'terminate', row: scope.row }" divided>终止</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空重排</el-dropdown-item>
+                      <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空单行数据</el-dropdown-item>
                     </el-dropdown-menu>
                   </el-dropdown>
                 </div>
@@ -867,6 +897,7 @@
         <el-card shadow="never">
           <div slot="header">
             <span>分切已排列表</span>
+            <el-button style="float:right;margin-right:8px" type="warning" size="small" icon="el-icon-printer" @click="openSchedulePrintDialog('slitting')">打印</el-button>
             <el-button style="float:right;margin-right:8px" type="success" size="small" icon="el-icon-plus" @click="openManualSlittingDialog">手动添加</el-button>
             <el-input
               v-model="slittingQuery.orderNo"
@@ -898,8 +929,10 @@
             style="width: 100%"
             :max-height="tableMaxHeight"
             :row-class-name="slittingRowClassName"
+            @selection-change="handleSlittingPrintSelectionChange"
             @sort-change="handleSlittingSortChange"
           >
+            <el-table-column type="selection" width="40" align="center" />
             <el-table-column type="index" label="序号" width="52" align="center" />
             <el-table-column label="排程号" width="102" align="center">
               <template slot-scope="scope">
@@ -959,7 +992,17 @@
             </el-table-column>
             <el-table-column label="分切速度(卷/分)" width="118" align="center" sortable="custom" column-key="slitting_speed">
               <template slot-scope="scope">
-                {{ formatSlittingSpeed(scope.row) }}
+                <el-input-number
+                  v-if="scope.row.__editing"
+                  v-model="scope.row.manual_slitting_speed"
+                  :min="0"
+                  :step="1"
+                  size="mini"
+                  controls-position="right"
+                  placeholder="可手输"
+                  @change="handleSlittingDateChange(scope.row)"
+                />
+                <span v-else>{{ formatSlittingSpeed(scope.row) }}</span>
               </template>
             </el-table-column>
             <el-table-column label="计划时间" width="170" align="center" sortable="custom" column-key="packaging_date">
@@ -1051,7 +1094,7 @@
                       <el-dropdown-item :command="{ action: 'report', row: scope.row, processType: 'SLITTING' }">报工</el-dropdown-item>
                       <el-dropdown-item :command="{ action: 'reduce', row: scope.row }">减量</el-dropdown-item>
                       <el-dropdown-item :command="{ action: 'terminate', row: scope.row }" divided>终止</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空重排</el-dropdown-item>
+                      <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空单行数据</el-dropdown-item>
                     </el-dropdown-menu>
                   </el-dropdown>
                 </div>
@@ -1072,6 +1115,63 @@
         </el-card>
       </el-tab-pane>
     </el-tabs>
+
+    <el-dialog
+      title="排程打印"
+      :visible.sync="schedulePrintDialogVisible"
+      width="520px"
+    >
+      <el-form :model="schedulePrintForm" label-width="92px" size="small">
+        <el-form-item label="排程类型">
+          <el-select v-model="schedulePrintForm.type" style="width: 100%">
+            <el-option label="涂布排程" value="coating" />
+            <el-option label="复卷排程" value="rewinding" />
+            <el-option label="分切排程" value="slitting" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="打印范围">
+          <el-radio-group v-model="schedulePrintForm.scope">
+            <el-radio label="date">按日期结果</el-radio>
+            <el-radio label="current">当前列表</el-radio>
+            <el-radio label="selected">勾选行</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="日期模式">
+          <el-radio-group v-model="schedulePrintForm.mode" :disabled="schedulePrintForm.scope !== 'date'">
+            <el-radio label="single">按日期</el-radio>
+            <el-radio label="range">按日期范围</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="schedulePrintForm.mode === 'single'" label="选择日期">
+          <el-date-picker
+            v-model="schedulePrintForm.singleDate"
+            type="date"
+            value-format="yyyy-MM-dd"
+            format="yyyy-MM-dd"
+            placeholder="选择日期"
+            style="width: 100%"
+            :disabled="schedulePrintForm.scope !== 'date'"
+          />
+        </el-form-item>
+        <el-form-item v-else label="日期范围">
+          <el-date-picker
+            v-model="schedulePrintForm.dateRange"
+            type="daterange"
+            value-format="yyyy-MM-dd"
+            format="yyyy-MM-dd"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            style="width: 100%"
+            :disabled="schedulePrintForm.scope !== 'date'"
+          />
+        </el-form-item>
+      </el-form>
+      <span slot="footer">
+        <el-button @click="schedulePrintDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="schedulePrintLoading" @click="handleSchedulePrint">打印</el-button>
+      </span>
+    </el-dialog>
 
     <el-dialog
       :title="workReportDialogTitle"
@@ -1269,6 +1369,7 @@
       :visible.sync="manualSlittingDialogVisible"
       width="920px"
       :close-on-click-modal="false"
+      @close="handleManualSlittingDialogClose"
     >
       <el-form :inline="true" style="margin-bottom: 10px;">
         <el-form-item label="订单号">
@@ -1278,6 +1379,7 @@
             clearable
             placeholder="输入订单号搜索"
             style="width: 220px"
+            @input="handleManualSlittingQueryInput"
             @keyup.enter.native="loadManualSlittingCandidates"
           />
         </el-form-item>
@@ -1361,7 +1463,7 @@ import {
   terminateSchedule,
   reduceSchedule,
   urgentLock,
-  resetScheduleByOrderDetail,
+  resetScheduleBySchedule,
   reportWork,
   getReportWorkList,
   getProcessMaterialIssues,
@@ -1374,7 +1476,7 @@ import { getEquipmentList, getEquipmentScheduleConfigList } from '@/api/equipmen
 import { getProcessParamsList, getProcessParams } from '@/api/processParams'
 import { getRewindingProcessParamsList, getRewindingProcessParams } from '@/api/rewindingProcessParams'
 import { getSlittingProcessParamsList, getSlittingProcessParams } from '@/api/slittingProcessParams'
-import { getSpecByMaterialCode, getSpecList } from '@/api/tapeSpec'
+import { getSpecByMaterialCode, getSpecSuggestions } from '@/api/tapeSpec'
 import { getAllActiveTeams } from '@/api/staff'
 
 export default {
@@ -1419,6 +1521,9 @@ export default {
       pendingDefaultSelectionInited: false,
       materialNameByCodeCache: {},
       materialSpecByCodeCache: {},
+      materialSuggestionCache: {},
+      materialSuggestionTimer: null,
+      materialSuggestionQuerySeq: 0,
       showCompletedRows: false,
       pendingSort: {
         prop: 'priority_score',
@@ -1470,9 +1575,22 @@ export default {
         unlockedRows: 0,
         unlockedArea: 0
       },
+      schedulePrintDialogVisible: false,
+      schedulePrintLoading: false,
+      coatingPrintSelections: [],
+      rewindingPrintSelections: [],
+      slittingPrintSelections: [],
+      schedulePrintForm: {
+        type: 'coating',
+        scope: 'date',
+        mode: 'single',
+        singleDate: '',
+        dateRange: []
+      },
       manualSlittingDialogVisible: false,
       manualSlittingLoading: false,
       manualSlittingSubmitting: false,
+      manualSlittingSearchTimer: null,
       manualSlittingCandidates: [],
       manualSlittingSelectedRows: [],
       manualSlittingQuery: {
@@ -1497,6 +1615,7 @@ export default {
       selectedStocks: [],
       stockScanCodes: '',
       currentOrder: null,
+      includeReturnWarehouse: false,
 
       // 涂布计算对话框
       coatingDialogVisible: false,
@@ -1618,6 +1737,10 @@ export default {
     if (this.highlightSlittingTimer) {
       clearTimeout(this.highlightSlittingTimer)
       this.highlightSlittingTimer = null
+    }
+    if (this.materialSuggestionTimer) {
+      clearTimeout(this.materialSuggestionTimer)
+      this.materialSuggestionTimer = null
     }
 
     ;['coatingTable', 'rewindingTable', 'slittingTable', 'manualSlittingOrderTable', 'pendingTable'].forEach((refName) => {
@@ -1851,7 +1974,8 @@ export default {
         materialCode: row.material_code,
         width: row.width,
         thickness: row.thickness,
-        requiredQty: scheduleQty
+        requiredQty: scheduleQty,
+        includeReturnWarehouse: false  // 批量锁料默认不含退货专仓
       })
       if (!(matchRes.code === 200 || matchRes.code === 20000)) {
         return { ok: false, reason: '库存匹配失败' }
@@ -3089,7 +3213,7 @@ export default {
           const speed = Number(item.coatingSpeed || item.coating_speed || 0)
           if (materialCode && speed > 0) {
             speedMap[this.makeSpeedKey(materialCode, equipmentCode)] = speed
-            if (!equipmentCode) {
+            if (!speedMap[materialCode]) {
               speedMap[materialCode] = speed
             }
           }
@@ -3162,21 +3286,61 @@ export default {
     },
 
     queryTapeSpecByMaterialCode(queryString, cb) {
-      const keyword = String(queryString || '').trim()
+      const keyword = this.normalizeMaterialCodeInput(queryString)
       if (!keyword) {
         cb([])
         return
       }
-      getSpecList({
-        page: 1,
-        size: 20,
-        materialCode: keyword,
-        status: 1
-      }).then((res) => {
+
+      const cached = this.materialSuggestionCache[keyword]
+      if (Array.isArray(cached)) {
+        cb(cached)
+        return
+      }
+
+      const prefixHit = this.findMaterialSuggestionsFromCache(keyword)
+      if (prefixHit.length) {
+        cb(prefixHit)
+      }
+
+      if (this.materialSuggestionTimer) {
+        clearTimeout(this.materialSuggestionTimer)
+      }
+      const requestSeq = ++this.materialSuggestionQuerySeq
+      this.materialSuggestionTimer = setTimeout(async() => {
+        const suggestions = await this.fetchMaterialSuggestions(keyword)
+        if (requestSeq !== this.materialSuggestionQuerySeq) return
+        this.$set(this.materialSuggestionCache, keyword, suggestions)
+        cb(suggestions)
+      }, 150)
+    },
+
+    findMaterialSuggestionsFromCache(keyword) {
+      const normalizedKeyword = this.normalizeMaterialCodeInput(keyword)
+      if (!normalizedKeyword) return []
+      const cacheKeys = Object.keys(this.materialSuggestionCache || {})
+        .filter(key => normalizedKeyword.startsWith(key) && key !== normalizedKeyword)
+        .sort((a, b) => b.length - a.length)
+      if (!cacheKeys.length) return []
+
+      const source = this.materialSuggestionCache[cacheKeys[0]] || []
+      return source
+        .filter(item => this.normalizeMaterialCodeInput(item.materialCode || item.value).includes(normalizedKeyword))
+        .slice(0, 20)
+    },
+
+    async fetchMaterialSuggestions(keyword) {
+      const normalizedKeyword = this.normalizeMaterialCodeInput(keyword)
+      if (!normalizedKeyword) return []
+      return this.requestMaterialSuggestionsByKeyword(normalizedKeyword)
+    },
+
+    async requestMaterialSuggestionsByKeyword(keyword) {
+      try {
+        const res = await getSpecSuggestions(keyword, 5)
         const ok = res && (res.code === 200 || res.code === 20000)
-        const data = ok ? (res.data || {}) : {}
-        const list = data.list || data.records || []
-        const suggestions = (list || []).map(item => {
+        const list = ok ? (res.data || []) : []
+        return (list || []).map(item => {
           const materialCode = String(item.materialCode || item.material_code || '').trim().toUpperCase()
           const productName = String(item.productName || item.materialName || item.material_name || '').trim()
           const width = Number(item.width != null ? item.width : item.coatingWidth)
@@ -3199,13 +3363,14 @@ export default {
             thickness: Number.isFinite(thickness) ? thickness : null
           }
         }).filter(item => item.materialCode)
-        cb(suggestions)
-      }).catch(() => cb([]))
+      } catch (e) {
+        return []
+      }
     },
 
     handleManualMaterialInput(row, value) {
       if (!row) return
-      const code = String(value || '').toUpperCase()
+      const code = this.normalizeMaterialCodeInput(value)
       this.$set(row, 'material_code', code)
       const key = this.normalizeMaterialCode(code)
       if (!key) {
@@ -3221,6 +3386,11 @@ export default {
       if (Number.isFinite(thickness) && thickness > 0) {
         this.$set(row, 'thickness', thickness)
       }
+    },
+
+    normalizeMaterialCodeInput(value) {
+      // 只去空格，保留连字符“-”（料号的一部分）
+      return String(value || '').replace(/\s+/g, '').trim().toUpperCase()
     },
 
     handleManualMaterialSelect(row, item, mode = 'coating') {
@@ -3336,6 +3506,23 @@ export default {
 
     normalizeMaterialCode(code) {
       return String(code || '').replace(/\s+/g, '').trim().toUpperCase()
+    },
+
+    getMaterialCodeCandidates(code) {
+      const normalized = this.normalizeMaterialCode(code)
+      if (!normalized) return []
+      const list = []
+      const seen = new Set()
+      let current = normalized
+      while (current && !seen.has(current)) {
+        list.push(current)
+        seen.add(current)
+        const lastDashIndex = current.lastIndexOf('-')
+        if (lastDashIndex < 0) break
+        current = current.slice(0, lastDashIndex).replace(/-+$/, '')
+        if (!current) break
+      }
+      return [...new Set(list)]
     },
 
     async enrichMaterialNamesFromSpec(rows) {
@@ -3556,6 +3743,7 @@ export default {
               equipmentId: eq.id,
               coatingDate: row.coating_schedule_date,
               coatingLength: row.coating_length,
+              manualCoatingSpeed: Number(row.manual_coating_speed || 0) > 0 ? Number(row.manual_coating_speed) : null,
               materialCode: row.material_code,
               insertMode: row.insert_mode || 'AFTER_TIME',
               anchorScheduleId: row.insert_mode === 'AFTER_ORDER' ? row.anchor_schedule_id : null,
@@ -3621,7 +3809,9 @@ export default {
             const res = await getRewindingAvailability({
               scheduleId: row.schedule_id,
               rewindingEquipment: equipmentCode,
-              rewindingDate: row.rewinding_date
+              rewindingDate: row.rewinding_date,
+              manualRewindingSpeed: Number(row.manual_rewinding_speed || 0) > 0 ? Number(row.manual_rewinding_speed) : null,
+              looseDurationMode: true
             })
             if (!(res.code === 200 || res.code === 20000)) return null
             const data = res.data || {}
@@ -3669,6 +3859,11 @@ export default {
 
     async refreshSlittingEquipmentOptions(row) {
       if (!row || !row.schedule_id) return
+      if (!row.packaging_date) {
+        const optionKeyNoDate = this.getProcessOptionKey('SLITTING', row)
+        this.$set(this.rewindingEquipmentOptionsMap, optionKeyNoDate, this.slittingEquipmentList || [])
+        return
+      }
       const optionKey = this.getProcessOptionKey('SLITTING', row)
       const loadingKey = `SLITTING@${optionKey}`
       if (this.equipmentOptionLoadingMap[loadingKey]) return
@@ -3681,7 +3876,9 @@ export default {
             const res = await getSlittingAvailability({
               scheduleId: row.schedule_id,
               slittingEquipment: equipmentCode,
-              packagingDate: row.packaging_date
+              packagingDate: row.packaging_date,
+              manualSlittingSpeed: Number(row.manual_slitting_speed || 0) > 0 ? Number(row.manual_slitting_speed) : null,
+              looseDurationMode: true
             })
             if (!(res.code === 200 || res.code === 20000)) return null
             const data = res.data || {}
@@ -3763,26 +3960,23 @@ export default {
           if (!code) return
           let speed = 0
 
-          const res = await getProcessParams(code, 'COATING', equipmentCode)
-          const data = res.data || {}
-          speed = Number(data.coatingSpeed || data.coating_speed || 0)
-
-          if (speed <= 0) {
-            const baseCode = this.toBaseMaterialCode(code)
-            if (baseCode && baseCode !== code) {
-              const baseRes = await getProcessParams(baseCode, 'COATING', equipmentCode)
-              const baseData = baseRes.data || {}
-              speed = Number(baseData.coatingSpeed || baseData.coating_speed || 0)
-              if (speed > 0) {
-                this.$set(this.coatingSpeedMap, this.makeSpeedKey(baseCode, equipmentCode), speed)
-                this.$set(this.coatingSpeedMap, baseCode, speed)
+          const candidates = this.getMaterialCodeCandidates(code)
+          for (const candidate of candidates) {
+            const res = await getProcessParams(candidate, 'COATING', equipmentCode)
+            const data = res.data || {}
+            speed = Number(data.coatingSpeed || data.coating_speed || 0)
+            if (speed > 0) {
+              this.$set(this.coatingSpeedMap, this.makeSpeedKey(candidate, equipmentCode), speed)
+              if (!this.coatingSpeedMap[candidate]) {
+                this.$set(this.coatingSpeedMap, candidate, speed)
               }
+              break
             }
           }
 
           if (speed > 0) {
             this.$set(this.coatingSpeedMap, this.makeSpeedKey(code, equipmentCode), speed)
-            if (!equipmentCode) {
+            if (!this.coatingSpeedMap[code]) {
               this.$set(this.coatingSpeedMap, code, speed)
             }
           }
@@ -3889,25 +4083,27 @@ export default {
     },
 
     resolveCoatingSpeed(row) {
+      const manual = Number(row.manual_coating_speed || row.manualCoatingSpeed || 0)
+      if (manual > 0) return manual
       const materialCode = this.normalizeMaterialCode(row.material_code || row.materialCode)
       if (!materialCode) return 0
       const equipmentCode = this.resolveEquipmentCode(row)
 
-      const exactEquipmentSpeed = Number(this.coatingSpeedMap[this.makeSpeedKey(materialCode, equipmentCode)] || 0)
-      if (exactEquipmentSpeed > 0) return exactEquipmentSpeed
+      const candidates = this.getMaterialCodeCandidates(materialCode)
+      for (const code of candidates) {
+        const exactEquipmentSpeed = Number(this.coatingSpeedMap[this.makeSpeedKey(code, equipmentCode)] || 0)
+        if (exactEquipmentSpeed > 0) return exactEquipmentSpeed
 
-      const exactSpeed = Number(this.coatingSpeedMap[materialCode] || 0)
-      if (exactSpeed > 0) return exactSpeed
-
-      const baseCode = this.toBaseMaterialCode(materialCode)
-      const baseEquipmentSpeed = Number(this.coatingSpeedMap[this.makeSpeedKey(baseCode, equipmentCode)] || 0)
-      if (baseEquipmentSpeed > 0) return baseEquipmentSpeed
-
-      const baseSpeed = Number(this.coatingSpeedMap[baseCode] || 0)
-      if (baseSpeed > 0) return baseSpeed
+        const exactSpeed = Number(this.coatingSpeedMap[code] || 0)
+        if (exactSpeed > 0) return exactSpeed
+      }
 
       const matchedKey = Object.keys(this.coatingSpeedMap).find(
-        key => materialCode.startsWith(key) || key.startsWith(materialCode) || (baseCode && (baseCode.startsWith(key) || key.startsWith(baseCode)))
+        key => {
+          const mapMaterial = this.normalizeMaterialCode(String(key).split('@@')[0])
+          if (!mapMaterial) return false
+          return candidates.some(code => code.startsWith(mapMaterial) || mapMaterial.startsWith(code))
+        }
       )
       return matchedKey ? Number(this.coatingSpeedMap[matchedKey] || 0) : 0
     },
@@ -3928,6 +4124,8 @@ export default {
     },
 
     resolveRewindingSpeed(row) {
+      const manual = Number(row.manual_rewinding_speed || row.manualRewindingSpeed || 0)
+      if (manual > 0) return manual
       const materialCode = this.normalizeMaterialCode(row.material_code || row.materialCode)
       if (!materialCode) return 0
       const equipmentCode = this.resolveRewindingEquipmentCode(row)
@@ -3971,6 +4169,8 @@ export default {
     },
 
     resolveSlittingSpeed(row) {
+      const manual = Number(row.manual_slitting_speed || row.manualSlittingSpeed || 0)
+      if (manual > 0) return manual
       const direct = Number(row.slitting_speed || row.slittingSpeed || 0)
       if (direct > 0) return direct
 
@@ -4034,7 +4234,9 @@ export default {
         const res = await getRewindingAvailability({
           scheduleId: row.schedule_id,
           rewindingEquipment: row.rewinding_equipment,
-          rewindingDate: row.rewinding_date
+          rewindingDate: row.rewinding_date,
+          manualRewindingSpeed: Number(row.manual_rewinding_speed || 0) > 0 ? Number(row.manual_rewinding_speed) : null,
+          looseDurationMode: true
         })
         if (res.code === 200 || res.code === 20000) {
           const data = res.data || {}
@@ -4053,10 +4255,13 @@ export default {
     async updateSlittingAvailability(row) {
       try {
         if (!row || !row.schedule_id || !row.slitting_equipment) return
+        if (!row.packaging_date) return
         const res = await getSlittingAvailability({
           scheduleId: row.schedule_id,
           slittingEquipment: row.slitting_equipment,
-          packagingDate: row.packaging_date
+          packagingDate: row.packaging_date,
+          manualSlittingSpeed: Number(row.manual_slitting_speed || 0) > 0 ? Number(row.manual_slitting_speed) : null,
+          looseDurationMode: true
         })
         if (res.code === 200 || res.code === 20000) {
           const data = res.data || {}
@@ -4285,6 +4490,7 @@ export default {
           equipmentId: row.coating_equipment,
           coatingDate: fromLatestEnd ? null : row.coating_schedule_date,
           coatingLength: row.coating_length,
+          manualCoatingSpeed: Number(row.manual_coating_speed || 0) > 0 ? Number(row.manual_coating_speed) : null,
           materialCode: row.material_code,
           insertMode: row.insert_mode || 'AFTER_TIME',
           anchorScheduleId: row.insert_mode === 'AFTER_ORDER' ? row.anchor_schedule_id : null,
@@ -4381,9 +4587,17 @@ export default {
     buildManualCoatingOrderNo() {
       const d = new Date()
       const pad = n => String(n).padStart(2, '0')
-      const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
-      const rand = String(Math.floor(Math.random() * 900) + 100)
-      return `MANUAL-COATING-${stamp}-${rand}`
+      const stamp = `${String(d.getFullYear()).slice(-2)}${pad(d.getMonth() + 1)}${pad(d.getDate())}`
+      const prefix = `MT${stamp}-`
+      const serials = (this.coatingList || [])
+        .map(item => String((item && item.order_no) || '').trim().toUpperCase())
+        .map(code => {
+          const m = code.match(/^MT\d{6}-(\d{3})$/)
+          return m ? Number(m[1]) : 0
+        })
+        .filter(n => n > 0)
+      const next = (serials.length ? Math.max(...serials) : 0) + 1
+      return `${prefix}${String(Math.min(next, 999)).padStart(3, '0')}`
     },
 
     recalcManualCoatingArea(row) {
@@ -4411,6 +4625,7 @@ export default {
         coating_width: 1040,
         coating_length: 0,
         coating_schedule_date: '',
+        manual_coating_speed: 0,
         insert_mode: 'AFTER_TIME',
         anchor_schedule_id: null,
         rebalance_mode: 'MANUAL_CROSS_LINE',
@@ -4444,6 +4659,7 @@ export default {
         rewinding_width: 500,
         rewinding_date: '',
         rewinding_equipment: '',
+        manual_rewinding_speed: 0,
         __editing: true,
         __manual: true
       }
@@ -4459,14 +4675,38 @@ export default {
       await this.loadManualSlittingCandidates()
     },
 
-    async loadManualSlittingCandidates() {
+    handleManualSlittingDialogClose() {
+      if (this.manualSlittingSearchTimer) {
+        clearTimeout(this.manualSlittingSearchTimer)
+        this.manualSlittingSearchTimer = null
+      }
+    },
+
+    handleManualSlittingQueryInput() {
+      if (this.manualSlittingSearchTimer) {
+        clearTimeout(this.manualSlittingSearchTimer)
+      }
+      const keyword = String(this.manualSlittingQuery.orderNo || '').trim()
+      if (keyword && keyword.length < 3) {
+        return
+      }
+      this.manualSlittingSearchTimer = setTimeout(() => {
+        this.loadManualSlittingCandidates(false)
+      }, 350)
+    },
+
+    async loadManualSlittingCandidates(force = true) {
+      const keyword = String(this.manualSlittingQuery.orderNo || '').trim()
+      if (!force && keyword && keyword.length < 3) {
+        return
+      }
       this.manualSlittingLoading = true
       try {
         const res = await getPendingOrders({
           current: 1,
           size: 50,
           includeCompleted: false,
-          orderNo: (this.manualSlittingQuery.orderNo || '').trim()
+          orderNo: keyword
         })
         if (!(res.code === 200 || res.code === 20000)) {
           this.manualSlittingCandidates = []
@@ -4580,6 +4820,7 @@ export default {
               slitting_equipment: '',
               packaging_team: '',
               rewinding_equipment: '',
+              manual_slitting_speed: 0,
               __editing: true,
               __manual: true
             })
@@ -4845,7 +5086,8 @@ export default {
           materialCode: row.material_code,
           width: row.width,
           thickness: row.thickness,
-          requiredQty: row.schedule_qty
+          requiredQty: row.schedule_qty,
+          includeReturnWarehouse: this.includeReturnWarehouse
         })
 
         if (res.code === 200 || res.code === 20000) {
@@ -5284,6 +5526,7 @@ export default {
               ...item,
               coating_width: finalWidth,
               coating_length: finalLength,
+              manual_coating_speed: Number(item.manual_coating_speed || item.manualCoatingSpeed || 0),
               coating_area: finalArea,
               insert_mode: item.insert_mode || 'AFTER_TIME',
               anchor_schedule_id: item.anchor_schedule_id ? Number(item.anchor_schedule_id) : null,
@@ -5524,6 +5767,284 @@ export default {
       this.loadRewindingSchedules()
     },
 
+    openSchedulePrintDialog(type) {
+      const today = new Date()
+      const yyyy = today.getFullYear()
+      const mm = String(today.getMonth() + 1).padStart(2, '0')
+      const dd = String(today.getDate()).padStart(2, '0')
+      const dateText = `${yyyy}-${mm}-${dd}`
+      this.schedulePrintForm = {
+        type: type || this.activeTab || 'coating',
+        scope: 'date',
+        mode: 'single',
+        singleDate: dateText,
+        dateRange: []
+      }
+      this.schedulePrintDialogVisible = true
+    },
+
+    handleCoatingPrintSelectionChange(selection) {
+      this.coatingPrintSelections = Array.isArray(selection) ? selection : []
+    },
+
+    handleRewindingPrintSelectionChange(selection) {
+      this.rewindingPrintSelections = Array.isArray(selection) ? selection : []
+    },
+
+    handleSlittingPrintSelectionChange(selection) {
+      this.slittingPrintSelections = Array.isArray(selection) ? selection : []
+    },
+
+    getCurrentSchedulesByType(type) {
+      if (type === 'rewinding') return this.rewindingList || []
+      if (type === 'slitting') return this.slittingList || []
+      return this.coatingList || []
+    },
+
+    getSelectedSchedulesByType(type) {
+      if (type === 'rewinding') return this.rewindingPrintSelections || []
+      if (type === 'slitting') return this.slittingPrintSelections || []
+      return this.coatingPrintSelections || []
+    },
+
+    getSchedulePrintTypeLabel(type) {
+      if (type === 'rewinding') return '复卷排程'
+      if (type === 'slitting') return '分切排程'
+      return '涂布排程'
+    },
+
+    getRowPlanDateByType(row, type) {
+      if (!row) return null
+      if (type === 'coating') {
+        return this.parseDateTimeValue(row.coating_schedule_date || row.coating_date)
+      }
+      if (type === 'rewinding') {
+        return this.parseDateTimeValue(row.rewinding_date || row.rewinding_start_time || row.coating_date)
+      }
+      return this.parseDateTimeValue(row.packaging_date || row.slitting_start_time || row.rewinding_end_time || row.slitting_schedule_date)
+    },
+
+    formatDateOnly(value) {
+      const d = value instanceof Date ? value : this.parseDateTimeValue(value)
+      if (!d) return ''
+      const yyyy = d.getFullYear()
+      const mm = String(d.getMonth() + 1).padStart(2, '0')
+      const dd = String(d.getDate()).padStart(2, '0')
+      return `${yyyy}-${mm}-${dd}`
+    },
+
+    filterSchedulesByDate(rows, type, form) {
+      const list = Array.isArray(rows) ? rows : []
+      if (form.mode === 'single') {
+        const target = String(form.singleDate || '').trim()
+        if (!target) return []
+        return list.filter(row => this.formatDateOnly(this.getRowPlanDateByType(row, type)) === target)
+      }
+
+      const range = Array.isArray(form.dateRange) ? form.dateRange : []
+      const startText = String(range[0] || '').trim()
+      const endText = String(range[1] || '').trim()
+      if (!startText || !endText) return []
+      const start = this.parseDateTimeValue(`${startText} 00:00:00`)
+      const end = this.parseDateTimeValue(`${endText} 23:59:59`)
+      if (!start || !end) return []
+      const startMs = start.getTime()
+      const endMs = end.getTime()
+      return list.filter(row => {
+        const d = this.getRowPlanDateByType(row, type)
+        if (!d) return false
+        const ms = d.getTime()
+        return ms >= startMs && ms <= endMs
+      })
+    },
+
+    async collectPagedRows(fetchPageFn, pageSize = 200) {
+      let current = 1
+      let total = 0
+      const all = []
+      do {
+        const res = await fetchPageFn(current, pageSize)
+        if (!(res && (res.code === 200 || res.code === 20000))) {
+          break
+        }
+        const pageData = res.data || {}
+        const records = pageData.records || pageData.list || []
+        total = Number(pageData.total || 0)
+        if (!records.length) break
+        all.push(...records)
+        current += 1
+      } while (all.length < total && current <= 200)
+      return all
+    },
+
+    async fetchSchedulesForPrint(type, form) {
+      if (type === 'coating') {
+        const params = {
+          planDateStart: form.mode === 'single' ? form.singleDate : ((form.dateRange && form.dateRange[0]) || ''),
+          planDateEnd: form.mode === 'single' ? form.singleDate : ((form.dateRange && form.dateRange[1]) || '')
+        }
+        return this.collectPagedRows((current, size) => getCoatingSchedules({ current, size, ...params }))
+      }
+      if (type === 'rewinding') {
+        return this.collectPagedRows((current, size) => getCoatingCompletedOrders({ current, size }))
+      }
+      return this.collectPagedRows((current, size) => getSlittingSchedules({ current, size, orderNo: '' }))
+    },
+
+    escapeHtml(text) {
+      return String(text == null ? '' : text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+    },
+
+    buildPrintRows(rows, type) {
+      return (rows || []).map((row, index) => {
+        const planDate = this.getRowPlanDateByType(row, type)
+        const spec = this.formatOrderSpec(row)
+        const qty = Number(row.schedule_qty || row.order_qty || row.remaining_qty || 0)
+        const remark = String(
+          row.remark || row.schedule_remark || row.order_remark || row.requirement || row.requirements || ''
+        ).trim()
+        return {
+          index: index + 1,
+          planDate: planDate ? this.formatDateTime(this.toDateTimeString(planDate)) : '-',
+          orderNo: String(row.related_order_nos || row.order_nos || row.order_no || '-'),
+          materialCode: String(row.material_code || '-'),
+          materialName: String(row.material_name || '-'),
+          spec: spec || '-',
+          qty: Number.isFinite(qty) ? qty : '-',
+          remark: remark || '-'
+        }
+      })
+    },
+
+    doPrintScheduleRows(rows, type, form) {
+      const title = this.getSchedulePrintTypeLabel(type)
+      let rangeText = ''
+      if (form.scope === 'selected') {
+        rangeText = '范围：勾选行'
+      } else if (form.scope === 'current') {
+        rangeText = '范围：当前列表'
+      } else {
+        rangeText = form.mode === 'single'
+          ? `日期：${form.singleDate || '-'}`
+          : `日期范围：${(form.dateRange && form.dateRange[0]) || '-'} 至 ${(form.dateRange && form.dateRange[1]) || '-'}`
+      }
+
+      const bodyRows = rows.map(item => `
+        <tr>
+          <td>${item.index}</td>
+          <td>${this.escapeHtml(item.planDate)}</td>
+          <td>${this.escapeHtml(item.orderNo)}</td>
+          <td>${this.escapeHtml(item.materialCode)}</td>
+          <td>${this.escapeHtml(item.materialName)}</td>
+          <td>${this.escapeHtml(item.spec)}</td>
+          <td>${this.escapeHtml(item.qty)}</td>
+          <td>${this.escapeHtml(item.remark)}</td>
+        </tr>
+      `).join('')
+
+      const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${this.escapeHtml(title)}打印</title>
+  <style>
+    body { font-family: "Microsoft YaHei", Arial, sans-serif; color:#222; margin: 16px; }
+    h2 { margin: 0 0 8px; }
+    .meta { margin: 0 0 12px; color:#666; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { border: 1px solid #333; padding: 6px 8px; font-size: 12px; word-break: break-word; }
+    th { background: #f5f7fa; }
+    .right { text-align: right; }
+    @media print { body { margin: 8mm; } }
+  </style>
+</head>
+<body>
+  <h2>${this.escapeHtml(title)}打印清单</h2>
+  <div class="meta">${this.escapeHtml(rangeText)}　|　条数：${rows.length}</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40px;">序号</th>
+        <th style="width:130px;">计划时间</th>
+        <th style="width:170px;">订单号</th>
+        <th style="width:190px;">料号</th>
+        <th style="width:150px;">物料名称</th>
+        <th style="width:140px;">规格</th>
+        <th style="width:70px;">数量</th>
+        <th>备注要求</th>
+      </tr>
+    </thead>
+    <tbody>${bodyRows}</tbody>
+  </table>
+</body>
+</html>`
+
+      const win = window.open('', '_blank')
+      if (!win) {
+        this.$message.error('浏览器拦截了打印窗口，请允许弹窗后重试')
+        return
+      }
+      win.document.open()
+      win.document.write(html)
+      win.document.close()
+      win.focus()
+      setTimeout(() => {
+        win.print()
+      }, 120)
+    },
+
+    async handleSchedulePrint() {
+      const form = { ...this.schedulePrintForm }
+
+      this.schedulePrintLoading = true
+      try {
+        let rows = []
+
+        if (form.scope === 'selected') {
+          rows = this.getSelectedSchedulesByType(form.type)
+          if (!rows.length) {
+            this.$message.warning('请先在列表中勾选需要打印的排程行')
+            return
+          }
+        } else if (form.scope === 'current') {
+          rows = this.getCurrentSchedulesByType(form.type)
+          if (!rows.length) {
+            this.$message.warning('当前列表无可打印数据')
+            return
+          }
+        } else {
+          if (form.mode === 'single' && !form.singleDate) {
+            this.$message.warning('请选择日期')
+            return
+          }
+          if (form.mode === 'range' && (!form.dateRange || form.dateRange.length !== 2 || !form.dateRange[0] || !form.dateRange[1])) {
+            this.$message.warning('请选择完整日期范围')
+            return
+          }
+
+          const sourceRows = await this.fetchSchedulesForPrint(form.type, form)
+          rows = this.filterSchedulesByDate(sourceRows, form.type, form)
+          if (!rows.length) {
+            this.$message.warning('所选日期范围内无可打印排程')
+            return
+          }
+        }
+
+        const printRows = this.buildPrintRows(rows, form.type)
+        this.doPrintScheduleRows(printRows, form.type, form)
+        this.schedulePrintDialogVisible = false
+      } catch (e) {
+        this.$message.error(`打印失败：${e && e.message ? e.message : '未知错误'}`)
+      } finally {
+        this.schedulePrintLoading = false
+      }
+    },
+
     // 确认涂布排程
     async handleConfirmCoating(row) {
       try {
@@ -5596,6 +6117,7 @@ export default {
           equipmentId: row.coating_equipment,
           coatingWidth,
           coatingLength,
+          manualCoatingSpeed: Number(row.manual_coating_speed || 0) > 0 ? Number(row.manual_coating_speed) : null,
           materialCode,
           insertMode: row.insert_mode || 'AFTER_TIME',
           anchorScheduleId: row.insert_mode === 'AFTER_ORDER' ? row.anchor_schedule_id : null,
@@ -5749,13 +6271,13 @@ export default {
     },
 
     async handleResetSchedule(row) {
-      const orderDetailId = Number((row && row.order_detail_id) || 0)
-      if (!orderDetailId) {
-        this.$message.warning('未找到订单明细ID，无法清空重排')
+      const scheduleId = Number(this.getScheduleId(row) || 0)
+      if (!scheduleId) {
+        this.$message.warning('未找到排程ID，无法清空单行数据')
         return
       }
       try {
-        const reasonPrompt = await this.$prompt('请输入清空重排原因（必填）', '清空重排', {
+        const reasonPrompt = await this.$prompt('请输入清空单行原因（必填）', '清空单行数据', {
           confirmButtonText: '下一步',
           cancelButtonText: '取消',
           inputPlaceholder: '如：路线判定变更，重新排程',
@@ -5765,20 +6287,20 @@ export default {
           }
         })
 
-        await this.$confirm('将清空该订单明细的排程、报工与占用数据，并重置已排程数量。是否继续？', '确认清空重排', {
+        await this.$confirm('将清空当前这1行排程的排程、报工与占用数据，并回滚该行已排程数量。是否继续？', '确认清空单行数据', {
           confirmButtonText: '确定',
           cancelButtonText: '取消',
           type: 'warning'
         })
 
-        const res = await resetScheduleByOrderDetail({
-          orderDetailId,
+        const res = await resetScheduleBySchedule({
+          scheduleId,
           reason: reasonPrompt.value,
           operator: 'frontend'
         })
 
         if (res.code === 200 || res.code === 20000) {
-          this.$message.success('清空重排成功')
+          this.$message.success('清空单行数据成功')
           await Promise.all([
             this.loadOrders(),
             this.loadCoatingSchedules(),
@@ -5786,13 +6308,13 @@ export default {
             this.loadSlittingSchedules()
           ])
         } else {
-          this.$message.error(res.message || '清空重排失败')
+          this.$message.error(res.message || '清空单行数据失败')
         }
       } catch (error) {
         if (error === 'cancel' || (error && error.message === 'cancel')) {
           return
         }
-        this.$message.error(this.parseApiError(error, '清空重排失败'))
+        this.$message.error(this.parseApiError(error, '清空单行数据失败'))
       }
     },
 
@@ -6088,7 +6610,9 @@ export default {
           rewindingArea: plannedArea,
           rewindingDate: row.rewinding_date,
           rewindingEquipment: row.rewinding_equipment,
-          rewindingWidth: Number(row.rewinding_width || 500)
+          rewindingWidth: Number(row.rewinding_width || 500),
+          manualRewindingSpeed: Number(row.manual_rewinding_speed || 0) > 0 ? Number(row.manual_rewinding_speed) : null,
+          looseDurationMode: true
         })
 
         if (res.code === 200 || res.code === 20000) {
@@ -6142,7 +6666,9 @@ export default {
           scheduleId: row.schedule_id,
           packagingDate: row.packaging_date,
           slittingEquipment: row.slitting_equipment || row.rewinding_equipment,
-          packagingTeam: row.packaging_team
+          packagingTeam: row.packaging_team,
+          manualSlittingSpeed: Number(row.manual_slitting_speed || 0) > 0 ? Number(row.manual_slitting_speed) : null,
+          looseDurationMode: true
         })
 
         if (res.code === 200 || res.code === 20000) {

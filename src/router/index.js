@@ -86,7 +86,7 @@ export const asyncRoutes = [
         path: 'reconciliation',
         component: () => import('@/views/sales/reconciliation'),
         name: 'SalesReconciliation',
-        meta: { title: '销售对账单', icon: 'el-icon-document', roles: ['sales', 'admin', 'finance'] }
+        meta: { title: '销售对账', icon: 'el-icon-document', roles: ['sales', 'admin', 'finance'] }
       },
       {
         path: 'quotations',
@@ -129,6 +129,44 @@ export const asyncRoutes = [
         component: () => import('@/views/sales/customerMaterialMapping'),
         name: 'CustomerMaterialMapping',
         meta: { title: '客户物料映射', icon: 'el-icon-connection', roles: ['sales', 'admin', 'finance'] }
+      }
+    ]
+  },
+  {
+    path: '/finance',
+    component: Layout,
+    name: 'Finance',
+    meta: { title: '财务管理', icon: 'el-icon-money', roles: ['finance', 'admin'] },
+    children: [
+      {
+        path: 'sales-reconciliation',
+        component: () => import('@/views/sales/reconciliation'),
+        name: 'FinanceSalesReconciliation',
+        meta: { title: '销售对账', icon: 'el-icon-document-checked', roles: ['finance', 'admin'] }
+      },
+      {
+        path: 'cost-accounting',
+        component: () => import('@/views/finance/costAccounting'),
+        name: 'FinanceCostAccounting',
+        meta: { title: '成本核算', icon: 'el-icon-data-analysis', roles: ['finance', 'admin'] }
+      },
+      {
+        path: 'basic-config',
+        component: () => import('@/views/finance/basicConfig'),
+        name: 'FinanceBasicConfig',
+        meta: { title: '基本信息配置', icon: 'el-icon-setting', roles: ['finance', 'admin'] }
+      },
+      {
+        path: 'salary-accounting',
+        component: () => import('@/views/finance/salaryAccounting'),
+        name: 'FinanceSalaryAccounting',
+        meta: { title: '工资核算', icon: 'el-icon-s-custom', roles: ['finance', 'admin'] }
+      },
+      {
+        path: 'bank-ledger',
+        component: () => import('@/views/finance/bankLedger'),
+        name: 'FinanceBankLedger',
+        meta: { title: '银行账目流水', icon: 'el-icon-bank-card', roles: ['finance', 'admin'] }
       }
     ]
   },
@@ -202,6 +240,12 @@ export const asyncRoutes = [
         meta: { title: '入库申请', icon: 'edit', roles: ['warehouse', 'admin', 'production'] }
       },
       {
+        path: 'return-inbound-review',
+        component: () => import('@/views/stock/return-inbound-review'),
+        name: 'ReturnInboundReview',
+        meta: { title: '退货入库审核', icon: 'el-icon-refresh-left', roles: ['warehouse', 'admin'] }
+      },
+      {
         path: 'outbound',
         component: () => import('@/views/stock/outbound'),
         name: 'OutboundRequest',
@@ -212,6 +256,12 @@ export const asyncRoutes = [
         component: () => import('@/views/stock/log'),
         name: 'StockLog',
         meta: { title: '库存流水', icon: 'documentation', roles: ['warehouse', 'admin'] }
+      },
+      {
+        path: 'unified-flow',
+        component: () => import('@/views/stock/unified-flow'),
+        name: 'UnifiedStockFlow',
+        meta: { title: '统一库存流水', icon: 'el-icon-data-analysis', roles: ['warehouse', 'admin', 'finance', 'production'] }
       },
       {
         path: 'film-stock',
@@ -423,6 +473,12 @@ export const asyncRoutes = [
         component: () => import('@/views/production/printConfig'),
         name: 'PrintConfig',
         meta: { title: '打印配置', icon: 'el-icon-printer', roles: ['production', 'admin'] }
+      },
+      {
+        path: 'label-qr-rule-config',
+        component: () => import('@/views/production/labelQrRuleConfig'),
+        name: 'LabelQrRuleConfig',
+        meta: { title: '二维码规则管理', icon: 'el-icon-document', roles: ['production', 'admin'] }
       }
     ]
   },
@@ -457,9 +513,15 @@ export const asyncRoutes = [
     path: '/production-management',
     component: Layout,
     name: 'ProductionManagementRoot',
-    redirect: '/production-management/coating',
+    redirect: '/production-management/coating-home',
     meta: { title: '生产管理', icon: 'el-icon-s-operation', roles: ['production', 'admin', 'packaging', 'packing', 'coating'] },
     children: [
+      {
+        path: 'coating-home',
+        component: () => import('@/views/production/coatingHome'),
+        name: 'ProductionManagementCoatingHome',
+        meta: { title: '涂布首页', icon: 'dashboard', roles: ['production', 'admin', 'coating'] }
+      },
       {
         path: 'coating',
         component: () => import('@/views/production/coatingTasks'),

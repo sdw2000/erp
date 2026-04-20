@@ -386,6 +386,9 @@
             </tr>
           </tbody>
         </table>
+        <div class="sample-print-remark" style="margin-top:12px; border:1px solid #000; padding:8px; font-weight:700; font-size:18px; white-space:pre-wrap; min-height:36px;">
+          备注：{{ currentPrintSample.remark || '-' }}
+        </div>
         <div class="sample-print-sign-row">
           <div class="sample-sign-maker">制单：{{ getSampleMakerName(currentPrintSample) }}</div>
           <div class="sample-sign-auditor">审核：</div>
@@ -399,7 +402,7 @@
 
     <!-- 物流信息维护对话框 -->
     <el-dialog title="维护物流信息" :visible.sync="logisticsVisible" width="600px" custom-class="sample-logistics-dialog">
-      <el-form ref="logisticsFormRef" :model="logisticsForm" :rules="logisticsRules" label-width="100px">
+      <el-form ref="logisticsFormRef" :model="logisticsForm" label-width="100px">
         <el-form-item label="快递公司">
           <el-select v-model="logisticsForm.expressCompany" filterable allow-create placeholder="选择或输入快递公司" style="width: 100%">
             <el-option label="顺丰速运" value="顺丰速运" />
@@ -412,7 +415,7 @@
             <el-option label="德邦快递" value="德邦快递" />
           </el-select>
         </el-form-item>
-        <el-form-item label="快递单号" prop="trackingNumber">
+        <el-form-item label="快递单号">
           <el-input v-model="logisticsForm.trackingNumber" placeholder="输入快递单号">
             <el-button slot="append" icon="el-icon-search" @click="queryLogisticsNow">查询</el-button>
           </el-input>
@@ -535,9 +538,6 @@ export default {
         sendDate: '',
         shipDate: '',
         deliveryDate: ''
-      },
-      logisticsRules: {
-        trackingNumber: [{ required: true, message: '请输入快递单号', trigger: 'blur' }]
       },
       rules: {
         customerName: [{ required: true, message: '请选择客户', trigger: 'change' }],
@@ -1219,9 +1219,10 @@ export default {
         }
       })
     }, async saveLogistics() {
-      if (!this.$refs.logisticsFormRef) return
-      this.$refs.logisticsFormRef.validate(async(valid) => {
-        if (!valid) return
+      if (!this.logisticsForm.trackingNumber) {
+        this.$message.warning('请输入快递单号')
+        return
+      }
       try {
         const payload = {
           ...this.logisticsForm,
@@ -1243,7 +1244,6 @@ export default {
         console.error(e)
         this.$message.error('更新失败')
       }
-      })
     },
     async viewLogistics(row) {
       try {

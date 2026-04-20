@@ -21,6 +21,8 @@
               :value="item.value"
             />
           </el-select>
+          <el-button size="small" style="margin-right:8px" @click="handleSeedTestData">生成测试数据</el-button>
+          <el-button size="small" type="warning" style="margin-right:8px" @click="handleCleanupTestData">清理测试数据</el-button>
           <el-button type="primary" icon="el-icon-plus" size="small" @click="openCreate">新增收货</el-button>
         </div>
       </div>
@@ -78,9 +80,10 @@
             <el-table-column prop="materialName" label="物料名称" width="150" />
             <el-table-column prop="specification" label="规格" width="150" />
             <el-table-column prop="purchaseQty" label="采购数量" width="90" />
-            <el-table-column prop="purchaseUomCode" label="采购单位" width="90" />
-            <el-table-column prop="expectedQty" label="应收数量" width="100" />
-            <el-table-column prop="receivedQty" label="实收数量" width="100" />
+            <el-table-column label="采购单位" width="90">
+              <template slot-scope="scope">{{ normalizeUomLabel(scope.row.purchaseUomCode) || '-' }}</template>
+            </el-table-column>
+            <el-table-column prop="receivedQty" label="应到数量(本次)" width="120" />
             <el-table-column prop="unit" label="单位" width="80" />
             <el-table-column prop="remark" label="备注" />
           </el-table>
@@ -155,6 +158,12 @@
           </el-row>
 
           <el-divider>明细</el-divider>
+          <el-alert
+            title="说明：仅保留“应到数量”，表示本次到货数量；提交时会同步到兼容字段。"
+            type="info"
+            :closable="false"
+            style="margin-bottom:8px"
+          />
           <div style="text-align:right; margin-bottom:8px">
             <el-button type="primary" size="mini" @click="addItem">新增明细</el-button>
           </div>
@@ -171,10 +180,7 @@
             <el-table-column label="规格" width="150">
               <template slot-scope="scope"><el-input v-model="scope.row.specification" size="small" /></template>
             </el-table-column>
-            <el-table-column label="应收数量" width="100">
-              <template slot-scope="scope"><el-input v-model.number="scope.row.expectedQty" size="small" type="number" /></template>
-            </el-table-column>
-            <el-table-column label="实收数量" width="100">
+            <el-table-column label="应到数量(本次)" width="120">
               <template slot-scope="scope"><el-input v-model.number="scope.row.receivedQty" size="small" type="number" /></template>
             </el-table-column>
             <el-table-column label="单位" width="90">
@@ -192,7 +198,7 @@
         </el-form>
         <span slot="footer">
           <el-button @click="editVisible = false">取消</el-button>
-          <el-button type="primary" @click="save">保存</el-button>
+          <el-button type="primary" @click="save">提交</el-button>
         </span>
       </el-dialog>
     </el-card>
@@ -200,7 +206,15 @@
 </template>
 
 <script>
-import { listPurchaseReceipts, getPurchaseReceiptDetail, createPurchaseReceipt, updatePurchaseReceipt, deletePurchaseReceipt } from '@/api/purchaseReceipt'
+import {
+  listPurchaseReceipts,
+  getPurchaseReceiptDetail,
+  createPurchaseReceipt,
+  updatePurchaseReceipt,
+  deletePurchaseReceipt,
+  seedPurchaseReceiptTestData,
+  cleanupPurchaseReceiptTestData
+} from '@/api/purchaseReceipt'
 import { getPurchaseOrders, getPurchaseOrderDetail } from '@/api/purchase'
 import { getRawMaterialList } from '@/api/tapeRawMaterial'
 import { getPurchaseReconciliationMeta, getPurchaseReconciliationOptions } from '@/constants/purchaseReconciliation'
@@ -276,6 +290,39 @@ export default {
         console.error('获取采购订单失败', e)
       }
     },
+    async handleSeedTestData() {
+      try {
+        const res = await seedPurchaseReceiptTestData(3)
+        if (res && (res.code === 200 || res.code === 20000)) {
+          const count = (res.data && res.data.count) || 0
+          this.$message.success(`已生成测试数据 ${count} 条`)
+          this.fetchList()
+        } else {
+          this.$message.error((res && (res.msg || res.message)) || '生成测试数据失败')
+        }
+      } catch (e) {
+        this.$message.error('生成测试数据失败')
+      }
+    },
+    async handleCleanupTestData() {
+      try {
+        await this.$confirm('确认清理收货通知测试数据吗？仅会删除带测试标记的数据。', '提示', { type: 'warning' })
+      } catch (e) {
+        return
+      }
+      try {
+        const res = await cleanupPurchaseReceiptTestData()
+        if (res && (res.code === 200 || res.code === 20000)) {
+          const receiptCount = (res.data && res.data.receiptCount) || 0
+          this.$message.success(`已清理测试收货单 ${receiptCount} 条`)
+          this.fetchList()
+        } else {
+          this.$message.error((res && (res.msg || res.message)) || '清理测试数据失败')
+        }
+      } catch (e) {
+        this.$message.error('清理测试数据失败')
+      }
+    },
     mapOrderItemToReceiptItem(item, orderNo) {
       const raw = this.findRawMaterialByCode(item.materialCode)
       const specification = item.specification || item.spec || (raw && raw.spec) || [item.thickness, item.width, item.length].filter(v => v !== null && v !== undefined && v !== '').join('*') || ''
@@ -293,7 +340,11 @@ export default {
         stockUomCode: item.stockUomCode || '',
         conversionRate: item.conversionRate || null,
         expectedQty: item.purchaseQty !== undefined && item.purchaseQty !== null ? item.purchaseQty : (item.rolls !== undefined && item.rolls !== null ? item.rolls : 0),
-        receivedQty: item.receivedQty !== undefined && item.receivedQty !== null ? item.receivedQty : 0,
+        receivedQty: item.receivedQty !== undefined && item.receivedQty !== null
+          ? item.receivedQty
+          : (item.purchaseQty !== undefined && item.purchaseQty !== null
+            ? item.purchaseQty
+            : (item.rolls !== undefined && item.rolls !== null ? item.rolls : 0)),
         unit: this.normalizeUomLabel(unitCode),
         remark: item.remark || ''
       }
@@ -335,11 +386,17 @@ export default {
         contactPhone: '',
         receiveAddress: '',
         expectedDate: '',
-        receivedDate: '',
+        receivedDate: this.today(),
         status: 'planned',
         remark: '',
         items: [this.emptyItem()]
       }
+    },
+    today() {
+      const d = new Date()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${d.getFullYear()}-${m}-${day}`
     },
     emptyItem() {
       return {
@@ -446,14 +503,19 @@ export default {
         this.$message.warning('请填写供应商')
         return
       }
-      this.form.items = (this.form.items || []).map(item => ({
-        ...item,
-        purchaseOrderNo: this.form.purchaseOrderNo || item.purchaseOrderNo || ''
-      }))
+      this.form.items = (this.form.items || []).map(item => {
+        const qty = Number(item.receivedQty || 0)
+        return {
+          ...item,
+          purchaseOrderNo: this.form.purchaseOrderNo || item.purchaseOrderNo || '',
+          receivedQty: qty,
+          expectedQty: qty
+        }
+      })
       const api = this.isEdit ? updatePurchaseReceipt : createPurchaseReceipt
       const res = await api(this.form)
       if (res && (res.code === 200 || res.code === 20000)) {
-        this.$message.success('保存成功')
+        this.$message.success('提交成功')
         this.editVisible = false
         this.fetchList()
       }
@@ -464,10 +526,19 @@ export default {
         .catch(() => {})
     },
     async remove(id) {
-      const res = await deletePurchaseReceipt(id)
-      if (res && (res.code === 200 || res.code === 20000)) {
-        this.$message.success('删除成功')
-        this.fetchList()
+      try {
+        const res = await deletePurchaseReceipt(id)
+        if (res && (res.code === 200 || res.code === 20000)) {
+          this.$message.success('删除成功')
+          if (this.records.length === 1 && this.pagination.page > 1) {
+            this.pagination.page -= 1
+          }
+          this.fetchList()
+        } else {
+          this.$message.error((res && (res.msg || res.message)) || '删除失败')
+        }
+      } catch (e) {
+        this.$message.error((e && e.message) || '删除失败')
       }
     }
   }

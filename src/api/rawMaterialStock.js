@@ -12,6 +12,15 @@ export function getFilmStockList() {
   })
 }
 
+// 分页查询薄膜库存
+export function getFilmStockPage(params) {
+  return request({
+    url: '/api/stock/film/list/page',
+    method: 'get',
+    params
+  })
+}
+
 // 按规格查询薄膜库存
 export function getFilmStockBySpec(params) {
   return request({
@@ -37,6 +46,32 @@ export function getFilmStockDetails(id) {
   })
 }
 
+// 新增薄膜库存明细
+export function createFilmStockDetail(filmStockId, data) {
+  return request({
+    url: `/api/stock/film/${filmStockId}/details`,
+    method: 'post',
+    data
+  })
+}
+
+// 更新薄膜库存明细
+export function updateFilmStockDetail(filmStockId, detailId, data) {
+  return request({
+    url: `/api/stock/film/${filmStockId}/details/${detailId}`,
+    method: 'put',
+    data
+  })
+}
+
+// 删除薄膜库存明细
+export function deleteFilmStockDetail(filmStockId, detailId) {
+  return request({
+    url: `/api/stock/film/${filmStockId}/details/${detailId}`,
+    method: 'delete'
+  })
+}
+
 // 查询可用的薄膜明细
 export function getAvailableFilmDetails(id) {
   return request({
@@ -53,6 +88,29 @@ export function getFilmOutboundBySchedule(scheduleId) {
   })
 }
 
+// 下载薄膜库存导入模板
+export function downloadFilmTemplate() {
+  return request({
+    url: '/api/stock/film/template',
+    method: 'get',
+    responseType: 'blob'
+  })
+}
+
+// 导入薄膜库存
+export function importFilmStock(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: '/api/stock/film/import',
+    method: 'post',
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}
+
 /**
  * 化工原料库存管理API
  */
@@ -62,6 +120,15 @@ export function getChemicalStockList() {
   return request({
     url: '/api/stock/chemical/list',
     method: 'get'
+  })
+}
+
+// 分页查询化工库存
+export function getChemicalStockPage(params) {
+  return request({
+    url: '/api/stock/chemical/list/page',
+    method: 'get',
+    params
   })
 }
 
@@ -89,6 +156,32 @@ export function getChemicalStockDetails(id) {
   })
 }
 
+// 新增化工库存明细
+export function createChemicalStockDetail(chemicalStockId, data) {
+  return request({
+    url: `/api/stock/chemical/${chemicalStockId}/details`,
+    method: 'post',
+    data
+  })
+}
+
+// 更新化工库存明细
+export function updateChemicalStockDetail(chemicalStockId, detailId, data) {
+  return request({
+    url: `/api/stock/chemical/${chemicalStockId}/details/${detailId}`,
+    method: 'put',
+    data
+  })
+}
+
+// 删除化工库存明细
+export function deleteChemicalStockDetail(chemicalStockId, detailId) {
+  return request({
+    url: `/api/stock/chemical/${chemicalStockId}/details/${detailId}`,
+    method: 'delete'
+  })
+}
+
 // 查询可用的化工明细
 export function getAvailableChemicalDetails(id) {
   return request({
@@ -111,5 +204,28 @@ export function getChemicalOutboundBySchedule(scheduleId) {
   return request({
     url: `/api/stock/chemical/outbound/schedule/${scheduleId}`,
     method: 'get'
+  })
+}
+
+// 下载化工库存导入模板
+export function downloadChemicalTemplate() {
+  return request({
+    url: '/api/stock/chemical/template',
+    method: 'get',
+    responseType: 'blob'
+  })
+}
+
+// 导入化工库存
+export function importChemicalStock(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: '/api/stock/chemical/import',
+    method: 'post',
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
   })
 }

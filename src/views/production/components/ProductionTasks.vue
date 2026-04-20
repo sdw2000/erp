@@ -21,29 +21,38 @@
         </el-form-item>
         <div class="query-second-row">
           <el-form-item label="订单号">
-            <el-input
+            <el-autocomplete
               v-model="query.orderNo"
+              :fetch-suggestions="queryOrderNoSuggestions"
               placeholder="支持搜索已排/未排订单号"
               clearable
               style="width: 220px"
+              trigger-on-focus
+              @select="handleQuerySuggestionSelect"
               @keyup.enter.native="loadTasks"
             />
           </el-form-item>
           <el-form-item v-if="isRewinding || isSlitting" label="料号">
-            <el-input
+            <el-autocomplete
               v-model="query.materialCodeKeyword"
+              :fetch-suggestions="queryMaterialCodeSuggestions"
               placeholder="输入料号筛选"
               clearable
               style="width: 180px"
+              trigger-on-focus
+              @select="handleQuerySuggestionSelect"
               @keyup.enter.native="loadTasks"
             />
           </el-form-item>
           <el-form-item v-if="isRewinding || isSlitting" label="规格">
-            <el-input
+            <el-autocomplete
               v-model="query.specKeyword"
+              :fetch-suggestions="querySpecSuggestions"
               placeholder="输入规格筛选"
               clearable
               style="width: 180px"
+              trigger-on-focus
+              @select="handleQuerySuggestionSelect"
               @keyup.enter.native="loadTasks"
             />
           </el-form-item>
@@ -155,12 +164,12 @@
               <td v-if="showTaskNo">{{ row.taskNo || '-' }}</td>
               <td v-if="orderNoVisible" class="task-grid-order">
                 <el-button
-                  v-if="row.orderNo"
+                  v-if="row.orderNo || row.customerOrderNo || row.customer_order_no"
                   type="text"
                   class="order-print-link"
                   @click="printOrderInstructionByTask(row)"
                 >
-                  {{ row.orderNo }}
+                  {{ row.customerOrderNo || row.customer_order_no || row.orderNo }}
                 </el-button>
                 <span v-else>-</span>
               </td>
@@ -244,8 +253,17 @@
         <el-form-item label="物料代码">
           <el-input :value="reportForm.materialCode || '-'" size="small" disabled style="width: 220px" />
         </el-form-item>
+        <el-form-item label="产品名称">
+          <el-input :value="reportForm.materialName || '-'" size="small" disabled style="width: 220px" />
+        </el-form-item>
         <el-form-item label="物料规格">
           <el-input :value="reportOrderSpecText" size="small" disabled style="width: 240px" />
+        </el-form-item>
+        <el-form-item label="客户代码">
+          <el-input :value="reportForm.customerCode || '-'" size="small" disabled style="width: 160px" />
+        </el-form-item>
+        <el-form-item label="订单号">
+          <el-input :value="reportOrderNoDisplay" size="small" disabled style="width: 220px" />
         </el-form-item>
       </el-form>
 
@@ -288,8 +306,29 @@
             @change="handleSlittingInputChanged"
           />
         </el-form-item>
-        <el-form-item v-if="reportForm.processType === 'SLITTING'" label="规格">
-          <el-input :value="formatSlittingSpec(reportForm || {})" size="small" disabled style="width: 220px" />
+        <el-form-item v-if="reportForm.processType === 'SLITTING'" label="批次号">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <el-checkbox v-model="reportForm.batchNoRequired">必填</el-checkbox>
+            <el-select
+              ref="slittingBatchNoSelect"
+              v-model="reportForm.batchNo"
+              size="small"
+              filterable
+              allow-create
+              default-first-option
+              clearable
+              style="width: 220px"
+              placeholder="可搜索已领料批次号，也可手输"
+              @blur="commitSlittingBatchNoInput"
+            >
+              <el-option
+                v-for="item in slittingIssuedBatchOptions"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
+          </div>
         </el-form-item>
         <el-form-item label="操作人">
           <el-input v-model="reportForm.operator" size="small" placeholder="系统自动带出" style="width: 200px" :disabled="true" />
@@ -446,7 +485,84 @@
             style="width: 140px"
           />
         </el-form-item>
+        <el-form-item label="本箱重量(kg)">
+          <el-input-number
+            v-model="reportForm.boxWeightKg"
+            :min="0"
+            :step="0.01"
+            :precision="2"
+            size="small"
+            controls-position="right"
+            style="width: 140px"
+          />
+        </el-form-item>
+        <el-form-item label="生产日期">
+          <el-date-picker
+            v-model="reportForm.labelProductionDate"
+            type="date"
+            value-format="yyyy-MM-dd"
+            format="yyyy-MM-dd"
+            size="small"
+            style="width: 140px"
+            placeholder="生产日期"
+          />
+        </el-form-item>
+        <el-form-item label="出货日期">
+          <el-date-picker
+            v-model="reportForm.labelShipDate"
+            type="date"
+            value-format="yyyy-MM-dd"
+            format="yyyy-MM-dd"
+            size="small"
+            style="width: 140px"
+            placeholder="出货日期"
+          />
+        </el-form-item>
+        <el-form-item label="送货单号">
+          <el-input v-model="reportForm.deliveryNoteNo" size="small" style="width: 160px" placeholder="如 DH-20260416-001" />
+        </el-form-item>
+        <el-form-item label="保质期(天)">
+          <el-input-number
+            v-model="reportForm.shelfLifeDays"
+            :min="0"
+            :step="1"
+            :precision="0"
+            size="small"
+            controls-position="right"
+            style="width: 140px"
+          />
+        </el-form-item>
+        <el-form-item label="二维码模板">
+          <el-input
+            v-model="reportForm.qrTemplate"
+            size="small"
+            style="width: 420px"
+            :placeholder="'支持 {{field}} 或 {field}，例如 {{orderNo}}|{{batchNo}}|{{boxRollCount}}'"
+          />
+        </el-form-item>
         <el-form-item>
+          <el-button
+            size="mini"
+            type="success"
+            plain
+            :loading="qrRuleSaving"
+            @click="saveCurrentCustomerQrRule"
+          >保存当前客户二维码规则</el-button>
+        </el-form-item>
+        <el-form-item label="二维码预览">
+          <el-input :value="buildSlittingQrPreview()" size="small" readonly style="width: 420px" />
+        </el-form-item>
+        <el-form-item>
+          <el-select
+            v-model="reportForm.slittingCoreLabelBizType"
+            size="mini"
+            style="width: 180px; margin-right: 8px"
+            :disabled="!isLabelPrintMode || reportForm.processType !== 'SLITTING'"
+            placeholder="请选择卷芯标签类型"
+          >
+            <el-option label="普通管芯标签" value="SLITTING_CORE_LABEL" />
+            <el-option label="窄管芯标签" value="SLITTING_CORE_LABEL_NARROW" />
+          </el-select>
           <el-button size="mini" type="primary" plain icon="el-icon-printer" @click="printSlittingLabel('slitting-core-label')">打印卷芯标签</el-button>
           <el-button size="mini" type="primary" plain icon="el-icon-printer" @click="printSlittingLabel('slitting-inner-label')">打印内标签</el-button>
           <el-button size="mini" type="primary" plain icon="el-icon-printer" @click="printSlittingLabel('slitting-outer-label')">打印外标签</el-button>
@@ -693,10 +809,11 @@
 </template>
 
 <script>
+import request from '@/utils/request'
 import { getProductionTasks } from '@/api/productionManagement'
 import { getStagePlanTaskPage } from '@/api/schedulePlan'
 import { getShiftProductionSummary } from '@/api/schedule'
-import { getCoatingSchedules, getSlittingSchedules, getPendingOrders, reportWork, getReportWorkList, getLatestScheduleId, getNextCoatingRollCode, updateReportWork, deleteReportWork } from '@/api/manualSchedule'
+import { getCoatingSchedules, getPendingOrders, reportWork, getReportWorkList, getLatestScheduleId, getNextCoatingRollCode, updateReportWork, deleteReportWork } from '@/api/manualSchedule'
 import { queryOrderLockedStocks, allocateMaterials, returnMaterials, createIssueOrder } from '@/api/scheduleMaterial'
 import { queryCoatingChemicalLocks, confirmCoatingChemicalIssue } from '@/api/chemicalRequisition'
 import { matchCustomerMaterialMapping } from '@/api/customerMaterialMapping'
@@ -704,6 +821,7 @@ import { updateCoatingActualTimes } from '@/api/productionManagement'
 import { getCartonSpecList } from '@/api/rdCartonSpec'
 import { getSpecByMaterialCode } from '@/api/tapeSpec'
 import { getOrderDetailForProduction, resolveOrderItemByDetailId } from '@/api/sales'
+import { getCustomerLabelQrRule, saveCustomerLabelQrRule } from '@/api/labelQrRule'
 import { getBarTenderConfig, printByScene, sendBarTenderPrint, goToPrintConfig } from '@/utils/printService'
 import QRCode from 'qrcode'
 
@@ -762,6 +880,7 @@ export default {
       reportEditingId: null,
       reportLoading: false,
       reportSubmitting: false,
+      qrRuleSaving: false,
       reportList: [],
       reportForm: {
         scheduleId: null,
@@ -773,6 +892,8 @@ export default {
         customerCode: '',
         materialCode: '',
         materialName: '',
+        batchNo: '',
+        batchNoRequired: true,
         thickness: '',
         widthMm: null,
         lengthM: null,
@@ -788,8 +909,15 @@ export default {
         slittingRollPerTube: 1,
         slittingTubePerBoxCount: 0,
         slittingTubeRollCount: 0,
+        slittingCoreLabelBizType: 'SLITTING_CORE_LABEL',
         slittingInnerPrintCount: 0,
         slittingOuterPrintCount: 0,
+        boxWeightKg: null,
+        labelProductionDate: '',
+        labelShipDate: '',
+        deliveryNoteNo: '',
+        shelfLifeDays: 365,
+        qrTemplate: '',
         startTime: '',
         endTime: '',
         enableSegment: true,
@@ -811,6 +939,7 @@ export default {
         templateRollLabel: 'COATING_ROLL_LABEL',
         templateInboundSheet: 'COATING_INBOUND_SHEET',
         timeoutMs: 30000,
+        printConcurrency: 3,
         allowBrowserFallback: false
       },
       printPreviewEnabled: true,
@@ -824,6 +953,9 @@ export default {
       detailScanAutoTimer: null,
       lastScannedQrText: '',
       detailOrderItemsCache: {},
+      detailOrderCustomerCache: {},
+      detailOrderCustomerOrderNoCache: {},
+      deliveryNoticeNoCache: {},
       detailResolveCache: {},
       cartonPresetOptions: [],
       slittingPackingPreview: {
@@ -837,10 +969,16 @@ export default {
         diameterRoundedMm: 0
       },
       slittingTubePerBoxManual: false,
+      slittingIssuedBatchOptions: [],
       shiftProductionSummary: {
         shiftCode: '',
         monthArea: 0,
         yearArea: 0
+      },
+      taskQuerySuggestionPool: {
+        orderNos: [],
+        materialCodes: [],
+        specs: []
       }
     }
   },
@@ -889,6 +1027,12 @@ export default {
     },
     reportOrderSpecText() {
       return this.getOrderItemSpec(this.reportForm || {})
+    },
+    reportOrderNoDisplay() {
+      const form = this.reportForm || {}
+      const orderNo = String(form.orderNo || '').trim()
+      const customerOrderNo = String(form.customerOrderNo || '').trim()
+      return customerOrderNo || orderNo || '-'
     },
     isPrintConfigAdmin() {
       const roles = this.$store.getters.roles
@@ -948,6 +1092,10 @@ export default {
     this.focusDetailQrScanInput()
   },
   methods: {
+    resolveSelectedSlittingCoreBizType() {
+      const selected = String((this.reportForm && this.reportForm.slittingCoreLabelBizType) || '').trim().toUpperCase()
+      return selected === 'SLITTING_CORE_LABEL_NARROW' ? 'SLITTING_CORE_LABEL_NARROW' : 'SLITTING_CORE_LABEL'
+    },
     async loadShiftProductionSummary() {
       try {
         const shiftCode = this.currentWorkGroup
@@ -1012,6 +1160,142 @@ export default {
     toSafeNumber(value) {
       const n = Number(value)
       return Number.isFinite(n) ? n : NaN
+    },
+    isLikelyCustomerCode(value) {
+      const s = String(value || '').trim()
+      if (!s) return false
+      if (/[\u4e00-\u9fa5]/.test(s)) return false
+      return /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(s)
+    },
+    extractCustomerCodeCandidate(source) {
+      const row = source || {}
+      const direct = String(row.customerCode || row.customer_code || row.customerNo || row.customer_no || '').trim()
+      if (direct) return direct
+
+      const customerRaw = String(row.customer || '').trim()
+      if (this.isLikelyCustomerCode(customerRaw)) return customerRaw
+      return ''
+    },
+    extractCustomerOrderNoCandidate(source) {
+      const row = source || {}
+      return String(
+        row.customerOrderNo ||
+        row.customer_order_no ||
+        row.customerOrderNumber ||
+        row.customer_order_number ||
+        row.customerPo ||
+        row.customer_po ||
+        ''
+      ).trim()
+    },
+    async resolveCustomerCodeForReportRow(row) {
+      const direct = this.extractCustomerCodeCandidate(row)
+      if (direct) return direct
+
+      const orderNo = this.resolvePrintableOrderNo((row && (row.orderNo || row.order_no)) || '')
+      if (!orderNo) return ''
+
+      if (Object.prototype.hasOwnProperty.call(this.detailOrderCustomerCache, orderNo)) {
+        return String(this.detailOrderCustomerCache[orderNo] || '').trim()
+      }
+
+      try {
+        const res = await getOrderDetailForProduction(orderNo, { silentError: true })
+        const order = (res && (res.code === 200 || res.code === 20000)) ? (res.data || {}) : {}
+        const code = this.extractCustomerCodeCandidate(order)
+        this.$set(this.detailOrderCustomerCache, orderNo, code)
+        return code
+      } catch (e) {
+        this.$set(this.detailOrderCustomerCache, orderNo, '')
+        return ''
+      }
+    },
+    async resolveCustomerOrderNoForReportRow(row) {
+      const direct = this.extractCustomerOrderNoCandidate(row)
+      if (direct) return direct
+
+      const orderNo = this.resolvePrintableOrderNo((row && (row.orderNo || row.order_no)) || '')
+      if (!orderNo) return ''
+
+      if (Object.prototype.hasOwnProperty.call(this.detailOrderCustomerOrderNoCache, orderNo)) {
+        return String(this.detailOrderCustomerOrderNoCache[orderNo] || '').trim()
+      }
+
+      try {
+        const res = await getOrderDetailForProduction(orderNo, { silentError: true })
+        const order = (res && (res.code === 200 || res.code === 20000)) ? (res.data || {}) : {}
+        const customerOrderNo = this.extractCustomerOrderNoCandidate(order)
+        this.$set(this.detailOrderCustomerOrderNoCache, orderNo, customerOrderNo)
+        return customerOrderNo
+      } catch (e) {
+        this.$set(this.detailOrderCustomerOrderNoCache, orderNo, '')
+        return ''
+      }
+    },
+    normalizeCompareText(value) {
+      return String(value || '').trim().replace(/\s+/g, '').toUpperCase()
+    },
+    async resolveDeliveryNoteNoByCustomerAndOrder(customerCode, orderNo) {
+      const c = String(customerCode || '').trim()
+      const o = String(orderNo || '').trim()
+      if (!c || !o) return ''
+
+      const cacheKey = `${this.normalizeCompareText(c)}|${this.normalizeCompareText(o)}`
+      if (Object.prototype.hasOwnProperty.call(this.deliveryNoticeNoCache, cacheKey)) {
+        return String(this.deliveryNoticeNoCache[cacheKey] || '').trim()
+      }
+
+      try {
+        const res = await request({
+          url: '/delivery/list',
+          method: 'get',
+          params: {
+            pageNum: 1,
+            pageSize: 50,
+            orderNo: o,
+            customer: c
+          }
+        })
+
+        const ok = res && (res.code === 200 || res.code === 20000)
+        const data = (ok && res.data) || {}
+        const rows = Array.isArray(data.records)
+          ? data.records
+          : Array.isArray(data.list)
+            ? data.list
+            : Array.isArray(data)
+              ? data
+              : []
+
+        const oKey = this.normalizeCompareText(o)
+        // 关键修复：/delivery/list 的 customer 字段常存“客户名称”，而这里传的是客户代码。
+        // 后端已按 customer 参数做过过滤，这里只需按订单号二次择优，避免再次用客户字段误过滤。
+        const scoreRow = (item) => {
+          const rowOrderNo = this.normalizeCompareText(item && (item.orderNo || item.order_no))
+          if (!rowOrderNo) return 0
+          if (rowOrderNo === oKey) return 3
+          if (rowOrderNo.includes(oKey) || oKey.includes(rowOrderNo)) return 2
+          return 0
+        }
+        const sorted = (rows || []).slice().sort((a, b) => scoreRow(b) - scoreRow(a))
+        const hit = sorted.find(item => scoreRow(item) > 0) || sorted[0] || null
+
+        const noticeNo = String((hit && (
+          hit.noticeNo ||
+          hit.notice_no ||
+          hit.documentNo ||
+          hit.document_no ||
+          hit.deliveryNoteNo ||
+          hit.delivery_note_no ||
+          hit.deliveryNo ||
+          hit.delivery_no
+        )) || '').trim()
+        this.$set(this.deliveryNoticeNoCache, cacheKey, noticeNo)
+        return noticeNo
+      } catch (e) {
+        this.$set(this.deliveryNoticeNoCache, cacheKey, '')
+        return ''
+      }
     },
     extractDetailQrCandidates(rawText) {
       const text = String(rawText || '').trim()
@@ -1118,18 +1402,24 @@ export default {
       return false
     },
     async getOrderItemsByOrderNo(orderNo) {
-      const no = String(orderNo || '').trim()
+      const no = this.resolvePrintableOrderNo(orderNo)
       if (!no) return []
       if (Object.prototype.hasOwnProperty.call(this.detailOrderItemsCache, no)) {
         return Array.isArray(this.detailOrderItemsCache[no]) ? this.detailOrderItemsCache[no] : []
       }
       try {
-        const res = await getOrderDetailForProduction(no)
+        const res = await getOrderDetailForProduction(no, { silentError: true })
         const order = (res && (res.code === 200 || res.code === 20000)) ? (res.data || {}) : {}
+        const customerCode = this.extractCustomerCodeCandidate(order)
+        const customerOrderNo = this.extractCustomerOrderNoCandidate(order)
+        this.$set(this.detailOrderCustomerCache, no, customerCode)
+        this.$set(this.detailOrderCustomerOrderNoCache, no, customerOrderNo)
         const items = Array.isArray(order.items) ? order.items : []
         this.$set(this.detailOrderItemsCache, no, items)
         return items
       } catch (e) {
+        this.$set(this.detailOrderCustomerCache, no, '')
+        this.$set(this.detailOrderCustomerOrderNoCache, no, '')
         this.$set(this.detailOrderItemsCache, no, [])
         return []
       }
@@ -1158,6 +1448,7 @@ export default {
               orderItemId: Number(d.orderDetailId || detailId),
               materialCode: d.materialCode || d.material_code || '',
               materialName: d.materialName || d.material_name || '',
+              customerCode: this.extractCustomerCodeCandidate(d),
               thickness: d.thickness || '',
               widthMm: d.width || d.widthMm || null,
               length: d.length || d.lengthM || null,
@@ -1310,7 +1601,7 @@ export default {
         this.reportForm.cartonHeightMm = Number((target && target.heightMm) || 0)
       }
     },
-    buildMaterialAliasCacheKey(customerCode, materialCode, thickness, width, length) {
+    buildMaterialAliasCacheKey(customerCode, materialCode, customerOrderNo, thickness, width, length) {
       const c = String(customerCode || '').trim().toUpperCase()
       const m = String(materialCode || '').trim().toUpperCase()
       const t = Number(thickness || 0)
@@ -1318,25 +1609,60 @@ export default {
       const l = Number(length || 0)
       return `${c}|${m}|${Number.isFinite(t) ? t.toFixed(3) : ''}|${Number.isFinite(w) ? w.toFixed(2) : ''}|${Number.isFinite(l) ? l.toFixed(2) : ''}`
     },
-    async resolveCustomerMaterialAliasForPrint({ customerCode, materialCode, thickness, width, length }) {
+    buildMaterialCodeCandidatesForAlias(materialCode) {
+      const raw = String(materialCode || '').trim()
+      if (!raw) return []
+      const set = new Set()
+      const add = (v) => {
+        const text = String(v || '').trim()
+        if (text) set.add(text)
+      }
+
+      add(raw)
+
+      // 去掉诸如 "1011-" 之类的前缀编码
+      add(raw.replace(/^\d{2,}-/, ''))
+
+      // 去掉 "/" 后附加段（如客户扩展后缀）
+      const slashIdx = raw.indexOf('/')
+      if (slashIdx > 0) {
+        add(raw.slice(0, slashIdx))
+      }
+
+      // 去掉末尾短标识（如 -HT、-A）
+      add(raw.replace(/-[A-Za-z]{1,4}$/i, ''))
+
+      // 组合回退：先去前缀再去后缀
+      const noPrefix = raw.replace(/^\d{2,}-/, '')
+      add(noPrefix.replace(/-[A-Za-z]{1,4}$/i, ''))
+
+      return Array.from(set)
+    },
+    async resolveCustomerMaterialAliasForPrint({ customerCode, materialCode, customerOrderNo, thickness, width, length }) {
       const c = String(customerCode || '').trim()
       const m = String(materialCode || '').trim()
       if (!c || !m) return null
 
-      const key = this.buildMaterialAliasCacheKey(c, m, thickness, width, length)
+      const key = this.buildMaterialAliasCacheKey(c, m, '', thickness, width, length)
       if (Object.prototype.hasOwnProperty.call(this.customerMaterialAliasCache, key)) {
         return this.customerMaterialAliasCache[key]
       }
 
       try {
-        const res = await matchCustomerMaterialMapping({
-          customerCode: c,
-          materialCode: m,
-          thickness: Number(thickness || 0) > 0 ? Number(thickness) : undefined,
-          width: Number(width || 0) > 0 ? Number(width) : undefined,
-          length: Number(length || 0) > 0 ? Number(length) : undefined
-        })
-        const alias = (res && (res.code === 200 || res.code === 20000)) ? (res.data || null) : null
+        const materialCandidates = this.buildMaterialCodeCandidatesForAlias(m)
+        let alias = null
+        for (let i = 0; i < materialCandidates.length; i++) {
+          const candidate = materialCandidates[i]
+          const res = await matchCustomerMaterialMapping({
+            customerCode: c,
+            materialCode: candidate,
+            thickness: Number(thickness || 0) > 0 ? Number(thickness) : undefined,
+            width: Number(width || 0) > 0 ? Number(width) : undefined,
+            length: Number(length || 0) > 0 ? Number(length) : undefined
+          })
+          alias = (res && (res.code === 200 || res.code === 20000)) ? (res.data || null) : null
+          if (alias) break
+        }
         this.$set(this.customerMaterialAliasCache, key, alias)
         return alias
       } catch (e) {
@@ -1347,16 +1673,29 @@ export default {
     applyMaterialAlias(payload, alias, internalMaterialCode, internalMaterialName) {
       const customerMaterialCode = String((alias && alias.customerMaterialCode) || '').trim()
       const customerMaterialName = String((alias && alias.customerMaterialName) || '').trim()
+      const customerSpec = String((alias && alias.customerSpec) || '').trim()
+      const mappedRemark = String((alias && alias.remark) || '').trim()
+      const orderNo = String(((payload || {}).orderNo) || '').trim()
+      const customerOrderNo = String(((payload || {}).customerOrderNo) || '').trim()
       const materialCode = customerMaterialCode || String(internalMaterialCode || '').trim()
       const materialName = customerMaterialName || String(internalMaterialName || '').trim()
       return {
         ...(payload || {}),
         materialCode,
         materialName,
+        ...(customerSpec ? { spec: customerSpec } : {}),
+        ...(mappedRemark ? { remark: mappedRemark } : {}),
+        orderNoDisplay: customerOrderNo || orderNo || '',
+        productName: materialName,
+        product_name: materialName,
         internalMaterialCode: String(internalMaterialCode || '').trim(),
         internalMaterialName: String(internalMaterialName || '').trim(),
+        internalProductName: String(internalMaterialName || '').trim(),
         customerMaterialCode,
-        customerMaterialName
+        customerMaterialName,
+        customerSpec,
+        customerSpecText: customerSpec,
+        customerProductName: customerMaterialName || materialName
       }
     },
     getPrintScene(type) {
@@ -1382,6 +1721,7 @@ export default {
             const thickness = String((this.reportForm && this.reportForm.thickness) || '').trim()
             const spec = `${thickness || ''}*${Number.isFinite(width) ? width : ''}*${Number.isFinite(length) ? length : ''}`
             const printTime = this.toDateTimeString(new Date())
+            const labelOrderNo = this.resolveLabelOrderNo(this.reportForm)
 
             const payload = {
               rollCode,
@@ -1391,7 +1731,8 @@ export default {
               lengthM: Number.isFinite(length) ? length : 0,
               areaM2: Number(this.formatAreaNum(area)),
               scheduleId: this.reportForm.scheduleId || '',
-              orderNo: this.reportForm.orderNo || '',
+              orderNo: labelOrderNo,
+              internalOrderNo: this.reportForm.orderNo || '',
               customerOrderNo: this.reportForm.customerOrderNo || '',
               qrText: rollCode,
               printDate: String(printTime || '').slice(0, 10),
@@ -1421,6 +1762,7 @@ export default {
             const serialNo = Number(source && source.serialNo)
             const rollSerialCode = this.buildRewindingRollSerialCode(serialNo)
             const productionDate = String((this.reportForm && this.reportForm.startTime) || printTime || '').slice(0, 10)
+            const labelOrderNo = this.resolveLabelOrderNo(this.reportForm)
 
             const payload = {
               spec,
@@ -1430,7 +1772,8 @@ export default {
               productionDate,
               printDate: productionDate,
               scheduleId: this.reportForm.scheduleId || '',
-              orderNo: this.reportForm.orderNo || '',
+              orderNo: labelOrderNo,
+              internalOrderNo: this.reportForm.orderNo || '',
               customerOrderNo: this.reportForm.customerOrderNo || '',
               processType: 'REWINDING',
               operator: this.reportForm.operator || '-',
@@ -1442,8 +1785,13 @@ export default {
       }
 
       if (sceneType === 'slitting-core-label' || sceneType === 'slitting-inner-label' || sceneType === 'slitting-outer-label' || sceneType === 'slitting-pallet-label') {
+        const coreBizType = this.resolveSelectedSlittingCoreBizType()
         const sceneMap = {
-          'slitting-core-label': { sceneName: '分切卷芯标签', bizType: 'SLITTING_CORE_LABEL', defaultTemplate: 'SLITTING_CORE_LABEL' },
+          'slitting-core-label': {
+            sceneName: coreBizType === 'SLITTING_CORE_LABEL_NARROW' ? '分切窄管芯标签' : '分切卷芯标签',
+            bizType: coreBizType,
+            defaultTemplate: coreBizType
+          },
           'slitting-inner-label': { sceneName: '分切内标签', bizType: 'SLITTING_INNER_LABEL', defaultTemplate: 'SLITTING_INNER_LABEL' },
           'slitting-outer-label': { sceneName: '分切外标签', bizType: 'SLITTING_OUTER_LABEL', defaultTemplate: 'SLITTING_OUTER_LABEL' },
           'slitting-pallet-label': { sceneName: '分切栈板标签', bizType: 'SLITTING_PALLET_LABEL', defaultTemplate: 'SLITTING_PALLET_LABEL' }
@@ -1455,7 +1803,7 @@ export default {
           defaultTemplate: () => sceneMeta.defaultTemplate,
           customerCode: () => String((this.reportForm && this.reportForm.customerCode) || '').trim(),
           buildOptions: source => ({
-            copies: 1,
+            copies: Math.max(1, Math.trunc(Number((source && source.copies) || 1) || 1)),
             jobName: `${sceneMeta.bizType}_${String((source && source.serialNo) || 'NA').trim() || 'NA'}`
           }),
           buildData: (source, runtime = {}) => {
@@ -1472,30 +1820,91 @@ export default {
             const perBoxRolls = (tubeRollCount > 0 && tubePerBoxCount > 0) ? (tubeRollCount * tubePerBoxCount) : 0
             const isOuterLabel = sceneType === 'slitting-outer-label'
             const quantityUnit = isOuterLabel ? '卷/箱' : '卷/筒'
+            const currentBoxRollCount = isOuterLabel ? quantityPerLabel : perBoxRolls
             const coreOuterDiameterMm = Number((this.reportForm && this.reportForm.coreOuterDiameterMm) || 0)
             const tapeOuterDiameterMm = this.calcSlittingTapeOuterDiameterMm(this.reportForm || {})
+            const batchNo = String((this.reportForm && this.reportForm.batchNo) || '').trim()
+            const productionDateText = this.toDateString(String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() || this.toDateString((this.reportForm && this.reportForm.startTime) || printTime))
+            const shipDateText = this.toDateString(String((this.reportForm && this.reportForm.labelShipDate) || '').trim() || this.resolveDateTextFromRow(this.reportForm || {}))
+            const productionDate = this.toCompactDateStringStrict(productionDateText)
+            const shipDate = this.toCompactDateStringStrict(shipDateText)
+            const deliveryNoteNo = String((this.reportForm && this.reportForm.deliveryNoteNo) || '').trim()
+            const shelfLifeDays = Math.max(0, Math.trunc(Number((this.reportForm && this.reportForm.shelfLifeDays) || 0) || 0))
+            const expiryDate = this.calcExpiryDate(productionDate, shelfLifeDays)
+            const boxWeightKg = Number((this.reportForm && this.reportForm.boxWeightKg) || 0)
+            const boxWeightValue = Number.isFinite(boxWeightKg) && boxWeightKg > 0 ? Number(boxWeightKg.toFixed(2)) : null
+            const labelOrderNo = this.resolveLabelOrderNo(this.reportForm)
+            const qtyOrWeight = this.resolveQtyOrWeightText({
+              grossWeightKg: boxWeightValue,
+              boxRollCount: currentBoxRollCount,
+              quantityUnit
+            })
+            const shelfLifeText = shelfLifeDays > 0 ? String(shelfLifeDays) : ''
             const payload = {
               sceneType,
               processType: 'SLITTING',
-              orderNo: (this.reportForm && this.reportForm.orderNo) || '',
+              orderNo: labelOrderNo,
+              internalOrderNo: (this.reportForm && this.reportForm.orderNo) || '',
               customerOrderNo: (this.reportForm && this.reportForm.customerOrderNo) || '',
               taskNo: (this.reportForm && this.reportForm.taskNo) || '',
+              batchNo,
+              issueBatchNo: batchNo,
+              slittingBatchNo: batchNo,
               spec: this.formatSlittingSpec(this.reportForm || {}),
               scheduleId: (this.reportForm && this.reportForm.scheduleId) || '',
               orderDetailId: (this.reportForm && this.reportForm.orderDetailId) || '',
               producedQty,
               rollPerTube: quantityPerLabel,
-              rollPerTubeRaw: rollPerTube,
+              rollPerTubeRaw: quantityPerLabel,
+              standardRollPerTube: rollPerTube,
               tubePerBoxCount,
               tubeRollCount: quantityPerLabel,
-              tubeRollCountRaw: tubeRollCount,
-              boxRollCount: perBoxRolls,
+              tubeRollCountRaw: quantityPerLabel,
+              standardTubeRollCount: tubeRollCount,
+              boxRollCount: currentBoxRollCount,
+              currentBoxRollCount,
+              cartonRollCount: currentBoxRollCount,
+              rollsPerBox: currentBoxRollCount,
+              rollsInBox: currentBoxRollCount,
+              slittingQty: currentBoxRollCount,
+              standardBoxRollCount: perBoxRolls,
+              boxRollCountCapacity: perBoxRolls,
               quantity: quantityPerLabel,
               qty: quantityPerLabel,
               labelQty: quantityPerLabel,
               quantityPerLabel,
               quantityUnit,
-              quantityText: `${quantityPerLabel}${quantityUnit}`,
+              quantityText: `${currentBoxRollCount}${quantityUnit}`,
+              boxRollCountText: `${currentBoxRollCount}卷/箱`,
+              productionDate: productionDate,
+              productionDateText,
+              productionDateCompact: productionDate,
+              production_date: productionDate,
+              prodDate: productionDate,
+              prodDateText: productionDateText,
+              shengchanriqi: productionDate,
+              shengchanriqiText: productionDateText,
+              shipDate: shipDate,
+              shipDateText,
+              shipDateCompact: shipDate,
+              ship_date: shipDate,
+              deliveryDate: shipDate,
+              deliveryDateText: shipDateText,
+              deliveryDateCompact: shipDate,
+              delivery_date: shipDate,
+              chuhuoriqi: shipDate,
+              chuhuoriqiText: shipDateText,
+              shelfLifeDays,
+              shelfLifeText,
+              expiryDate,
+              deliveryNoteNo,
+              boxWeightKg: boxWeightValue,
+              currentBoxWeightKg: boxWeightValue,
+              grossWeightKg: boxWeightValue,
+              netWeightKg: boxWeightValue,
+              qtyOrWeight,
+              boxWeightText: boxWeightValue != null ? `${boxWeightValue}kg` : '',
+              remark: String((this.reportForm && this.reportForm.remark) || '').trim(),
               cartonLengthMm: Number((this.reportForm && this.reportForm.cartonLengthMm) || 0) || null,
               cartonWidthMm: Number((this.reportForm && this.reportForm.cartonWidthMm) || 0) || null,
               cartonHeightMm: Number((this.reportForm && this.reportForm.cartonHeightMm) || 0) || null,
@@ -1504,10 +1913,16 @@ export default {
               serialNo: Number.isFinite(serialNo) ? serialNo : 1,
               labelCode: `${sceneMeta.bizType}-${Number.isFinite(serialNo) ? serialNo : 1}`,
               operator: (this.reportForm && this.reportForm.operator) || '-',
-              printDate: String(((this.reportForm && this.reportForm.startTime) || printTime || '')).slice(0, 10),
+              printDate: this.toCompactDateString((this.reportForm && this.reportForm.startTime) || printTime),
               printTime
             }
-            return this.applyMaterialAlias(payload, runtime.alias, materialCode, materialName)
+            const mergedPayload = this.applyMaterialAlias(payload, runtime.alias, materialCode, materialName)
+            const qrTemplate = String((this.reportForm && this.reportForm.qrTemplate) || '').trim() || this.getDefaultSlittingQrTemplate()
+            const qrContent = this.buildDynamicQrContent(qrTemplate, mergedPayload)
+            mergedPayload.qrTemplate = qrTemplate
+            mergedPayload.qrContent = qrContent
+            mergedPayload.qrCode = qrContent
+            return mergedPayload
           }
         }
       }
@@ -1675,6 +2090,233 @@ export default {
       if (!d || Number.isNaN(d.getTime())) return ''
       const pad = n => String(n).padStart(2, '0')
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+    },
+    toDateString(value) {
+      const d = value instanceof Date ? value : new Date(value)
+      if (!d || Number.isNaN(d.getTime())) return ''
+      const pad = n => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    },
+    toCompactDateString(value) {
+      const raw = String(value == null ? '' : value).trim()
+      if (!raw) return ''
+      if (/^\d{8}$/.test(raw)) return raw
+      const dateText = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : this.toDateString(raw)
+      return String(dateText || '').replace(/-/g, '')
+    },
+    toCompactDateStringStrict(value) {
+      const raw = String(value == null ? '' : value).trim()
+      if (!raw) return ''
+      if (/^\d{8}$/.test(raw)) return raw
+
+      const digits = raw.replace(/\D/g, '')
+      if (/^\d{8}$/.test(digits)) {
+        const y = digits.slice(0, 4)
+        const mm = Number(digits.slice(4, 6))
+        const dd = Number(digits.slice(6, 8))
+        if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
+          return `${y}${String(mm).padStart(2, '0')}${String(dd).padStart(2, '0')}`
+        }
+      }
+
+      return this.toCompactDateString(raw)
+    },
+    composeOrderNoDisplay(orderNo, customerOrderNo) {
+      const o = String(orderNo || '').trim()
+      const c = String(customerOrderNo || '').trim()
+      return c || o || '-'
+    },
+    resolveLabelOrderNo(form = {}) {
+      const customerOrderNo = String((form && form.customerOrderNo) || '').trim()
+      const orderNo = String((form && form.orderNo) || '').trim()
+      return customerOrderNo || orderNo || ''
+    },
+    getDefaultSlittingQrTemplate() {
+      return '{{materialCode}}-{{batchNo}}-{{orderNo}}-{{qtyOrWeight}}-{{productionDate}}-{{shipDate}}-{{deliveryNoteNo}}-{{shelfLifeText}}'
+    },
+    resolveQtyOrWeightText({ grossWeightKg, boxRollCount, quantityUnit = '卷/箱' } = {}) {
+      const qty = Math.max(0, Math.trunc(Number(boxRollCount || 0) || 0))
+      if (qty > 0) {
+        return `${qty}PCS`
+      }
+      return ''
+    },
+    resolveDateTextFromRow(row, keys = []) {
+      const target = row || {}
+      const list = Array.isArray(keys) && keys.length
+        ? keys
+        : ['deliveryDate', 'delivery_date', 'shipDate', 'ship_date', 'planDeliveryDate', 'plan_delivery_date']
+      for (let i = 0; i < list.length; i++) {
+        const key = list[i]
+        const raw = target && target[key]
+        if (!raw) continue
+        const text = this.toDateString(raw)
+        if (text) return text
+        const fallback = String(raw).trim()
+        if (fallback) return fallback.slice(0, 10)
+      }
+      return ''
+    },
+    calcExpiryDate(productionDate, shelfLifeDays) {
+      const base = String(productionDate || '').trim()
+      const days = Math.max(0, Math.trunc(Number(shelfLifeDays || 0) || 0))
+      if (!base || !(days > 0)) return ''
+      let d = null
+      if (/^\d{8}$/.test(base)) {
+        d = new Date(`${base.slice(0, 4)}-${base.slice(4, 6)}-${base.slice(6, 8)}`)
+      } else {
+        d = new Date(base)
+      }
+      if (!d || Number.isNaN(d.getTime())) return ''
+      d.setDate(d.getDate() + days)
+      return this.toCompactDateString(d)
+    },
+    buildDynamicQrContent(template, data = {}) {
+      const source = data || {}
+      const defaultTpl = this.getDefaultSlittingQrTemplate()
+      const rawTemplate = String(template || '').trim() || defaultTpl
+
+      const readValue = (key) => {
+        const k = String(key || '').trim()
+        if (!k) return ''
+        const val = source[k]
+        if (val === null || val === undefined) return ''
+        return String(val).trim()
+      }
+
+      const hasPlaceholder = /\{\{\s*[^{}\s]+\s*\}\}|\{\s*[^{}\s]+\s*\}/.test(rawTemplate)
+      let built = ''
+      if (hasPlaceholder) {
+        built = rawTemplate
+          .replace(/\{\{\s*([^{}\s]+)\s*\}\}/g, (_, key) => readValue(key))
+          .replace(/\{\s*([^{}\s]+)\s*\}/g, (_, key) => readValue(key))
+      } else {
+        const keys = rawTemplate.split('|').map(x => String(x || '').trim()).filter(Boolean)
+        built = keys.map(k => readValue(k)).filter(Boolean).join('|')
+      }
+
+      return String(built || '')
+        .replace(/\|{2,}/g, '|')
+        .replace(/^[|\s]+|[|\s]+$/g, '')
+    },
+    buildSlittingQrPreview(aliasOverride = null) {
+      const form = this.reportForm || {}
+      if (form.processType !== 'SLITTING') return ''
+      let alias = aliasOverride
+      if (!alias) {
+        const cacheKey = this.buildMaterialAliasCacheKey(
+          form.customerCode,
+          form.materialCode,
+          form.customerOrderNo,
+          form.thickness,
+          form.widthMm,
+          form.lengthM
+        )
+        alias = this.customerMaterialAliasCache && this.customerMaterialAliasCache[cacheKey]
+      }
+      const batchNo = String(form.batchNo || '').trim()
+      const materialCode = String(((alias && alias.customerMaterialCode) || form.materialCode) || '').trim()
+      const orderNo = this.resolveLabelOrderNo(form)
+      const customerOrderNo = String(form.customerOrderNo || '').trim()
+      const deliveryNoteNo = String(form.deliveryNoteNo || '').trim()
+      const producedQty = Math.max(0, Math.trunc(Number(form.producedQty || 0) || 0))
+      const rollPerTube = Math.max(1, Math.trunc(Number(form.slittingRollPerTube || 0) || 1))
+      const tubePerBoxCount = Math.max(0, Math.trunc(Number(form.slittingTubePerBoxCount || 0) || 0))
+      const outerPrintCount = this.calcSlittingOuterLabelCount(producedQty, rollPerTube, tubePerBoxCount)
+      const outerQuantities = this.buildSlittingInnerLabelQuantities(producedQty, rollPerTube, tubePerBoxCount, outerPrintCount, 'slitting-outer-label')
+      const boxRollCount = Number(outerQuantities[0] || 0) > 0
+        ? Number(outerQuantities[0] || 0)
+        : (producedQty > 0 ? producedQty : rollPerTube)
+      const productionDateText = this.toDateString(String(form.labelProductionDate || '').trim() || this.toDateString(form.startTime))
+      const shipDateText = this.toDateString(String(form.labelShipDate || '').trim())
+      const productionDate = this.toCompactDateStringStrict(productionDateText)
+      const shipDate = this.toCompactDateStringStrict(shipDateText)
+      const shelfLifeDays = Math.max(0, Math.trunc(Number(form.shelfLifeDays || 0) || 0))
+      const expiryDate = this.calcExpiryDate(productionDate, shelfLifeDays)
+      const grossWeightKg = Number(form.boxWeightKg || 0)
+      const grossWeightValue = Number.isFinite(grossWeightKg) && grossWeightKg > 0 ? Number(grossWeightKg.toFixed(2)) : ''
+      const qtyOrWeight = this.resolveQtyOrWeightText({
+        grossWeightKg: grossWeightValue,
+        boxRollCount,
+        quantityUnit: '卷/箱'
+      })
+      const shelfLifeText = shelfLifeDays > 0 ? String(shelfLifeDays) : ''
+      return this.buildDynamicQrContent(form.qrTemplate, {
+        orderNo,
+        customerOrderNo,
+        deliveryNoteNo,
+        batchNo,
+        materialCode,
+        boxRollCount,
+        currentBoxRollCount: boxRollCount,
+        slittingQty: boxRollCount,
+        grossWeightKg: grossWeightValue,
+        boxWeightKg: grossWeightValue,
+        qtyOrWeight,
+        productionDate,
+        productionDateText,
+        productionDateCompact: productionDate,
+        production_date: productionDate,
+        prodDate: productionDate,
+        prodDateText: productionDateText,
+        shipDate,
+        shipDateText,
+        shipDateCompact: shipDate,
+        ship_date: shipDate,
+        deliveryDate: shipDate,
+        deliveryDateText: shipDateText,
+        deliveryDateCompact: shipDate,
+        delivery_date: shipDate,
+        shelfLifeDays,
+        shelfLifeText,
+        expiryDate,
+        remark: String(form.remark || '').trim()
+      })
+    },
+    async loadCustomerQrRuleForSlitting(customerCode, bizType = 'SLITTING_OUTER_LABEL') {
+      const code = String(customerCode || '').trim()
+      if (!code) return
+      try {
+        const res = await getCustomerLabelQrRule(code, bizType)
+        if (res && (res.code === 200 || res.code === 20000) && res.data && res.data.qrTemplate) {
+          this.reportForm.qrTemplate = String(res.data.qrTemplate || '').trim() || this.getDefaultSlittingQrTemplate()
+        }
+      } catch (e) {
+        // 忽略加载失败，保持本地默认模板
+      }
+    },
+    async saveCurrentCustomerQrRule(bizType = 'SLITTING_OUTER_LABEL', silent = false) {
+      const form = this.reportForm || {}
+      const customerCode = String(form.customerCode || '').trim()
+      if (!customerCode) {
+        if (!silent) this.$message.warning('客户代码为空，无法保存二维码规则')
+        return false
+      }
+      const qrTemplate = String(form.qrTemplate || '').trim() || this.getDefaultSlittingQrTemplate()
+      this.qrRuleSaving = true
+      try {
+        const res = await saveCustomerLabelQrRule({
+          customerCode,
+          bizType,
+          qrTemplate,
+          enabled: 1
+        })
+        if (res && (res.code === 200 || res.code === 20000)) {
+          if (!silent) this.$message.success('二维码规则已保存')
+          return true
+        }
+        if (!silent) this.$message.error((res && (res.msg || res.message)) || '保存二维码规则失败')
+        return false
+      } catch (e) {
+        if (!silent) this.$message.error(this.resolveErrorMessage(e, '保存二维码规则失败'))
+        return false
+      } finally {
+        this.qrRuleSaving = false
+      }
+    },
+    async persistQrRuleOnFirstPrint(sceneType) {
+      if (sceneType !== 'slitting-outer-label') return
+      await this.saveCurrentCustomerQrRule('SLITTING_OUTER_LABEL', true)
     },
     parseDateTimeValue(value) {
       if (!value) return null
@@ -1877,7 +2519,11 @@ export default {
       const rows = (pairs || []).map(item => {
         const label = this.escapeHtml(item && item.label)
         const value = this.escapeHtml(item && item.value)
-        return `<div style="margin:4px 0;"><strong>${label}：</strong>${value || '-'}</div>`
+        const field = this.escapeHtml(item && (item.field || item.key || item.payloadKey || ''))
+        const fieldText = field
+          ? `<span style="margin-left:8px;color:#909399;font-size:12px;">字段: <code style="color:#606266;background:#f5f7fa;padding:1px 4px;border-radius:3px;">${field}</code></span>`
+          : ''
+        return `<div style="margin:4px 0;"><strong>${label}：</strong>${value || '-'}${fieldText}</div>`
       }).join('')
       const html = `<div style="max-height:420px;overflow:auto;line-height:1.6;">${rows}</div>`
       try {
@@ -1902,21 +2548,24 @@ export default {
       const width = Number(roll.widthMm || 0)
       const length = Number(roll.lengthM || 0)
       const area = this.calcRollArea(width, length)
+      const spec = `${Number.isFinite(width) ? width : '-'} * ${Number.isFinite(length) ? length : '-'}`
       const materialCode = String((this.reportForm && this.reportForm.materialCode) || '').trim()
       const materialName = this.resolveMaterialNameByCode(materialCode)
       const alias = await this.resolveCustomerMaterialAliasForPrint({
         customerCode: this.reportForm.customerCode,
         materialCode,
+        customerOrderNo: this.reportForm.customerOrderNo,
         thickness: this.reportForm.thickness,
         width,
         length
       })
       const ok = await this.confirmPrintPreview('母卷标签', [
         { label: '母卷号', value: rollCode },
-        { label: '订单号', value: this.reportForm.orderNo || '-' },
+        { label: '订单号', value: this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo) },
         { label: '客户订单号', value: this.reportForm.customerOrderNo || '-' },
         { label: '物料代码', value: (alias && alias.customerMaterialCode) || materialCode || '-' },
         { label: '物料名称', value: (alias && alias.customerMaterialName) || materialName || '-' },
+        { label: '客户规格', value: (alias && alias.customerSpec) || spec || '-' },
         { label: '规格(mm*m)', value: `${Number.isFinite(width) ? width : '-'} * ${Number.isFinite(length) ? length : '-'}` },
         { label: '面积(m²)', value: this.formatAreaNum(area) }
       ])
@@ -1949,7 +2598,7 @@ export default {
         <div class="row"><strong>长度(m)：</strong>${Number.isFinite(length) ? length : ''}</div>
         <div class="row"><strong>面积(m²)：</strong>${this.formatAreaNum(area)}</div>
         <div class="row"><strong>排程ID：</strong>${this.reportForm.scheduleId || '-'}</div>
-        <div class="row"><strong>订单号：</strong>${this.reportForm.orderNo || '-'}</div>
+        <div class="row"><strong>订单号：</strong>${this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo)}</div>
         <div class="row"><strong>客户订单号：</strong>${this.reportForm.customerOrderNo || '-'}</div>
         <div class="row"><strong>物料代码：</strong>${(alias && alias.customerMaterialCode) || materialCode || '-'}</div>
         <div class="row"><strong>物料名称：</strong>${(alias && alias.customerMaterialName) || materialName || '-'}</div>
@@ -2054,6 +2703,7 @@ export default {
       const alias = await this.resolveCustomerMaterialAliasForPrint({
         customerCode: this.reportForm.customerCode,
         materialCode,
+        customerOrderNo: this.reportForm.customerOrderNo,
         thickness: this.reportForm.thickness,
         width,
         length
@@ -2061,10 +2711,11 @@ export default {
       const materialName = this.resolveMaterialNameByCode(materialCode)
       const ok = await this.confirmPrintPreview('复卷标签', [
         { label: '母卷号', value: motherRollCode },
-        { label: '订单号', value: this.reportForm.orderNo || '-' },
+        { label: '订单号', value: this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo) },
         { label: '客户订单号', value: this.reportForm.customerOrderNo || '-' },
         { label: '物料代码', value: (alias && alias.customerMaterialCode) || materialCode || '-' },
         { label: '物料名称', value: (alias && alias.customerMaterialName) || materialName || '-' },
+        { label: '客户规格', value: (alias && alias.customerSpec) || this.resolveRewindingSpecText() || '-' },
         { label: '规格', value: this.resolveRewindingSpecText() || '-' },
         { label: '起始序号', value: startNo },
         { label: '打印张数', value: printCount }
@@ -2090,6 +2741,14 @@ export default {
     async printSlittingLabel(sceneType) {
       const validScenes = ['slitting-core-label', 'slitting-inner-label', 'slitting-outer-label', 'slitting-pallet-label']
       if (!validScenes.includes(sceneType)) return
+
+      this.commitSlittingBatchNoInput()
+      const batchNoRequired = !!(this.reportForm && this.reportForm.batchNoRequired)
+      const batchNo = String((this.reportForm && this.reportForm.batchNo) || '').trim()
+      if (batchNoRequired && !batchNo) {
+        this.$message.warning('批次号已设置为必填，请先选择或填写批次号后再打印')
+        return
+      }
 
       const defaultRollPerTube = this.calcSlittingDefaultRollPerTube(this.reportForm && this.reportForm.widthMm)
       const producedQty = Math.max(1, Math.trunc(Number((this.reportForm && this.reportForm.producedQty) || 0) || 0))
@@ -2129,45 +2788,155 @@ export default {
       const alias = await this.resolveCustomerMaterialAliasForPrint({
         customerCode: this.reportForm.customerCode,
         materialCode,
+        customerOrderNo: this.reportForm.customerOrderNo,
         thickness: this.reportForm.thickness,
         width,
         length
       })
       const materialName = this.resolveMaterialNameByCode(materialCode)
+      const quantities = this.buildSlittingInnerLabelQuantities(producedQty, tubeRollCount, tubePerBoxCount, printCount, sceneType)
+      const mergedItems = this.buildMergedSlittingPrintItems(quantities)
+      const standardBoxRollCount = (tubeRollCount > 0 && tubePerBoxCount > 0) ? (tubeRollCount * tubePerBoxCount) : 0
+      const productionDate = this.toCompactDateStringStrict(String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() || this.toDateString((this.reportForm && this.reportForm.startTime) || new Date())) || '-'
+      const shipDate = this.toCompactDateStringStrict(String((this.reportForm && this.reportForm.labelShipDate) || '').trim()) || '-'
+      const deliveryNoteNo = String((this.reportForm && this.reportForm.deliveryNoteNo) || '').trim() || '-'
+      const shelfLifeDays = Math.max(0, Math.trunc(Number((this.reportForm && this.reportForm.shelfLifeDays) || 0) || 0))
+      const expiryDate = this.calcExpiryDate(productionDate, shelfLifeDays) || '-'
+      const boxWeightKg = Number((this.reportForm && this.reportForm.boxWeightKg) || 0)
+      const boxWeightText = Number.isFinite(boxWeightKg) && boxWeightKg > 0 ? `${Number(boxWeightKg.toFixed(2))}kg` : '-'
       const ok = await this.confirmPrintPreview(labelName, [
-        { label: '订单号', value: this.reportForm.orderNo || '-' },
-        { label: '客户订单号', value: this.reportForm.customerOrderNo || '-' },
-        { label: '任务号', value: this.reportForm.taskNo || '-' },
-        { label: '物料代码', value: (alias && alias.customerMaterialCode) || materialCode || '-' },
-        { label: '物料名称', value: (alias && alias.customerMaterialName) || materialName || '-' },
-        { label: '卷/筒', value: tubeRollCount },
-        { label: '筒/箱', value: tubePerBoxCount },
-        { label: '内标张数', value: innerPrintCount },
-        { label: '外标张数', value: outerPrintCount },
-        { label: '本次打印张数', value: printCount },
-        { label: '纸箱规格', value: `${Number(this.reportForm.cartonLengthMm || 0) || 0}×${Number(this.reportForm.cartonWidthMm || 0) || 0}×${Number(this.reportForm.cartonHeightMm || 0) || 0}` },
-        { label: '管芯外径(mm)', value: coreOuterDiameterMm > 0 ? coreOuterDiameterMm : '-' },
-        { label: '胶带外径(mm)', value: tapeOuterDiameterText },
-        { label: '规格', value: this.formatSlittingSpec(this.reportForm || {}) }
+        { label: '订单号', value: this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo), field: 'orderNo | orderNoDisplay' },
+        { label: '客户订单号', value: this.reportForm.customerOrderNo || '-', field: 'customerOrderNo' },
+        { label: '任务号', value: this.reportForm.taskNo || '-', field: 'taskNo' },
+        { label: '批次号', value: this.reportForm.batchNo || '-', field: 'batchNo | issueBatchNo | slittingBatchNo' },
+        { label: '物料代码', value: (alias && alias.customerMaterialCode) || materialCode || '-', field: 'materialCode' },
+        { label: '物料名称', value: (alias && alias.customerMaterialName) || materialName || '-', field: 'materialName | productName' },
+        { label: '客户规格', value: (alias && alias.customerSpec) || this.formatSlittingSpec(this.reportForm || {}) || '-', field: 'customerSpec | customerSpecText | spec' },
+        { label: '卷/筒', value: tubeRollCount, field: 'rollPerTube | tubeRollCount | quantityPerLabel | quantityText' },
+        { label: '本箱卷数', value: (quantities && quantities.length) ? quantities.join(' / ') : '-', field: 'boxRollCount | currentBoxRollCount | cartonRollCount | rollsPerBox | rollsInBox | slittingQty' },
+        { label: '满箱卷数', value: standardBoxRollCount || '-', field: 'standardBoxRollCount | boxRollCountCapacity' },
+        { label: '生产日期', value: productionDate || '-', field: 'productionDate | shengchanriqi | printDate' },
+        { label: '出货日期', value: shipDate, field: 'shipDate | deliveryDate | chuhuoriqi' },
+        { label: '送货单号', value: deliveryNoteNo, field: 'deliveryNoteNo' },
+        { label: '本箱重量', value: boxWeightText, field: 'grossWeightKg | boxWeightKg | currentBoxWeightKg | netWeightKg | boxWeightText' },
+        { label: '保质期(天)', value: shelfLifeDays || '-', field: 'shelfLifeDays' },
+        { label: '保质期至', value: expiryDate, field: 'expiryDate' },
+        { label: '备注', value: String((this.reportForm && this.reportForm.remark) || '').trim() || '-', field: 'remark' },
+        { label: '二维码内容', value: this.buildSlittingQrPreview(alias) || '-', field: 'qrContent | qrCode' },
+        { label: '每张卷数序列', value: (quantities && quantities.length) ? quantities.join(' / ') : '-', field: 'quantityOverride -> quantityPerLabel' },
+        { label: '提交批次', value: `${mergedItems.length} 次请求（共 ${printCount} 张）`, field: '同值合并提交(copies)' },
+        { label: '筒/箱', value: tubePerBoxCount, field: 'tubePerBoxCount' },
+        { label: '内标张数', value: innerPrintCount, field: '前端计算值(不入payload)' },
+        { label: '外标张数', value: outerPrintCount, field: '前端计算值(不入payload)' },
+        { label: '本次打印张数', value: printCount, field: 'copies(提交次数)' },
+        { label: '纸箱规格', value: `${Number(this.reportForm.cartonLengthMm || 0) || 0}×${Number(this.reportForm.cartonWidthMm || 0) || 0}×${Number(this.reportForm.cartonHeightMm || 0) || 0}`, field: 'cartonLengthMm | cartonWidthMm | cartonHeightMm' },
+        { label: '管芯外径(mm)', value: coreOuterDiameterMm > 0 ? coreOuterDiameterMm : '-', field: 'coreOuterDiameterMm' },
+        { label: '胶带外径(mm)', value: tapeOuterDiameterText, field: 'tapeOuterDiameterMm' },
+        { label: '规格', value: this.formatSlittingSpec(this.reportForm || {}), field: 'spec' }
       ])
       if (!ok) return
+
+      const batchSaved = await this.persistSlittingBatchNoForDeliveryNote()
+      if (!batchSaved) return
+
+      await this.persistQrRuleOnFirstPrint(sceneType)
       try {
         this.loadBarTenderConfig()
-        const quantities = this.buildSlittingInnerLabelQuantities(producedQty, tubeRollCount, tubePerBoxCount, printCount, sceneType)
-        for (let i = 0; i < printCount; i++) {
-          await printByScene(this.getPrintScene(sceneType), {
-            serialNo: i + 1,
-            quantityOverride: quantities[i]
+        const scene = this.getPrintScene(sceneType)
+        const jobs = []
+        for (let i = 0; i < mergedItems.length; i++) {
+          const item = mergedItems[i]
+          const serialNo = Number(item && item.serialNo) || (i + 1)
+          const quantityOverride = Number(item && item.quantityOverride) || 1
+          const copies = Math.max(1, Math.trunc(Number(item && item.copies) || 1))
+          jobs.push(() => printByScene(scene, {
+            serialNo,
+            quantityOverride,
+            copies
           }, {
             config: this.barTenderConfig,
             vm: this,
             alias
-          })
+          }))
         }
+        const batchSize = this.getAdaptivePrintBatchSize(mergedItems.length)
+        await this.runPrintJobsInBatches(jobs, batchSize)
         this.$message.success(`已提交BarTender打印任务（${labelName}）${printCount}张`)
       } catch (e) {
         const msg = (e && e.message) || '未知错误'
         this.$message.error(`BarTender打印失败：${msg}`)
+      }
+    },
+    async persistSlittingBatchNoForDeliveryNote() {
+      const noticeNo = String((this.reportForm && this.reportForm.deliveryNoteNo) || '').trim()
+      const batchNo = String((this.reportForm && this.reportForm.batchNo) || '').trim()
+      const materialCode = String((this.reportForm && this.reportForm.materialCode) || '').trim()
+
+      if (!noticeNo || !batchNo) {
+        return true
+      }
+
+      try {
+        const res = await request({
+          url: '/delivery/append-batch-no',
+          method: 'post',
+          data: {
+            noticeNo,
+            batchNo,
+            materialCode
+          }
+        })
+        if (res && (res.code === 200 || res.code === 20000)) {
+          return true
+        }
+        this.$message.error((res && res.msg) || '保存送货单批次号失败，已取消打印')
+        return false
+      } catch (e) {
+        const status = e && e.response ? Number(e.response.status) : 0
+        if (status === 405) {
+          try {
+            const fallbackRes = await request({
+              url: '/delivery/append-batch-no',
+              method: 'get',
+              params: {
+                noticeNo,
+                batchNo,
+                materialCode
+              }
+            })
+            if (fallbackRes && (fallbackRes.code === 200 || fallbackRes.code === 20000)) {
+              return true
+            }
+          } catch (fallbackError) {
+            // ignore and use unified error message below
+          }
+        }
+        const msg = (e && e.message) || '未知错误'
+        this.$message.error(`保存送货单批次号失败，已取消打印：${msg}`)
+        return false
+      }
+    },
+    getAdaptivePrintBatchSize(printCount) {
+      const configured = Number(this.barTenderConfig && this.barTenderConfig.printConcurrency)
+      if (Number.isFinite(configured) && configured > 0) {
+        return Math.max(1, Math.min(8, Math.trunc(configured)))
+      }
+      const count = Math.max(1, Math.trunc(Number(printCount || 1) || 1))
+      if (count <= 4) return 2
+      if (count <= 12) return 3
+      if (count <= 30) return 4
+      return 5
+    },
+    async runPrintJobsInBatches(jobs = [], batchSize = 3) {
+      const queue = Array.isArray(jobs) ? jobs : []
+      const size = Math.max(1, Math.trunc(Number(batchSize || 1) || 1))
+      for (let i = 0; i < queue.length; i += size) {
+        const group = queue.slice(i, i + size).map(fn => fn())
+        const results = await Promise.allSettled(group)
+        const failed = results.find(x => x.status === 'rejected')
+        if (failed) {
+          throw failed.reason || new Error('打印任务失败')
+        }
       }
     },
     calcProducedRollsArea() {
@@ -2384,6 +3153,27 @@ export default {
         return unitQty
       })
     },
+    buildMergedSlittingPrintItems(quantities = []) {
+      const list = Array.isArray(quantities) ? quantities : []
+      if (!list.length) return []
+      const result = []
+      let startSerial = 1
+      let currentQty = Math.max(1, Math.trunc(Number(list[0]) || 1))
+      let copies = 1
+      for (let i = 1; i < list.length; i++) {
+        const qty = Math.max(1, Math.trunc(Number(list[i]) || 1))
+        if (qty === currentQty) {
+          copies += 1
+          continue
+        }
+        result.push({ serialNo: startSerial, quantityOverride: currentQty, copies })
+        startSerial = i + 1
+        currentQty = qty
+        copies = 1
+      }
+      result.push({ serialNo: startSerial, quantityOverride: currentQty, copies })
+      return result
+    },
     handleSlittingTubePerBoxChanged(value) {
       if (!this.reportForm) return
       this.slittingTubePerBoxManual = true
@@ -2419,8 +3209,11 @@ export default {
       if (!code) return ''
       const fromForm = String((this.reportForm && this.reportForm.materialName) || '').trim()
       if (fromForm) return fromForm
-      const hit = (this.list || []).find(x => String((x && x.materialCode) || '').trim() === code)
-      return String((hit && hit.materialName) || '').trim()
+      const hit = (this.list || []).find(x => {
+        const c = String((x && (x.materialCode || x.material_code)) || '').trim()
+        return c === code
+      })
+      return String((hit && (hit.materialName || hit.material_name || hit.productName || hit.product_name || hit.name)) || '').trim()
     },
     formatAreaNum(value) {
       const n = Number(value || 0)
@@ -2602,7 +3395,7 @@ export default {
           sourceType: 'MANUAL_COATING',
           orderNo: row.related_order_nos || row.order_nos || row.order_no,
           materialCode: row.material_code,
-          materialName: row.material_name,
+          materialName: row.material_name || row.product_name || row.productName || row.name || '',
           colorName: row.color_name || '',
           thickness: row.thickness,
           jumboWidth: row.coating_width != null ? row.coating_width : (row.width != null ? row.width : row.jumbo_width),
@@ -2656,7 +3449,7 @@ export default {
         type: row.type || (row.processType ? String(row.processType).toLowerCase() : this.query.type || this.fixedType),
         orderNo: row.orderNo || row.order_no,
         materialCode: row.materialCode || row.material_code,
-        materialName: row.materialName || row.material_name,
+        materialName: row.materialName || row.material_name || row.productName || row.product_name || row.name || '',
         orderQty: row.orderQty != null ? row.orderQty : (row.order_qty != null ? row.order_qty : (row.rolls != null ? row.rolls : (row.orderRolls != null ? row.orderRolls : row.order_rolls))),
         thickness: row.thickness || row.totalThickness || row.total_thickness || row.order_thickness || row.orderThickness,
         rewindingWidth: row.rewindingWidth || row.rewinding_width || row.processWidth || row.process_width || 500,
@@ -2871,12 +3664,78 @@ export default {
     openLabelPrintDialog(row) {
       return this.openReportDialog(row, 'print')
     },
+    ensureSlittingBatchOption(value) {
+      const text = String(value || '').trim()
+      if (!text) return
+      if (!Array.isArray(this.slittingIssuedBatchOptions)) {
+        this.slittingIssuedBatchOptions = [text]
+        return
+      }
+      if (!this.slittingIssuedBatchOptions.includes(text)) {
+        this.slittingIssuedBatchOptions = [text].concat(this.slittingIssuedBatchOptions)
+      }
+    },
+    commitSlittingBatchNoInput() {
+      if (!this.reportForm || this.reportForm.processType !== 'SLITTING') return
+      const current = String(this.reportForm.batchNo || '').trim()
+      const selectRef = this.$refs && this.$refs.slittingBatchNoSelect
+      const query = String((selectRef && selectRef.query) || '').trim()
+      const finalValue = current || query
+      if (!finalValue) return
+      this.reportForm.batchNo = finalValue
+      this.ensureSlittingBatchOption(finalValue)
+    },
+    async loadSlittingIssuedBatchOptions() {
+      if (!this.reportForm || this.reportForm.processType !== 'SLITTING') {
+        this.slittingIssuedBatchOptions = []
+        return
+      }
+      const orderNo = this.resolvePrintableOrderNo(this.reportForm.orderNo)
+      const materialCode = String(this.reportForm.materialCode || '').trim()
+      const planDate = this.resolveTaskLockDate(this.reportForm) || this.todayDate()
+      if (!orderNo || !materialCode) {
+        this.slittingIssuedBatchOptions = []
+        return
+      }
+      try {
+        const res = await queryOrderLockedStocks(materialCode, planDate, orderNo, '', 'SLITTING', null)
+        const list = (res && (res.code === 200 || res.code === 20000) && Array.isArray(res.data)) ? res.data : []
+        const toBatchNo = (row) => {
+          const candidates = [row && row.batchNo, row && row.rollCode, row && row.sourceBatchNo, row && row.stockBatchNo, row && row.tapeBatchNo]
+          for (let i = 0; i < candidates.length; i++) {
+            const text = String(candidates[i] || '').trim()
+            if (text) return text
+          }
+          return ''
+        }
+        const isIssued = (row) => {
+          const status = String((row && row.lockStatus) || '').trim().toUpperCase()
+          return status === 'ALLOCATED' || status === 'PICKED' || status === '已领料'
+        }
+
+        const issued = list.filter(isIssued).map(toBatchNo).filter(Boolean)
+        const fallback = list.map(toBatchNo).filter(Boolean)
+        const current = String(this.reportForm.batchNo || '').trim()
+        const uniq = Array.from(new Set((issued.length ? issued : fallback)))
+        if (current && !uniq.includes(current)) {
+          uniq.unshift(current)
+        }
+        this.slittingIssuedBatchOptions = uniq
+        if (!String(this.reportForm.batchNo || '').trim() && uniq.length) {
+          this.reportForm.batchNo = uniq[0]
+        }
+      } catch (e) {
+        this.slittingIssuedBatchOptions = []
+      }
+    },
     async openReportDialog(row, mode = 'report') {
       try {
         this.reportDialogMode = mode === 'print' ? 'print' : 'report'
         this.reportEditingId = null
         await this.loadCartonPresetOptions()
         const materialCode = String((row && (row.materialCode || row.material_code)) || '').trim()
+        const rawOrderNo = String((row && (row.orderNo || row.order_no)) || '').trim()
+        const normalizedOrderNo = this.resolvePrintableOrderNo(rawOrderNo)
         const scheduleId = await this.resolveScheduleId(row)
         const orderDetailId = Number(row && (row.orderItemId || row.order_detail_id || row.orderDetailId))
         if (!scheduleId && !(Number.isFinite(orderDetailId) && orderDetailId > 0)) {
@@ -2885,6 +3744,8 @@ export default {
         }
         const now = this.toDateTimeString(new Date())
         const processType = this.inferProcessType(row)
+        const customerCode = await this.resolveCustomerCodeForReportRow(row)
+        const customerOrderNo = await this.resolveCustomerOrderNoForReportRow(row)
         if (processType === 'SLITTING' && !this.cartonPresetOptions.length) {
           this.$message.warning('请先到研发管理-纸箱料号维护中新增纸箱规格')
         }
@@ -2896,6 +3757,15 @@ export default {
         const defaultQty = processType === 'COATING' ? null : (Number.isFinite(planQty) && planQty > 0
           ? (processType === 'SLITTING' ? Math.max(1, Math.round(planQty)) : planQty)
           : null)
+        const productionDate = this.toDateString(now)
+        const shipDate = this.resolveDateTextFromRow(row)
+        let deliveryNoteNo = ''
+        if (processType === 'SLITTING') {
+          deliveryNoteNo = await this.resolveDeliveryNoteNoByCustomerAndOrder(customerCode, normalizedOrderNo || rawOrderNo)
+        }
+        deliveryNoteNo = String(deliveryNoteNo || '').trim()
+        const shelfLifeDays = Math.max(0, Math.trunc(Number((row && (row.shelfLifeDays || row.shelf_life_days)) || 0) || 0)) || 365
+        const boxWeightKg = Number((row && (row.boxWeightKg || row.box_weight_kg || row.weightKg || row.weight_kg)) || 0)
         const widthMm = Number(row.widthMm || row.width_mm || row.width || row.order_width || row.orderWidth || row.processWidth || row.process_width || 0) || null
         const defaultSlittingCount = processType === 'SLITTING' ? this.calcSlittingDefaultRollPerTube(widthMm) : 1
         const defaultProducedQty = processType === 'SLITTING' ? (defaultQty || 0) : 0
@@ -2916,11 +3786,13 @@ export default {
           orderDetailId: Number.isFinite(orderDetailId) && orderDetailId > 0 ? orderDetailId : null,
           processType,
           taskNo: row.taskNo || row.task_no || '',
-          orderNo: row.orderNo || row.order_no || '',
-          customerOrderNo: row.customerOrderNo || row.customer_order_no || row.customerOrderNumber || '',
+          orderNo: normalizedOrderNo || rawOrderNo,
+          customerOrderNo: customerOrderNo || row.customerOrderNo || row.customer_order_no || row.customerOrderNumber || '',
           materialCode,
-          materialName: row.materialName || row.material_name || '',
-          customerCode: row.customerCode || row.customer_code || '',
+          materialName: row.materialName || row.material_name || row.productName || row.product_name || row.name || '',
+          customerCode: customerCode || '',
+          batchNo: '',
+          batchNoRequired: true,
           thickness: row.thickness || row.totalThickness || row.total_thickness || row.order_thickness || row.orderThickness || '',
           widthMm,
           lengthM: Number(row.length || row.lengthM || row.order_length || row.orderLength || row.processLength || row.process_length || 0) || null,
@@ -2936,8 +3808,15 @@ export default {
           slittingRollPerTube: defaultSlittingCount,
           slittingTubePerBoxCount: 0,
           slittingTubeRollCount: defaultTubeRollCount,
+          slittingCoreLabelBizType: 'SLITTING_CORE_LABEL',
           slittingInnerPrintCount: defaultInnerPrintCount,
           slittingOuterPrintCount: defaultInnerPrintCount,
+          boxWeightKg: processType === 'SLITTING' && Number.isFinite(boxWeightKg) && boxWeightKg > 0 ? Number(boxWeightKg.toFixed(2)) : null,
+          labelProductionDate: processType === 'SLITTING' ? productionDate : '',
+          labelShipDate: processType === 'SLITTING' ? shipDate : '',
+          deliveryNoteNo: processType === 'SLITTING' ? deliveryNoteNo : '',
+          shelfLifeDays: processType === 'SLITTING' ? shelfLifeDays : 365,
+          qrTemplate: processType === 'SLITTING' ? this.getDefaultSlittingQrTemplate() : '',
           startTime: now,
           endTime: now,
           enableSegment: true,
@@ -2948,8 +3827,26 @@ export default {
           operator: this.buildOperatorWithGroup(),
           remark: ''
         }
+        if (this.reportDialogMode === 'print' && processType === 'SLITTING') {
+          await this.resolveCustomerMaterialAliasForPrint({
+            customerCode: this.reportForm.customerCode,
+            materialCode: this.reportForm.materialCode,
+            customerOrderNo: this.reportForm.customerOrderNo,
+            thickness: this.reportForm.thickness,
+            width: this.reportForm.widthMm,
+            length: this.reportForm.lengthM
+          })
+        }
+        if (this.reportDialogMode === 'print' && processType === 'SLITTING') {
+          await this.loadCustomerQrRuleForSlitting(this.reportForm.customerCode, 'SLITTING_OUTER_LABEL')
+        }
         this.slittingTubePerBoxManual = false
         this.$nextTick(() => this.handleSlittingInputChanged())
+        if (this.reportDialogMode === 'print' && processType === 'SLITTING') {
+          await this.loadSlittingIssuedBatchOptions()
+        } else {
+          this.slittingIssuedBatchOptions = []
+        }
         this.reportDialogVisible = true
         if (!this.isLabelPrintMode) {
           await this.loadReportList()
@@ -3001,6 +3898,46 @@ export default {
     normalizeKeywordText(value) {
       return String(value || '').replace(/\s+/g, '').trim().toUpperCase()
     },
+    buildTaskQuerySuggestionPool(rows = [], ft = '') {
+      const list = Array.isArray(rows) ? rows : []
+      const orderSet = new Set()
+      const materialSet = new Set()
+      const specSet = new Set()
+      list.forEach(row => {
+        const orderText = String((row && (row.customerOrderNo || row.customer_order_no || row.customerOrderNumber || row.orderNo || row.order_no || row.related_order_nos || row.order_nos)) || '').trim()
+        const materialText = String((row && (row.materialCode || row.material_code || row.finishedMaterialCode || row.finished_material_code)) || '').trim()
+        const specText = String(this.getTaskSpecForFilter(row, ft) || '').trim()
+        if (orderText) orderSet.add(orderText)
+        if (materialText) materialSet.add(materialText)
+        if (specText) specSet.add(specText)
+      })
+      this.taskQuerySuggestionPool = {
+        orderNos: Array.from(orderSet),
+        materialCodes: Array.from(materialSet),
+        specs: Array.from(specSet)
+      }
+    },
+    buildAutocompleteResults(pool = [], queryString = '') {
+      const list = Array.isArray(pool) ? pool : []
+      const key = this.normalizeKeywordText(queryString)
+      const matched = key
+        ? list.filter(item => this.normalizeKeywordText(item).includes(key))
+        : list
+      return matched.slice(0, 20).map(item => ({ value: item }))
+    },
+    queryOrderNoSuggestions(queryString, cb) {
+      cb(this.buildAutocompleteResults(this.taskQuerySuggestionPool.orderNos, queryString))
+    },
+    queryMaterialCodeSuggestions(queryString, cb) {
+      cb(this.buildAutocompleteResults(this.taskQuerySuggestionPool.materialCodes, queryString))
+    },
+    querySpecSuggestions(queryString, cb) {
+      cb(this.buildAutocompleteResults(this.taskQuerySuggestionPool.specs, queryString))
+    },
+    handleQuerySuggestionSelect() {
+      this.query.pageNum = 1
+      this.loadTasks()
+    },
     getTaskSpecForFilter(row, ft) {
       if (!row) return ''
       if (ft === 'rewinding') return this.formatRewindingSpec(row)
@@ -3019,7 +3956,7 @@ export default {
       if (!orderKey && !materialKey && !specKey) return list
 
       return list.filter(row => {
-        const orderText = this.normalizeOrderNoKeyword((row && (row.orderNo || row.order_no || row.related_order_nos || row.order_nos)) || '')
+        const orderText = this.normalizeOrderNoKeyword((row && (row.customerOrderNo || row.customer_order_no || row.customerOrderNumber || row.orderNo || row.order_no || row.related_order_nos || row.order_nos)) || '')
         const materialText = this.normalizeKeywordText((row && (row.materialCode || row.material_code || row.finishedMaterialCode || row.finished_material_code)) || '')
         const specText = this.normalizeKeywordText(this.getTaskSpecForFilter(row, ft))
 
@@ -3472,6 +4409,13 @@ export default {
         return
       }
       if (this.reportForm.processType === 'SLITTING') {
+        this.commitSlittingBatchNoInput()
+        const batchNoRequired = !!(this.reportForm && this.reportForm.batchNoRequired)
+        const batchNo = String((this.reportForm && this.reportForm.batchNo) || '').trim()
+        if (batchNoRequired && !batchNo) {
+          this.$message.warning('批次号已设置为必填，请先选择或填写批次号后再提交报工')
+          return
+        }
         if (!Number.isInteger(qty)) {
           this.$message.warning('分切报工请填写整数卷数')
           return
@@ -3498,6 +4442,15 @@ export default {
         .filter(x => x && (x.materialCode || x.rollCode) && (Number(x.actualArea || 0) > 0 || Number(x.planArea || 0) > 0 || Number(x.lossArea || 0) > 0))
       this.reportSubmitting = true
       try {
+        const normalizedRemark = this.buildReportRemarkWithSlittingBatchNo(this.reportForm.remark)
+        if (this.reportForm.processType === 'SLITTING') {
+          const batchSaved = await this.persistSlittingBatchNoForDeliveryNote()
+          if (!batchSaved) {
+            this.reportSubmitting = false
+            return
+          }
+        }
+
         const basePayload = {
           scheduleId: this.reportForm.scheduleId,
           orderDetailId: this.reportForm.orderDetailId,
@@ -3508,7 +4461,7 @@ export default {
           producedRolls,
           materialIssues,
           operator: this.reportForm.operator,
-          remark: this.reportForm.remark
+          remark: normalizedRemark
         }
 
         let res
@@ -3589,6 +4542,8 @@ export default {
         customerCode: '',
         materialCode: '',
         materialName: '',
+        batchNo: '',
+        batchNoRequired: true,
         thickness: '',
         widthMm: null,
         lengthM: null,
@@ -3604,8 +4559,15 @@ export default {
         slittingRollPerTube: 1,
         slittingTubePerBoxCount: 0,
         slittingTubeRollCount: 0,
+        slittingCoreLabelBizType: 'SLITTING_CORE_LABEL',
         slittingInnerPrintCount: 0,
         slittingOuterPrintCount: 0,
+        boxWeightKg: null,
+        labelProductionDate: '',
+        labelShipDate: '',
+        deliveryNoteNo: '',
+        shelfLifeDays: 365,
+        qrTemplate: this.getDefaultSlittingQrTemplate(),
         startTime: '',
         endTime: '',
         enableSegment: true,
@@ -3619,6 +4581,26 @@ export default {
     },
     newProducedRoll(rollCode = '') {
       return { rollCode: rollCode || '', batchNo: '', widthMm: 500, lengthM: 4000, weightKg: null, remark: '' }
+    },
+    buildReportRemarkWithSlittingBatchNo(rawRemark) {
+      const baseRemark = String(rawRemark || '').trim()
+      if (!this.reportForm || this.reportForm.processType !== 'SLITTING') {
+        return baseRemark
+      }
+      const batchNo = String((this.reportForm && this.reportForm.batchNo) || '').trim()
+      if (!batchNo) return baseRemark
+
+      const marker = `[BATCH_NO:${batchNo}]`
+      if (!baseRemark) return marker
+
+      const existed = baseRemark.match(/\[BATCH_NO:[^\]]*\]/i)
+      if (existed && existed[0] === marker) {
+        return baseRemark
+      }
+      if (existed) {
+        return baseRemark.replace(/\[BATCH_NO:[^\]]*\]/i, marker)
+      }
+      return `${baseRemark} ${marker}`.trim()
     },
     async addProducedRoll() {
       const scheduleId = this.reportForm.scheduleId
@@ -3812,16 +4794,18 @@ export default {
       this.loading = true
       try {
         this.detailOrderItemsCache = {}
+        this.detailOrderCustomerOrderNoCache = {}
         this.detailResolveCache = {}
+        const ft = (this.fixedType || '').toLowerCase()
         const normalizedOrderNo = this.normalizeOrderNoKeyword(this.query.orderNo)
         const normalizedMaterialCode = this.normalizeKeywordText(this.query.materialCodeKeyword)
         const normalizedSpecKeyword = this.normalizeKeywordText(this.query.specKeyword)
         const finishFilter = (this.query.finishState || '').toUpperCase()
-        const hasSlittingKeywordMode = (this.fixedType || '').toLowerCase() === 'slitting' && (normalizedOrderNo || normalizedMaterialCode || normalizedSpecKeyword)
+        const hasTaskKeywordMode = ['rewinding', 'slitting'].includes(ft) && (normalizedOrderNo || normalizedMaterialCode || normalizedSpecKeyword)
         const params = {
           type: this.query.type || undefined,
           status: this.query.status || undefined,
-          orderNo: normalizedOrderNo || undefined,
+          orderNo: hasTaskKeywordMode ? undefined : (normalizedOrderNo || undefined),
           materialCode: normalizedMaterialCode || undefined,
           planDateStart: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[0] : undefined,
           planDateEnd: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[1] : undefined,
@@ -3830,8 +4814,6 @@ export default {
         }
 
         let res
-        const ft = (this.fixedType || '').toLowerCase()
-
         // 生产管理固定任务（涂布/复卷/分切）统一按计划取数
         if (ft === 'coating') {
           // 涂布任务必须与“涂布排程”一致：直接复用手动排程涂布列表数据源
@@ -3844,81 +4826,97 @@ export default {
             status: this.query.status || undefined
           })
         } else if (['rewinding', 'slitting'].includes(ft)) {
-          if (hasSlittingKeywordMode) {
-            // 分切按订单号搜索：合并“已排分切 + 未排订单”，支持紧急插单直报
-            const [scheduledRes, pendingRes] = await Promise.all([
-              getSlittingSchedules({
-                current: 1,
-                size: 5000,
-                orderNo: normalizedOrderNo || undefined,
-                materialCode: normalizedMaterialCode || undefined
-              }),
-              getPendingOrders({
-                current: 1,
-                size: 200,
-                orderNo: normalizedOrderNo,
-                includeCompleted: finishFilter === 'COMPLETED' || !finishFilter
+          if (hasTaskKeywordMode) {
+            if (ft === 'slitting') {
+              // 分切关键词模式：合并“已排分切 + 未排订单”，交给前端做模糊匹配
+              const [scheduledRes, pendingRes] = await Promise.all([
+                getStagePlanTaskPage({
+                  stage: 'SLITTING',
+                  pageNum: 1,
+                  pageSize: 5000,
+                  orderNo: normalizedOrderNo || undefined,
+                  planDateStart: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[0] : undefined,
+                  planDateEnd: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[1] : undefined
+                }),
+                getPendingOrders({
+                  current: 1,
+                  size: 5000,
+                  orderNo: normalizedOrderNo || undefined,
+                  materialCode: normalizedMaterialCode || undefined,
+                  includeCompleted: finishFilter === 'COMPLETED' || !finishFilter
+                })
+              ])
+
+              const sData = (scheduledRes && (scheduledRes.code === 200 || scheduledRes.code === 20000)) ? (scheduledRes.data || {}) : {}
+              const pData = (pendingRes && (pendingRes.code === 200 || pendingRes.code === 20000)) ? (pendingRes.data || {}) : {}
+
+              const scheduledList = sData.records || sData.list || []
+              const pendingListRaw = Array.isArray(pData) ? pData : (pData.records || pData.list || [])
+
+              // 同一订单明细可能存在“已排已完工 + 未排剩余缺口”，这种情况未排项必须保留
+              const normalizedScheduled = this.normalizeTaskList(scheduledList, 'slitting')
+              const detailAllCompletedMap = new Map()
+              normalizedScheduled.forEach(x => {
+                const odId = Number(x && (x.order_detail_id || x.orderDetailId || x.orderItemId))
+                if (!(Number.isFinite(odId) && odId > 0)) return
+                const done = this.isTaskCompleted(x, 'slitting')
+                if (!detailAllCompletedMap.has(odId)) {
+                  detailAllCompletedMap.set(odId, !!done)
+                } else {
+                  detailAllCompletedMap.set(odId, detailAllCompletedMap.get(odId) && !!done)
+                }
               })
-            ])
 
-            const sData = (scheduledRes && (scheduledRes.code === 200 || scheduledRes.code === 20000)) ? (scheduledRes.data || {}) : {}
-            const pData = (pendingRes && (pendingRes.code === 200 || pendingRes.code === 20000)) ? (pendingRes.data || {}) : {}
+              const pendingFiltered = pendingListRaw
+                .filter(x => {
+                  const deletedFlag = Number(x && (x.is_deleted != null ? x.is_deleted : x.deleted))
+                  return !(Number.isFinite(deletedFlag) && deletedFlag === 1)
+                })
+                .map(x => ({
+                  ...x,
+                  id: x && x.order_detail_id,
+                  processType: 'SLITTING',
+                  type: 'slitting',
+                  status: 'UNSCHEDULED',
+                  sourceType: 'PENDING_ORDER'
+                }))
 
-            const scheduledList = sData.records || sData.list || []
-            const pendingListRaw = Array.isArray(pData) ? pData : (pData.records || pData.list || [])
-
-            // 同一订单明细可能存在“已排已完工 + 未排剩余缺口”，这种情况未排项必须保留
-            const normalizedScheduled = this.normalizeTaskList(scheduledList, 'slitting')
-            const detailAllCompletedMap = new Map()
-            normalizedScheduled.forEach(x => {
-              const odId = Number(x && (x.order_detail_id || x.orderDetailId || x.orderItemId))
-              if (!(Number.isFinite(odId) && odId > 0)) return
-              const done = this.isTaskCompleted(x, 'slitting')
-              if (!detailAllCompletedMap.has(odId)) {
-                detailAllCompletedMap.set(odId, !!done)
-              } else {
-                detailAllCompletedMap.set(odId, detailAllCompletedMap.get(odId) && !!done)
-              }
-            })
-
-            const pendingFiltered = pendingListRaw
-              .filter(x => {
-                const deletedFlag = Number(x && (x.is_deleted != null ? x.is_deleted : x.deleted))
-                return !(Number.isFinite(deletedFlag) && deletedFlag === 1)
+              const merged = [...scheduledList]
+              const existingOrderDetailIds = new Set(
+                scheduledList
+                  .map(x => Number(x && (x.order_detail_id || x.orderItemId || x.orderDetailId)))
+                  .filter(v => Number.isFinite(v) && v > 0)
+              )
+              pendingFiltered.forEach(x => {
+                const odId = Number(x && (x.order_detail_id || x.orderItemId || x.orderDetailId))
+                if (!(Number.isFinite(odId) && odId > 0) || !existingOrderDetailIds.has(odId)) {
+                  merged.push(x)
+                  return
+                }
+                const allCompleted = detailAllCompletedMap.get(odId)
+                if (allCompleted === true) {
+                  merged.push(x)
+                }
               })
-              .map(x => ({
-                ...x,
-                id: x && x.order_detail_id,
-                processType: 'SLITTING',
-                type: 'slitting',
-                status: 'UNSCHEDULED',
-                sourceType: 'PENDING_ORDER'
-              }))
 
-            const merged = [...scheduledList]
-            const existingOrderDetailIds = new Set(
-              scheduledList
-                .map(x => Number(x && (x.order_detail_id || x.orderItemId || x.orderDetailId)))
-                .filter(v => Number.isFinite(v) && v > 0)
-            )
-            pendingFiltered.forEach(x => {
-              const odId = Number(x && (x.order_detail_id || x.orderItemId || x.orderDetailId))
-              if (!(Number.isFinite(odId) && odId > 0) || !existingOrderDetailIds.has(odId)) {
-                merged.push(x)
-                return
+              res = {
+                code: 20000,
+                data: {
+                  list: merged,
+                  total: merged.length
+                }
               }
-              const allCompleted = detailAllCompletedMap.get(odId)
-              if (allCompleted === true) {
-                merged.push(x)
-              }
-            })
-
-            res = {
-              code: 20000,
-              data: {
-                list: merged,
-                total: merged.length
-              }
+            } else {
+              // 复卷关键词模式：拉取较大范围后在前端模糊匹配
+              const stageMap = { coating: 'COATING', rewinding: 'REWINDING', slitting: 'SLITTING' }
+              res = await getStagePlanTaskPage({
+                stage: stageMap[ft],
+                pageNum: 1,
+                pageSize: 5000,
+                status: this.query.status || undefined,
+                planDateStart: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[0] : undefined,
+                planDateEnd: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[1] : undefined
+              })
             }
           } else {
             const stageMap = { coating: 'COATING', rewinding: 'REWINDING', slitting: 'SLITTING' }
@@ -3942,7 +4940,6 @@ export default {
           let normalizedList = this.normalizeTaskList(list, ft)
           normalizedList = await this.enrichTaskMaterialNamesFromMaster(normalizedList)
           const statusFilter = (this.query.status || '').toUpperCase()
-          
 
           if (finishFilter === 'COMPLETED') {
             normalizedList = normalizedList.filter(x => this.isTaskCompleted(x, ft))
@@ -3956,8 +4953,9 @@ export default {
             materialCodeKeyword: normalizedMaterialCode,
             specKeyword: normalizedSpecKeyword
           })
+          this.buildTaskQuerySuggestionPool(normalizedList, ft)
 
-          if (hasSlittingKeywordMode) {
+          if (hasTaskKeywordMode) {
             if (statusFilter) {
               normalizedList = normalizedList.filter(x => String((x && x.status) || '').toUpperCase() === statusFilter)
             }
@@ -3980,7 +4978,7 @@ export default {
             this.total = Number(raw.total || 0)
           }
 
-          if (hasSlittingKeywordMode) {
+          if (hasTaskKeywordMode) {
             this.taskSummary = this.calcTaskSummary(normalizedList)
           } else {
             await this.loadTaskSummary(ft, this.total)
@@ -3990,9 +4988,11 @@ export default {
             this.lockQuery.planDate = syncDate
           }
         } else {
+          this.taskQuerySuggestionPool = { orderNos: [], materialCodes: [], specs: [] }
           this.taskSummary = { materialCodeCount: 0, totalArea: 0, reportedMaterialCodeCount: 0, reportedArea: 0 }
         }
       } catch (e) {
+        this.taskQuerySuggestionPool = { orderNos: [], materialCodes: [], specs: [] }
         this.taskSummary = { materialCodeCount: 0, totalArea: 0, reportedMaterialCodeCount: 0, reportedArea: 0 }
         this.$message.error('加载任务失败')
       } finally {
@@ -4300,6 +5300,9 @@ export default {
           this.slittingIssueForm.batchScanCodes = ''
           this.slittingIssueForm.rows = []
           await this.loadOrderLocks()
+          if (this.reportDialogVisible && this.reportDialogMode === 'print' && this.reportForm && this.reportForm.processType === 'SLITTING') {
+            await this.loadSlittingIssuedBatchOptions()
+          }
         } else {
           this.$message.error((res && (res.msg || res.message)) || '领料失败')
         }

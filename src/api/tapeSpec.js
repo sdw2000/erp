@@ -5,12 +5,53 @@ import request from '@/utils/request'
  */
 
 // 分页查询规格列表
-export function getSpecList(params) {
-  return request({
-    url: '/api/tape-spec/list',
-    method: 'get',
-    params
-  })
+export async function getSpecList(params = {}) {
+  try {
+    return await request({
+      url: '/api/tape-spec/list',
+      method: 'get',
+      params,
+      silentError: true
+    })
+  } catch (e) {
+    // 兜底：权限不足时，改查物料生产配置，保证排程模块可继续使用
+    const fallback = await request({
+      url: '/api/material-config/list',
+      method: 'get',
+      params: {
+        pageNum: params.page || params.pageNum || 1,
+        pageSize: params.size || params.pageSize || 20,
+        materialCode: params.materialCode || '',
+        isActive: params.status === 1 ? 1 : undefined
+      },
+      silentError: true
+    })
+
+    const page = (fallback && fallback.data) || {}
+    const records = Array.isArray(page.records) ? page.records : []
+    const normalizedRecords = records.map(item => ({
+      ...item,
+      id: item.id,
+      materialCode: item.materialCode || '',
+      productName: item.materialName || '',
+      materialName: item.materialName || '',
+      totalThickness: item.recommendedThickness,
+      total_thickness: item.recommendedThickness,
+      status: Number(item.isActive == null ? 1 : item.isActive)
+    }))
+
+    return {
+      code: 20000,
+      msg: 'success',
+      data: {
+        records: normalizedRecords,
+        list: normalizedRecords,
+        total: Number(page.total || normalizedRecords.length || 0),
+        current: Number(page.current || params.page || params.pageNum || 1),
+        size: Number(page.size || params.size || params.pageSize || 20)
+      }
+    }
+  }
 }
 
 // 别名导出，兼容旧代码
@@ -25,10 +66,52 @@ export function getSpecById(id) {
 }
 
 // 根据料号查询
-export function getSpecByMaterialCode(materialCode) {
+export async function getSpecByMaterialCode(materialCode) {
+  try {
+    // 主路径：研发规格
+    return await request({
+      url: `/api/tape-spec/by-code/${materialCode}`,
+      method: 'get',
+      silentError: true
+    })
+  } catch (e) {
+    // 兜底路径：生产侧物料信息（兼容无 tape-spec 访问权限账号）
+    const fallback = await request({
+      url: `/api/production/schedule/material-info/${materialCode}`,
+      method: 'get',
+      silentError: true
+    })
+
+    if (fallback && (fallback.code === 200 || fallback.code === 20000)) {
+      const data = fallback.data || {}
+      const normalized = {
+        ...data,
+        productName: data.productName || data.materialName || data.name || '',
+        materialName: data.materialName || data.productName || data.name || '',
+        totalThickness: data.totalThickness != null ? data.totalThickness : data.thickness,
+        total_thickness: data.total_thickness != null ? data.total_thickness : data.thickness,
+        status: Number(data.status == null ? 1 : data.status)
+      }
+      return {
+        ...fallback,
+        data: normalized
+      }
+    }
+
+    return fallback
+  }
+}
+
+// 料号建议（仅研发规格表）
+export function getSpecSuggestions(keyword, limit = 5) {
   return request({
-    url: `/api/tape-spec/by-code/${materialCode}`,
-    method: 'get'
+    url: '/api/tape-spec/suggest',
+    method: 'get',
+    params: {
+      keyword,
+      limit
+    },
+    silentError: true
   })
 }
 

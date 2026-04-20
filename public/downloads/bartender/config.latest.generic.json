@@ -30,6 +30,14 @@
     "SLITTING_PALLET_LABEL": {
       "formatPath": "C:\\Users\\<Windows用户名>\\AppData\\Local\\MES-BarTender-Gateway\\templates\\coating.btw",
       "printer": "<你的打印机名称>"
+    },
+    "RUIPU_PUTONG_GUANXIN": {
+      "formatPath": "C:\\Users\\<Windows用户名>\\AppData\\Local\\MES-BarTender-Gateway\\templates\\ruipu_putong_guanxin.btw",
+      "printer": "<你的打印机名称>"
+    },
+    "RP01_fenqie_neibiao": {
+      "formatPath": "C:\\Users\\<Windows用户名>\\AppData\\Local\\MES-BarTender-Gateway\\templates\\RP01_fenqie_neibiao.btw",
+      "printer": "<你的打印机名称>"
     }
   }
 }

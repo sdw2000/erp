@@ -63,11 +63,12 @@ export function getOrderDetail(orderNo) {
 }
 
 // 生产任务场景：只读订单详情（权限放在 /sales/order-items 下）
-export function getOrderDetailForProduction(orderNo) {
+export function getOrderDetailForProduction(orderNo, config = {}) {
   return request({
     url: '/sales/order-items/order-detail',
     method: 'get',
-    params: { orderNo }
+    params: { orderNo },
+    ...config
   })
 }
 

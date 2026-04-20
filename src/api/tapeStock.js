@@ -65,9 +65,43 @@ export function importStock(file) {
     url: '/api/tape-stock/import',
     method: 'post',
     data: formData,
+    timeout: 600000,
     headers: {
       'Content-Type': 'multipart/form-data'
     }
+  })
+}
+
+// 异步导入Excel库存数据（推荐：大文件/大量数据）
+export function importStockAsync(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: '/api/tape-stock/import/async',
+    method: 'post',
+    data: formData,
+    timeout: 60000,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}
+
+// 查询异步导入任务状态
+export function getImportTaskStatus(taskId) {
+  return request({
+    url: `/api/tape-stock/import/task/${taskId}`,
+    method: 'get',
+    timeout: 60000
+  })
+}
+
+// 下载异步导入失败明细文件
+export function downloadImportFailedFile(taskId) {
+  return request({
+    url: `/api/tape-stock/import/task/${taskId}/failed.xlsx`,
+    method: 'get',
+    responseType: 'blob'
   })
 }
 
@@ -141,6 +175,14 @@ export function countPendingInbound() {
   return request({
     url: '/api/tape-stock/inbound/pending-count',
     method: 'get'
+  })
+}
+
+// 历史分切成品库存聚合
+export function mergeHistoricalSlittingInboundStock() {
+  return request({
+    url: '/api/tape-stock/inbound/merge-historical-slitting',
+    method: 'post'
   })
 }
 

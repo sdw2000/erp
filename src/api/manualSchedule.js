@@ -232,6 +232,17 @@ export function resetScheduleByOrderDetail(data) {
 }
 
 /**
+ * 清空单条排程（按排程ID）
+ */
+export function resetScheduleBySchedule(data) {
+  return request({
+    url: '/schedule/manual/reset-by-schedule',
+    method: 'post',
+    data
+  })
+}
+
+/**
  * 工序报工
  */
 export function reportWork(data) {

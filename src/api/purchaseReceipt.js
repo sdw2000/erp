@@ -37,3 +37,18 @@ export function deletePurchaseReceipt(id) {
     method: 'delete'
   })
 }
+
+export function seedPurchaseReceiptTestData(count = 3) {
+  return request({
+    url: '/purchase/receipts/test-data/seed',
+    method: 'post',
+    params: { count }
+  })
+}
+
+export function cleanupPurchaseReceiptTestData() {
+  return request({
+    url: '/purchase/receipts/test-data/cleanup',
+    method: 'delete'
+  })
+}

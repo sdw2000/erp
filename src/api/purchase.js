@@ -26,8 +26,8 @@ export function updatePurchaseOrder(data) {
 
 export function deletePurchaseOrder(orderNo) {
   return request({
-    url: '/purchase/orders',
-    method: 'delete',
+    url: '/purchase/orders/delete',
+    method: 'post',
     params: { orderNo }
   })
 }
@@ -43,6 +43,14 @@ export function getPurchaseOrderReconciliation(orderNo) {
   return request({
     url: `/purchase/orders/${orderNo}/reconciliation`,
     method: 'get'
+  })
+}
+
+export function getPurchaseOrderRawSpecHistory(params) {
+  return request({
+    url: '/purchase/orders/spec-history',
+    method: 'get',
+    params
   })
 }
 

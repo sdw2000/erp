@@ -1,0 +1,44 @@
+﻿{
+    "ROLLING":  {
+                    "updatedAt":  "2026-04-15 18:02:20",
+                    "fileName":  "rolling.btw",
+                    "sha256":  "44d8619c48174415cdbb204ecb9ea36fb5e5493d7475b3c6c37125c1dd294d81",
+                    "version":  "1776247088836",
+                    "localPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw"
+                },
+    "RUIPU_PUTONG_GUANXIN":  {
+                                 "updatedAt":  "2026-04-15 18:02:20",
+                                 "fileName":  "ruipu_putong_guanxin.btw",
+                                 "sha256":  "7e0917914aa8d70cb2aa78599cd0d1dc40b96cfc28d7eb22ed4fe2eecae3c672",
+                                 "version":  "1776247089030",
+                                 "localPath":  "D:\\MES\\BarTender\\Templates\\ruipu_putong_guanxin.btw"
+                             },
+    "RP01_FENQIE_NEIBIAO":  {
+                                "updatedAt":  "2026-04-15 18:02:20",
+                                "fileName":  "RP01_fenqie_neibiao.btw",
+                                "sha256":  "95e3c6b4b1d41090063db04756a7ba19e2f50c0702fa277801ceafdba5fc9443",
+                                "version":  "1776247088932",
+                                "localPath":  "D:\\MES\\BarTender\\Templates\\RP01_fenqie_neibiao.btw"
+                            },
+    "FENQIEWAIBIAO":  {
+                          "updatedAt":  "2026-04-15 18:02:19",
+                          "fileName":  "fenqiewaibiao.btw",
+                          "sha256":  "5a182c9358819fd282fd1661d0fcc87d2575900e0c8c545804d4dedc6bd25f00",
+                          "version":  "1776247088685",
+                          "localPath":  "D:\\MES\\BarTender\\Templates\\fenqiewaibiao.btw"
+                      },
+    "COATING":  {
+                    "updatedAt":  "2026-04-15 18:02:19",
+                    "fileName":  "coating.btw",
+                    "sha256":  "048651c39ea29a876afca9dd98d686fe26f3128097123955c965de7f37a8b92a",
+                    "version":  "1776247088484",
+                    "localPath":  "D:\\MES\\BarTender\\Templates\\coating.btw"
+                },
+    "FENGQIIENEIBIAO":  {
+                            "updatedAt":  "2026-04-15 18:02:19",
+                            "fileName":  "fengqiieneibiao.btw",
+                            "sha256":  "2b7c190c923c4366dbb8f98fec70596c081f185d81bdd438fd07cf09981cb053",
+                            "version":  "1776247088580",
+                            "localPath":  "D:\\MES\\BarTender\\Templates\\fengqiieneibiao.btw"
+                        }
+}

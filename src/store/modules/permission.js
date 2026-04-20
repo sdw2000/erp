@@ -1,5 +1,10 @@
 import { asyncRoutes, constantRoutes } from '@/router'
 
+function isCoatingRestrictedUser(roles) {
+  const normalizedRoles = (roles || []).map(role => String(role || '').trim().toLowerCase()).filter(Boolean)
+  return normalizedRoles.includes('coating') && !normalizedRoles.includes('admin')
+}
+
 /**
  * Use meta.role to determine if the current user has permission
  * @param roles
@@ -47,8 +52,17 @@ const state = {
 }
 
 const mutations = {
-  SET_ROUTES: (state, routes) => {
+  SET_ROUTES: (state, payload) => {
+    const routes = payload && payload.routes ? payload.routes : []
+    const coatingRestricted = !!(payload && payload.coatingRestricted)
     state.addRoutes = routes
+
+    if (coatingRestricted) {
+      const minimalConstantRoutes = (constantRoutes || []).filter(route => route.hidden)
+      state.routes = minimalConstantRoutes.concat(routes)
+      return
+    }
+
     state.routes = constantRoutes.concat(routes)
   }
 }
@@ -58,13 +72,20 @@ const actions = {
     return new Promise(resolve => {
       let accessedRoutes
       const normalizedRoles = (roles || []).map(role => String(role || '').trim().toLowerCase()).filter(Boolean)
+      const coatingRestricted = isCoatingRestrictedUser(normalizedRoles)
+
       if (normalizedRoles.includes('admin')) {
         accessedRoutes = asyncRoutes || []
+      } else if (coatingRestricted) {
+        accessedRoutes = filterAsyncRoutes(asyncRoutes, ['coating'])
       } else {
         accessedRoutes = filterAsyncRoutes(asyncRoutes, normalizedRoles)
       }
 
-      commit('SET_ROUTES', accessedRoutes)
+      commit('SET_ROUTES', {
+        routes: accessedRoutes,
+        coatingRestricted
+      })
       resolve(accessedRoutes)
     })
   }
