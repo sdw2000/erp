@@ -1,0 +1,71 @@
+<view class="container">
+  <view class="card">
+    <view class="title">发货通知</view>
+    <view class="muted">按销售订单创建发货单</view>
+
+    <view class="row row-middle">
+      <view>
+        <view class="label">订单号</view>
+        <input class="input" value="{{orderNo}}" placeholder="如 SO250502001" data-key="orderNo" bindinput="onInput" />
+      </view>
+      <button class="btn-secondary small" loading="{{orderLoading}}" bindtap="onLoadOrder">带出订单</button>
+    </view>
+
+    <view class="row">
+      <view>
+        <view class="label">客户</view>
+        <input class="input" value="{{customer}}" disabled="{{true}}" />
+      </view>
+      <view>
+        <view class="label">客户订单号</view>
+        <input class="input" value="{{customerOrderNo}}" disabled="{{true}}" />
+      </view>
+    </view>
+
+    <view class="label">发货日期</view>
+    <input class="input" value="{{deliveryDate}}" placeholder="yyyy-MM-dd" data-key="deliveryDate" bindinput="onInput" />
+
+    <view class="label">收货地址</view>
+    <input class="input" value="{{deliveryAddress}}" placeholder="可空" data-key="deliveryAddress" bindinput="onInput" />
+
+    <view class="row">
+      <view>
+        <view class="label">联系人</view>
+        <input class="input" value="{{contactPerson}}" placeholder="可空" data-key="contactPerson" bindinput="onInput" />
+      </view>
+      <view>
+        <view class="label">联系电话</view>
+        <input class="input" value="{{contactPhone}}" placeholder="可空" data-key="contactPhone" bindinput="onInput" />
+      </view>
+    </view>
+
+    <view class="row">
+      <view>
+        <view class="label">物流公司</view>
+        <input class="input" value="{{carrierName}}" placeholder="必填" data-key="carrierName" bindinput="onInput" />
+      </view>
+      <view>
+        <view class="label">运单号</view>
+        <input class="input" value="{{carrierNo}}" placeholder="可空" data-key="carrierNo" bindinput="onInput" />
+      </view>
+    </view>
+
+    <view class="label">订单明细选择</view>
+    <picker mode="selector" range="{{orderItems}}" range-key="materialCode" value="{{selectedItemIndex}}" bindchange="onItemChange">
+      <view class="input" wx:if="{{orderItems.length > 0}}">
+        {{orderItems[selectedItemIndex].materialCode}} / 剩余卷数: {{orderItems[selectedItemIndex].rolls || '-'}}
+      </view>
+      <view class="input" wx:else>请先带出订单明细</view>
+    </picker>
+
+    <view class="label">发货卷数</view>
+    <input class="input" value="{{quantity}}" type="number" placeholder="必填" data-key="quantity" bindinput="onInput" />
+
+    <view class="label">备注</view>
+    <input class="input" value="{{remark}}" placeholder="可空" data-key="remark" bindinput="onInput" />
+
+    <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">创建发货通知</button>
+
+    <view wx:if="{{lastNoticeNo}}" class="muted">最近发货单号：{{lastNoticeNo}}</view>
+  </view>
+</view>

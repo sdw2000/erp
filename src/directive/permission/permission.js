@@ -1,4 +1,5 @@
 import store from '@/store'
+import { hasAnyRole } from '@/utils/role'
 
 function checkPermission(el, binding) {
   const { value } = binding
@@ -8,9 +9,7 @@ function checkPermission(el, binding) {
     if (value.length > 0) {
       const permissionRoles = value
 
-      const hasPermission = roles.some(role => {
-        return permissionRoles.includes(role)
-      })
+      const hasPermission = hasAnyRole(roles, permissionRoles)
 
       if (!hasPermission) {
         el.parentNode && el.parentNode.removeChild(el)

@@ -3,7 +3,6 @@ const { setToken, setUserInfo } = require('../../utils/auth')
 
 Page({
   data: {
-    baseUrl: 'http://localhost:8090',
     username: '',
     password: '',
     loading: false
@@ -11,12 +10,9 @@ Page({
 
   onShow() {
     const app = getApp()
-    const current = app.globalData.baseUrl || this.data.baseUrl
-    this.setData({ baseUrl: current })
-  },
-
-  onBaseUrlInput(e) {
-    this.setData({ baseUrl: e.detail.value })
+    const fixedBaseUrl = 'https://api.maxtritape.com'
+    app.globalData.baseUrl = fixedBaseUrl
+    wx.setStorageSync('mes_base_url', fixedBaseUrl)
   },
 
   onUsernameInput(e) {
@@ -28,14 +24,16 @@ Page({
   },
 
   async onLogin() {
-    const { username, password, baseUrl } = this.data
+    const { username, password } = this.data
     if (!username || !password) {
       wx.showToast({ title: '请输入账号密码', icon: 'none' })
       return
     }
 
     const app = getApp()
-    app.globalData.baseUrl = (baseUrl || '').trim()
+    const normalizedBaseUrl = 'https://api.maxtritape.com'
+    app.globalData.baseUrl = normalizedBaseUrl
+    wx.setStorageSync('mes_base_url', normalizedBaseUrl)
 
     this.setData({ loading: true })
     try {
@@ -57,7 +55,12 @@ Page({
         // getInfo失败不阻断
       }
 
-      wx.reLaunch({ url: '/pages/report/index' })
+      wx.reLaunch({
+        url: '/pages/home/index',
+        fail: () => {
+          wx.reLaunch({ url: '/pages/report/index' })
+        }
+      })
     } catch (e) {
       wx.showToast({ title: (e && (e.msg || e.message)) || '登录失败', icon: 'none' })
     } finally {

@@ -55,7 +55,14 @@
       </el-col>
     </el-row>
 
-    <el-dialog title="今日下单明细" :visible.sync="todayOrderDialogVisible" width="980px">
+    <el-dialog :visible.sync="todayOrderDialogVisible" width="980px">
+      <div slot="title" class="today-order-dialog-title">
+        <span class="title-text">今日下单明细</span>
+        <span class="today-order-header-total">
+          总面积：{{ formatNumber(todayOrderTotalArea) }} ㎡
+          <span class="header-total-gap">总金额：{{ formatNumber(todayOrderTotalAmount) }}</span>
+        </span>
+      </div>
       <el-table v-loading="todayOrderLoading" :data="todayOrderItems" stripe style="width:100%">
         <el-table-column prop="customerName" label="客户简称" width="140" show-overflow-tooltip />
         <el-table-column prop="materialCode" label="物料代码" width="180" show-overflow-tooltip />
@@ -109,6 +116,12 @@ export default {
     },
     hasDocumentationRole() {
       return this.isDocumentationRole()
+    },
+    todayOrderTotalArea() {
+      return (this.todayOrderItems || []).reduce((sum, item) => sum + Number((item && item.sqm) || 0), 0)
+    },
+    todayOrderTotalAmount() {
+      return (this.todayOrderItems || []).reduce((sum, item) => sum + Number((item && item.amount) || 0), 0)
     }
   },
   data() {
@@ -470,6 +483,30 @@ export default {
     .label { color: #888; font-size: 13px; }
     .value { font-size: 18px; font-weight: 700; margin: 4px 0; }
     .sub { color: #aaa; font-size: 12px; }
+  }
+
+  .today-order-dialog-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-right: 8px;
+
+    .title-text {
+      font-size: 18px;
+      font-weight: 600;
+      color: #303133;
+    }
+
+    .today-order-header-total {
+      color: #1976d2;
+      font-weight: 700;
+      font-size: 18px;
+      white-space: nowrap;
+    }
+
+    .header-total-gap {
+      margin-left: 22px;
+    }
   }
 }
 

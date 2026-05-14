@@ -21,6 +21,15 @@ export function getFilmStockPage(params) {
   })
 }
 
+// 查询薄膜库存统计（全表聚合，非当前页）
+export function getFilmStockStatistics(params) {
+  return request({
+    url: '/api/stock/film/list/statistics',
+    method: 'get',
+    params
+  })
+}
+
 // 按规格查询薄膜库存
 export function getFilmStockBySpec(params) {
   return request({
@@ -43,6 +52,15 @@ export function getFilmStockDetails(id) {
   return request({
     url: `/api/stock/film/${id}/details`,
     method: 'get'
+  })
+}
+
+// 分页查询薄膜库存明细（支持排序）
+export function getFilmStockDetailsPage(id, params) {
+  return request({
+    url: `/api/stock/film/${id}/details/page`,
+    method: 'get',
+    params
   })
 }
 
@@ -80,11 +98,38 @@ export function getAvailableFilmDetails(id) {
   })
 }
 
+// 按料号分页查询可用薄膜明细（支持排序）
+export function getAvailableFilmDetailsPage(params) {
+  return request({
+    url: '/api/stock/film/available/page',
+    method: 'get',
+    params
+  })
+}
+
 // 查询薄膜出库记录
 export function getFilmOutboundBySchedule(scheduleId) {
   return request({
     url: `/api/stock/film/outbound/schedule/${scheduleId}`,
     method: 'get'
+  })
+}
+
+// 薄膜出库
+export function createFilmOutbound(data) {
+  return request({
+    url: '/api/stock/film/outbound',
+    method: 'post',
+    data
+  })
+}
+
+// 分页查询薄膜出库记录
+export function getFilmOutboundList(params) {
+  return request({
+    url: '/api/stock/film/outbound/list',
+    method: 'get',
+    params
   })
 }
 
@@ -97,17 +142,39 @@ export function downloadFilmTemplate() {
   })
 }
 
+// 按导入模板格式导出薄膜库存（可修改后回导）
+export function exportFilmStockImportFormat(params) {
+  return request({
+    url: '/api/stock/film/export/import-format',
+    method: 'get',
+    params,
+    responseType: 'blob'
+  })
+}
+
 // 导入薄膜库存
-export function importFilmStock(file) {
+export function importFilmStock(file, options = {}) {
   const formData = new FormData()
   formData.append('file', file)
   return request({
     url: '/api/stock/film/import',
     method: 'post',
+    params: {
+      clearBeforeImport: options.clearBeforeImport === true
+    },
     data: formData,
     headers: {
       'Content-Type': 'multipart/form-data'
     }
+  })
+}
+
+// 清空薄膜库存（用于重导）
+export function clearFilmStockForReimport(params = { clearOutbound: true }) {
+  return request({
+    url: '/api/stock/film/clear-for-reimport',
+    method: 'post',
+    params
   })
 }
 
@@ -132,6 +199,15 @@ export function getChemicalStockPage(params) {
   })
 }
 
+// 查询化工库存统计（全表聚合，非当前页）
+export function getChemicalStockStatistics(params) {
+  return request({
+    url: '/api/stock/chemical/list/statistics',
+    method: 'get',
+    params
+  })
+}
+
 // 按类型查询化工库存
 export function getChemicalStockByType(chemicalType) {
   return request({
@@ -145,6 +221,15 @@ export function getChemicalStockById(id) {
   return request({
     url: `/api/stock/chemical/${id}`,
     method: 'get'
+  })
+}
+
+// 更新化工库存主表
+export function updateChemicalStock(id, data) {
+  return request({
+    url: `/api/stock/chemical/${id}`,
+    method: 'put',
+    data
   })
 }
 
@@ -190,6 +275,15 @@ export function getAvailableChemicalDetails(id) {
   })
 }
 
+// 按料号分页查询可用化工明细（支持排序）
+export function getAvailableChemicalDetailsPage(params) {
+  return request({
+    url: '/api/stock/chemical/available/page',
+    method: 'get',
+    params
+  })
+}
+
 // 查询即将过期的化工原料
 export function getExpiringChemicals(days = 30) {
   return request({
@@ -207,6 +301,24 @@ export function getChemicalOutboundBySchedule(scheduleId) {
   })
 }
 
+// 化工原材料出库
+export function createChemicalOutbound(data) {
+  return request({
+    url: '/api/stock/chemical/outbound',
+    method: 'post',
+    data
+  })
+}
+
+// 分页查询化工出库记录
+export function getChemicalOutboundList(params) {
+  return request({
+    url: '/api/stock/chemical/outbound/list',
+    method: 'get',
+    params
+  })
+}
+
 // 下载化工库存导入模板
 export function downloadChemicalTemplate() {
   return request({
@@ -216,16 +328,69 @@ export function downloadChemicalTemplate() {
   })
 }
 
+// 按导入模板格式导出化工库存（可修改后回导）
+export function exportChemicalStockImportFormat(params) {
+  return request({
+    url: '/api/stock/chemical/export/import-format',
+    method: 'get',
+    params,
+    responseType: 'blob'
+  })
+}
+
 // 导入化工库存
-export function importChemicalStock(file) {
+export function importChemicalStock(file, options = {}) {
   const formData = new FormData()
   formData.append('file', file)
   return request({
     url: '/api/stock/chemical/import',
     method: 'post',
+    params: {
+      clearBeforeImport: options.clearBeforeImport === true
+    },
     data: formData,
     headers: {
       'Content-Type': 'multipart/form-data'
     }
+  })
+}
+
+// 清空化工库存（用于重导）
+export function clearChemicalStockForReimport(params = { clearOutbound: true }) {
+  return request({
+    url: '/api/stock/chemical/clear-for-reimport',
+    method: 'post',
+    params
+  })
+}
+
+/**
+ * 包材仓库存管理API
+ */
+
+// 分页查询包材库存
+export function getPackageStockPage(params) {
+  return request({
+    url: '/api/stock/package/list/page',
+    method: 'get',
+    params
+  })
+}
+
+// 查询包材库存统计
+export function getPackageStockStatistics(params) {
+  return request({
+    url: '/api/stock/package/list/statistics',
+    method: 'get',
+    params
+  })
+}
+
+// 分页查询包材库存明细
+export function getPackageStockDetailsPage(id, params) {
+  return request({
+    url: `/api/stock/package/${id}/details/page`,
+    method: 'get',
+    params
   })
 }

@@ -15,10 +15,10 @@
       <!-- 查询表单 -->
       <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="料号">
-          <el-input v-model="searchForm.materialCode" placeholder="请输入料号" clearable style="width: 200px" />
+          <el-input v-model="searchForm.materialCode" placeholder="请输入料号" clearable style="width: 200px" @keyup.enter.native="handleSearch" />
         </el-form-item>
         <el-form-item label="产品名称">
-          <el-input v-model="searchForm.productName" placeholder="请输入产品名称" clearable style="width: 160px" />
+          <el-input v-model="searchForm.productName" placeholder="请输入产品名称" clearable style="width: 160px" @keyup.enter.native="handleSearch" />
         </el-form-item>
         <el-form-item label="颜色">
           <el-select v-model="searchForm.colorCode" placeholder="全部" clearable style="width: 120px">
@@ -69,6 +69,12 @@
         </el-table-column>
         <el-table-column label="耐温/℃" width="80" align="center">
           <template slot-scope="scope">{{ formatRange(scope.row, 'heatResistance') }}</template>
+        </el-table-column>
+        <el-table-column label="扩展检测项目" min-width="220" show-overflow-tooltip>
+          <template slot-scope="scope">{{ formatExtraQcList(scope.row, 'name') }}</template>
+        </el-table-column>
+        <el-table-column label="扩展标准值" min-width="220" show-overflow-tooltip>
+          <template slot-scope="scope">{{ formatExtraQcList(scope.row, 'standard') }}</template>
         </el-table-column>
         <el-table-column prop="status" label="状态" width="70" align="center">
           <template slot-scope="scope">
@@ -260,6 +266,25 @@
           </el-col>
         </el-row>
 
+        <el-divider content-position="left">扩展检测项目（可维护报告额外项目）</el-divider>
+        <el-row v-for="idx in [1, 2, 3, 4]" :key="'extra-qc-' + idx" :gutter="20">
+          <el-col :span="8">
+            <el-form-item :label="`项目${idx}名称`">
+              <el-input v-model="form[`extraQcItem${idx}Name`]" :placeholder="`如：附着力/外观`" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item :label="`项目${idx}单位`">
+              <el-input v-model="form[`extraQcItem${idx}Unit`]" :placeholder="`如：N、-`" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="10">
+            <el-form-item :label="`项目${idx}标准值`">
+              <el-input v-model="form[`extraQcItem${idx}Standard`]" :placeholder="`如：≥3.5、无气泡`" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
         <!-- 备注 -->
         <el-row>
           <el-col :span="24">
@@ -297,7 +322,7 @@
     <el-dialog title="颜色字典维护" :visible.sync="colorDictDialogVisible" width="900px" :close-on-click-modal="false">
       <el-form :inline="true" :model="colorDictSearch" class="search-form" style="margin-bottom: 10px;">
         <el-form-item label="关键字">
-          <el-input v-model="colorDictSearch.keyword" clearable placeholder="颜色代码/颜色名称" style="width: 220px" />
+          <el-input v-model="colorDictSearch.keyword" clearable placeholder="颜色代码/颜色名称" style="width: 220px" @keyup.enter.native="handleColorDictSearch" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="colorDictSearch.status" clearable placeholder="全部" style="width: 120px">
@@ -306,7 +331,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" icon="el-icon-search" @click="fetchColorDictList">查询</el-button>
+          <el-button type="primary" icon="el-icon-search" @click="handleColorDictSearch">查询</el-button>
           <el-button icon="el-icon-refresh-left" @click="resetColorDictSearch">重置</el-button>
         </el-form-item>
       </el-form>
@@ -361,6 +386,17 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <el-pagination
+        style="margin-top: 10px; text-align: right"
+        :current-page="colorDictPagination.page"
+        :page-sizes="[10, 20, 50, 100]"
+        :page-size="colorDictPagination.size"
+        :total="colorDictPagination.total"
+        layout="total, sizes, prev, pager, next, jumper"
+        @size-change="handleColorDictSizeChange"
+        @current-change="handleColorDictCurrentChange"
+      />
 
       <div slot="footer">
         <el-button @click="colorDictDialogVisible = false">关 闭</el-button>
@@ -422,6 +458,11 @@ export default {
         status: null
       },
       colorDictList: [],
+      colorDictPagination: {
+        page: 1,
+        size: 20,
+        total: 0
+      },
       colorDictForm: {
         id: null,
         code: '',
@@ -472,6 +513,18 @@ export default {
         unwindForceType: 'range',
         heatResistance: null,
         heatResistanceType: 'gte',
+        extraQcItem1Name: '',
+        extraQcItem1Unit: '',
+        extraQcItem1Standard: '',
+        extraQcItem2Name: '',
+        extraQcItem2Unit: '',
+        extraQcItem2Standard: '',
+        extraQcItem3Name: '',
+        extraQcItem3Unit: '',
+        extraQcItem3Standard: '',
+        extraQcItem4Name: '',
+        extraQcItem4Unit: '',
+        extraQcItem4Standard: '',
         remark: '',
         status: 1
       }
@@ -657,6 +710,26 @@ export default {
       if (max != null) return `≤${max}`
       return ''
     },
+    getExtraQcList(row) {
+      const result = []
+      if (!row || typeof row !== 'object') return result
+      for (let i = 1; i <= 4; i++) {
+        const name = String(row[`extraQcItem${i}Name`] || '').trim()
+        const unit = String(row[`extraQcItem${i}Unit`] || '').trim()
+        const standard = String(row[`extraQcItem${i}Standard`] || '').trim()
+        if (!name && !standard) continue
+        result.push({ name, unit, standard })
+      }
+      return result
+    },
+    formatExtraQcList(row, mode) {
+      const list = this.getExtraQcList(row)
+      if (!list.length) return '-'
+      if (mode === 'name') {
+        return list.map(item => `${item.name || '(未命名)'}${item.unit ? `(${item.unit})` : ''}`).join('；')
+      }
+      return list.map(item => item.standard || '-').join('；')
+    },
     handleDownloadTemplate() {
       downloadTemplate().then(blob => {
         this.downloadFile(blob, '胶带规格导入模板.xlsx')
@@ -728,6 +801,7 @@ export default {
     },
     openColorDictDialog() {
       this.colorDictDialogVisible = true
+      this.colorDictPagination.page = 1
       this.fetchColorDictList()
       this.resetColorDictForm()
     },
@@ -736,11 +810,20 @@ export default {
       try {
         const params = {
           keyword: this.colorDictSearch.keyword || undefined,
-          status: this.colorDictSearch.status
+          status: this.colorDictSearch.status,
+          page: this.colorDictPagination.page,
+          size: this.colorDictPagination.size
         }
         const res = await getColorDictList(params)
         if (this.isSuccess(res)) {
-          this.colorDictList = Array.isArray(res.data) ? res.data : []
+          const data = res.data || {}
+          if (Array.isArray(data)) {
+            this.colorDictList = data
+            this.colorDictPagination.total = data.length
+          } else {
+            this.colorDictList = Array.isArray(data.records) ? data.records : []
+            this.colorDictPagination.total = Number(data.total || 0)
+          }
           this.scheduleTableLayout()
         }
       } catch (e) {
@@ -751,6 +834,20 @@ export default {
     },
     resetColorDictSearch() {
       this.colorDictSearch = { keyword: '', status: null }
+      this.colorDictPagination.page = 1
+      this.fetchColorDictList()
+    },
+    handleColorDictSearch() {
+      this.colorDictPagination.page = 1
+      this.fetchColorDictList()
+    },
+    handleColorDictSizeChange(size) {
+      this.colorDictPagination.size = size
+      this.colorDictPagination.page = 1
+      this.fetchColorDictList()
+    },
+    handleColorDictCurrentChange(page) {
+      this.colorDictPagination.page = page
       this.fetchColorDictList()
     },
     resetColorDictForm() {

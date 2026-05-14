@@ -22,18 +22,18 @@ export function getSalesTodayOrders(params) {
 }
 
 // 生产看板 API
-export function getProductionSummary(params) {
-  return request({ url: '/api/production/dashboard/summary', method: 'get', params })
+export function getProductionSummary(params, config = {}) {
+  return request({ url: '/api/production/dashboard/summary', method: 'get', params, ...config })
 }
 
-export function getProductionTopProcesses(params) {
-  return request({ url: '/api/production/dashboard/top-processes', method: 'get', params })
+export function getProductionTopProcesses(params, config = {}) {
+  return request({ url: '/api/production/dashboard/top-processes', method: 'get', params, ...config })
 }
 
-export function getProductionYearTrend(params) {
-  return request({ url: '/api/production/dashboard/year-trend', method: 'get', params })
+export function getProductionYearTrend(params, config = {}) {
+  return request({ url: '/api/production/dashboard/year-trend', method: 'get', params, ...config })
 }
 
-export function getProductionTodayReports(params) {
-  return request({ url: '/api/production/dashboard/today-reports', method: 'get', params })
+export function getProductionTodayReports(params, config = {}) {
+  return request({ url: '/api/production/dashboard/today-reports', method: 'get', params, ...config })
 }

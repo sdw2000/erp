@@ -1,0 +1,66 @@
+<view class="container">
+  <view class="card">
+    <view class="title">样板单</view>
+    <view class="muted">用于销售送样登记</view>
+
+    <view class="row row-middle">
+      <view>
+        <view class="label">样板单号（可自动）</view>
+        <input class="input" value="{{sampleNo}}" placeholder="可空" data-key="sampleNo" bindinput="onInput" />
+      </view>
+      <button class="btn-secondary small" bindtap="onGenerateSampleNo">自动生成</button>
+    </view>
+
+    <view class="label">客户名称</view>
+    <input class="input" value="{{customerName}}" placeholder="必填" data-key="customerName" bindinput="onInput" />
+
+    <view class="row">
+      <view>
+        <view class="label">联系人</view>
+        <input class="input" value="{{contactName}}" placeholder="可空" data-key="contactName" bindinput="onInput" />
+      </view>
+      <view>
+        <view class="label">联系电话</view>
+        <input class="input" value="{{contactPhone}}" placeholder="可空" data-key="contactPhone" bindinput="onInput" />
+      </view>
+    </view>
+
+    <view class="label">联系地址</view>
+    <input class="input" value="{{contactAddress}}" placeholder="可空" data-key="contactAddress" bindinput="onInput" />
+
+    <view class="row">
+      <view>
+        <view class="label">送样日期</view>
+        <input class="input" value="{{sendDate}}" placeholder="yyyy-MM-dd" data-key="sendDate" bindinput="onInput" />
+      </view>
+      <view>
+        <view class="label">期望反馈日期</view>
+        <input class="input" value="{{expectedFeedbackDate}}" placeholder="yyyy-MM-dd" data-key="expectedFeedbackDate" bindinput="onInput" />
+      </view>
+    </view>
+
+    <view class="label">料号</view>
+    <input class="input" value="{{materialCode}}" placeholder="可空" data-key="materialCode" bindinput="onInput" />
+
+    <view class="label">品名</view>
+    <input class="input" value="{{materialName}}" placeholder="可空" data-key="materialName" bindinput="onInput" />
+
+    <view class="row">
+      <view>
+        <view class="label">规格</view>
+        <input class="input" value="{{specification}}" placeholder="可空" data-key="specification" bindinput="onInput" />
+      </view>
+      <view>
+        <view class="label">数量</view>
+        <input class="input" value="{{quantity}}" type="number" placeholder="默认1" data-key="quantity" bindinput="onInput" />
+      </view>
+    </view>
+
+    <view class="label">备注</view>
+    <input class="input" value="{{remark}}" placeholder="可空" data-key="remark" bindinput="onInput" />
+
+    <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">提交样板单</button>
+
+    <view wx:if="{{lastSampleNo}}" class="muted">最近样板单号：{{lastSampleNo}}</view>
+  </view>
+</view>

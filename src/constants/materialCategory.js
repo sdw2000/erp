@@ -21,11 +21,13 @@ export function resolveMaterialCategory({ materialCode, sourceType, explicitCate
   const explicit = normalize(explicitCategory)
   if (explicit === '薄膜' || explicit === 'FILM') return CATEGORY_DICT.FILM
   if (explicit === '化工' || explicit === 'CHEMICAL') return CATEGORY_DICT.CHEMICAL
+  if (explicit === '管芯' || explicit === '纸管' || explicit === '胶管') return CATEGORY_DICT.PACKAGING
   if (explicit === '包材' || explicit === 'PACKAGING') return CATEGORY_DICT.PACKAGING
 
   const source = normalize(sourceType)
   if (source === 'FILM') return CATEGORY_DICT.FILM
   if (source === 'CHEMICAL') return CATEGORY_DICT.CHEMICAL
+  if (source === 'PACKAGING') return CATEGORY_DICT.PACKAGING
 
   const code = normalize(materialCode)
   if (!code) return CATEGORY_DICT.UNKNOWN

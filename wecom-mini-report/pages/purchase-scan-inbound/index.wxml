@@ -1,0 +1,100 @@
+<view class="container">
+  <view class="card">
+    <view class="title">步骤1：选择单据（或扫码收货单号）</view>
+    <view class="row">
+      <input class="input" value="{{keyword}}" placeholder="输入/扫码收货单号" bindinput="onKeywordInput" />
+      <button class="btn-secondary small" bindtap="onScanReceiptNo">扫码</button>
+    </view>
+    <button class="btn-secondary" loading="{{listLoading}}" bindtap="queryDocuments">查询单据</button>
+
+    <view wx:if="{{documentList.length === 0}}" class="muted mt8">暂无可扫描单据</view>
+    <block wx:for="{{documentList}}" wx:key="id">
+      <view class="doc-row">
+        <view class="doc-main">
+          <view class="doc-no">{{item.receiptNo}}</view>
+          <view class="muted">供应商代码：{{item.supplierCode || '-'}}</view>
+          <view class="muted">采购单：{{item.purchaseOrderNo || '-'}}</view>
+          <view class="muted">状态：{{item.status || '-'}}</view>
+        </view>
+        <button class="btn-secondary small" data-id="{{item.id}}" data-receiptno="{{item.receiptNo}}" data-scancode="{{item.scanCode}}" bindtap="onSelectDocument">选择</button>
+      </view>
+    </block>
+  </view>
+
+  <view class="card" wx:if="{{document}}">
+    <view class="title">步骤2：连续扫码</view>
+    <view class="muted">当前单据：{{document.receiptNo}}</view>
+    <view class="muted">供应商代码：{{document.supplierCode || '-'}}</view>
+    <view class="muted" wx:if="{{focusedCode}}">当前定位码：{{focusedCode}}</view>
+
+    <view class="grid">
+      <view class="cell">计划数量：{{(focusedSummary && focusedSummary.planQty) || (document.summary && document.summary.planQty) || 0}}</view>
+      <view class="cell">已打印数量：{{(focusedSummary && focusedSummary.printedQty) || (document.summary && document.summary.printedQty) || 0}}</view>
+      <view class="cell">累计已入库：{{(focusedSummary && focusedSummary.scannedQty) || (document.summary && document.summary.scannedQty) || 0}}</view>
+      <view class="cell">本次已扫码：{{scanCodes.length || 0}}</view>
+    </view>
+
+    <view class="label">库位（支持先扫一次）</view>
+    <view class="row">
+      <input class="input" value="{{scannedLocation}}" placeholder="请扫码或输入库位" bindinput="onLocationInput" />
+      <button class="btn-secondary small" bindtap="onScanLocation">扫码库位</button>
+    </view>
+
+    <view class="actions">
+      <button class="btn-primary big scan-inbound-btn" wx:if="{{!scanning}}" bindtap="onStartScan">扫码入库</button>
+      <button class="btn-danger big" wx:if="{{scanning}}" bindtap="onStopScan">停止扫码</button>
+    </view>
+
+    <view class="label">手工补录标签码</view>
+    <view class="row">
+      <input class="input" value="{{scanCodeInput}}" placeholder="输入标签码" bindinput="onScanCodeInput" />
+      <button class="btn-secondary small" bindtap="onAddManualCode">添加</button>
+    </view>
+
+    <view class="muted mt8">本次已扫码：{{scanCodes.length}} 条</view>
+    <view class="code-list" wx:if="{{scanCodes.length > 0}}">
+      <block wx:for="{{scanCodes}}" wx:key="*this">
+        <view class="tag {{failedCodeMap[item] ? 'tag-fail' : ''}}">{{item}}</view>
+      </block>
+    </view>
+
+    <view class="items" wx:if="{{scanGroupedItems && scanGroupedItems.length > 0}}">
+      <view class="label">本次扫码汇总（按材料）</view>
+      <block wx:for="{{scanGroupedItems}}" wx:key="incomingBatchNo">
+        <view class="item-row">
+          <view>料号：{{item.materialCode || '-'}}</view>
+          <view>品名：{{item.materialName || '-'}}</view>
+          <view>来料批次：{{item.incomingBatchNo || '-'}}</view>
+          <view>本次扫码：{{item.scannedThisRound || 0}}</view>
+        </view>
+      </block>
+    </view>
+
+    <view class="items" wx:if="{{displayItems && displayItems.length > 0 && (!scanGroupedItems || scanGroupedItems.length === 0)}}">
+      <view class="label">{{focusedCode ? '匹配明细（按当前定位码）' : '单据明细'}}</view>
+      <block wx:for="{{displayItems}}" wx:key="itemId">
+        <view class="item-row">
+          <view>料号：{{item.materialCode || '-'}}</view>
+          <view>品名：{{item.materialName || '-'}}</view>
+          <view>规格：{{item.specification || '-'}}</view>
+          <view>来料批次：{{item.incomingBatchNo || '-'}}</view>
+          <view>计划：{{item.planQty || 0}} / 已打印：{{item.printedQty || 0}} / 累计已入库：{{item.scannedQty || 0}}</view>
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{document}}">
+    <view class="title">步骤3：提交入仓</view>
+    <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmitInbound">提交入仓</button>
+
+    <view class="summary" wx:if="{{submitSummary}}">
+      <view class="muted">状态：{{submitSummary.status || '-'}}</view>
+      <view class="muted">成功：{{submitSummary.successCount || 0}}，失败：{{submitSummary.failureCount || 0}}</view>
+      <view class="muted">失败原因清单：</view>
+      <block wx:for="{{submitSummary.failures || []}}" wx:key="code">
+        <view class="fail-row">{{item.code}} - {{item.reason}}</view>
+      </block>
+    </view>
+  </view>
+</view>

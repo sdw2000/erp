@@ -36,16 +36,19 @@
         <el-table-column prop="contactPerson" label="联系人" width="120" />
         <el-table-column prop="contactPhone" label="联系电话" width="140" />
         <el-table-column prop="quotationDate" label="报价日期" width="120" />
-        <el-table-column prop="validUntil" label="有效期至" width="120" />
+        <el-table-column label="有效期至" width="120">
+          <template slot-scope="scope">{{ formatValidUntil(scope.row.validUntil) }}</template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template slot-scope="scope">
             <el-tag :type="statusTag(scope.row.status)" size="small">{{ statusText(scope.row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="250" fixed="right">
           <template slot-scope="scope">
             <el-button type="text" size="mini" @click="openDetail(scope.row)">详情</el-button>
             <el-button type="text" size="mini" @click="openEdit(scope.row)">编辑</el-button>
+            <el-button type="text" size="mini" @click="handleReQuote(scope.row)">重报</el-button>
             <el-button type="text" size="mini" style="color:#f56c6c" @click="confirmDelete(scope.row)">删除</el-button>
           </template>
         </el-table-column>
@@ -67,7 +70,7 @@
         <div v-if="current">
           <p><strong>报价单号：</strong>{{ current.quotationNo || '-' }} &nbsp;&nbsp; <strong>供应商：</strong>{{ current.supplier || '-' }}</p>
           <p><strong>联系人：</strong>{{ current.contactPerson || '-' }} / {{ current.contactPhone || '-' }}</p>
-          <p><strong>报价日期：</strong>{{ current.quotationDate || '-' }} &nbsp;&nbsp; <strong>有效期至：</strong>{{ current.validUntil || '-' }}</p>
+          <p><strong>报价日期：</strong>{{ current.quotationDate || '-' }} &nbsp;&nbsp; <strong>有效期至：</strong>{{ formatValidUntil(current.validUntil) }}</p>
           <p><strong>状态：</strong>{{ statusText(current.status) }}</p>
           <div style="margin-top: 10px;"><strong>物料明细</strong></div>
           <el-table v-if="detailMode(current.items || []) !== 'raw'" :data="detailFilmItems(current.items || [])" stripe style="margin-top:10px">
@@ -234,9 +237,9 @@
             </el-table-column>
             <el-table-column label="计价方式" width="110">
               <template slot-scope="scope">
-                <el-select v-if="scope.row._editing" v-model="scope.row.pricingMode" size="small" style="width:100%">
-                  <el-option label="按㎡计价" value="sqm" />
+                <el-select v-if="scope.row._editing" v-model="scope.row.pricingMode" size="small" style="width:100%" disabled>
                   <el-option label="按kg计价" value="kg" />
+                  <el-option label="按㎡计价" value="sqm" />
                 </el-select>
                 <span v-else>{{ filmPricingText(scope.row.pricingMode) }}</span>
               </template>
@@ -259,7 +262,15 @@
               </template>
             </el-table-column>
             <el-table-column label="面积(㎡)" width="100">
-              <template slot-scope="scope">{{ calcFilmSqm(scope.row) }}</template>
+              <template slot-scope="scope">
+                <el-input
+                  v-if="scope.row._editing && scope.row.pricingMode === 'sqm'"
+                  v-model="scope.row.filmSqm"
+                  size="small"
+                  placeholder="面积㎡"
+                />
+                <span v-else>{{ calcFilmSqm(scope.row) }}</span>
+              </template>
             </el-table-column>
             <el-table-column label="金额" width="100">
               <template slot-scope="scope">{{ calcFilmAmount(scope.row) }}</template>
@@ -359,10 +370,13 @@
 </template>
 
 <script>
-import { listPurchaseQuotations, getPurchaseQuotationDetail, createPurchaseQuotation, updatePurchaseQuotation, deletePurchaseQuotation, initializePurchaseQuotationFromPriceSheet } from '@/api/purchaseQuotation'
+import { listPurchaseQuotations, getPurchaseQuotationDetail, createPurchaseQuotation, updatePurchaseQuotation, deletePurchaseQuotation, initializePurchaseQuotationFromPriceSheet, requotePurchaseQuotation } from '@/api/purchaseQuotation'
 import { listSuppliers } from '@/api/purchaseSupplier'
 import { getAllEnabledSpecs } from '@/api/tapeSpec'
 import { getRawMaterialList } from '@/api/tapeRawMaterial'
+import { dateStampInShanghai } from '@/utils/time'
+
+const KG_PRICING_FILM_CODES = ['PETLXM-D25', 'PETLXM-D36']
 
 export default {
   name: 'PurchaseQuotations',
@@ -746,7 +760,7 @@ export default {
           const workbook = XLSX.utils.book_new()
           XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(headerRows), '报价单')
           XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(detailRows), '报价明细')
-          XLSX.writeFile(workbook, `采购报价数据_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`)
+          XLSX.writeFile(workbook, `采购报价数据_${dateStampInShanghai()}.xlsx`)
         })
       } catch (e) {
         this.$message.error('导出失败')
@@ -778,6 +792,7 @@ export default {
         lengthDisplay: '',
         rolls: '',
         pricingMode: 'sqm',
+        filmSqm: '',
         filmWeight: '',
         unitPrice: '',
         remark: '',
@@ -805,6 +820,12 @@ export default {
     statusText(status) {
       const map = { draft: '草稿', submitted: '已提交', accepted: '已接受', rejected: '已拒绝', expired: '已过期' }
       return map[status] || status || '-'
+    },
+    formatValidUntil(val) {
+      if (!val) return '-'
+      const text = String(val)
+      if (text.startsWith('2099-12-31')) return '长期有效'
+      return text
     },
     quantityLabel(mode) {
       return mode === 'raw' ? '桶数' : '卷数'
@@ -885,6 +906,30 @@ export default {
         this.editVisible = true
       }
     },
+    handleReQuote(row) {
+      if (!row || !row.id) return
+      this.$confirm(`确认基于【${row.quotationNo || row.id}】创建新采购报价吗？将复制物料明细并生成新单号。`, '重报确认', {
+        type: 'warning',
+        confirmButtonText: '确认重报',
+        cancelButtonText: '取消'
+      }).then(async() => {
+        const res = await requotePurchaseQuotation(row.id)
+        if (res && (res.code === 200 || res.code === 20000)) {
+          const created = res.data || {}
+          this.$message.success('重报成功，已生成新采购报价')
+          await this.fetchList()
+          if (created.id) {
+            await this.openEdit({ id: created.id })
+          } else {
+            this.$message.warning('新报价已创建，但当前筛选条件可能未显示；请清空状态筛选后查看')
+          }
+          return
+        }
+        this.$message.error((res && res.msg) || '重报失败')
+      }).catch(() => {
+        this.$message.info('已取消重报')
+      })
+    },
     normalizeEditForm(data) {
       const form = {
         ...data,
@@ -894,6 +939,13 @@ export default {
       }
       ;(data.items || []).forEach(item => {
         if (this.isFilmItem(item)) {
+          const unitFromMaster = this.resolvePricingUnitByCode(item.materialCode)
+          const unitText = String(item.unit || '').toLowerCase()
+          const pricingMode = unitFromMaster === '㎡'
+            ? 'sqm'
+            : (unitFromMaster === 'kg'
+              ? 'kg'
+              : ((unitText === '㎡' || unitText === 'm²' || unitText === 'm2' || unitText === 'sqm') ? 'sqm' : 'kg'))
           form.filmItems.push({
             id: item.id,
             materialCode: item.materialCode,
@@ -903,8 +955,9 @@ export default {
             width: item.width,
             lengthDisplay: item.length,
             rolls: item.quantity,
-            pricingMode: String(item.unit || '').toLowerCase() === 'kg' ? 'kg' : 'sqm',
-            filmWeight: String(item.unit || '').toLowerCase() === 'kg' ? item.sqm : '',
+            pricingMode,
+            filmSqm: pricingMode === 'sqm' ? (item.sqm || '') : '',
+            filmWeight: pricingMode === 'kg' ? (item.sqm || '') : '',
             unitPrice: item.unitPrice,
             remark: item.remark,
             _editing: false
@@ -929,6 +982,9 @@ export default {
       return form
     },
     isFilmItem(item) {
+      if (!item) return false
+      const u = String(item.unit || '').toLowerCase()
+      if (u === '㎡' || u === 'm²' || u === 'm2' || u === 'sqm') return true
       return item.width !== null && item.width !== undefined && item.length !== null && item.length !== undefined
     },
     detailFilmItems(items) {
@@ -952,6 +1008,8 @@ export default {
       if (!item) return false
       const unitText = String(item.unit || '').toLowerCase()
       const text = `${item.materialCode || ''} ${item.materialName || ''} ${item.materialType || ''} ${item.materialCategoryRaw || ''} ${item.materialCategory || ''} ${item.spec || ''}`.toLowerCase()
+      const code = String(item.materialCode || '').toUpperCase().trim()
+      if (code.startsWith('PM')) return true
       if (unitText.includes('m') || unitText.includes('㎡') || unitText.includes('m²')) return true
       return /膜|离型|pe泡棉|泡棉|pet|bopp|epe|foam/.test(text)
     },
@@ -981,11 +1039,64 @@ export default {
       if (unitText.includes('kg') || /胶水|粘合|原料|kg|桶/i.test(nameText)) return 'raw'
       return this.form.materialMode || 'film'
     },
+    normalizeMaterialCode(code) {
+      return String(code || '').trim().toUpperCase()
+    },
+    normalizePricingUnit(unit) {
+      const text = String(unit || '').trim()
+      if (!text) return ''
+      const upper = text.toUpperCase()
+      if (text.includes('㎡') || text.includes('平米') || text.includes('平方米') || upper.includes('M²') || upper.includes('M2') || upper.includes('SQM')) {
+        return '㎡'
+      }
+      if (text.includes('公斤') || text.includes('千克') || upper.includes('KG')) {
+        return 'kg'
+      }
+      return ''
+    },
+    resolveMasterUnitByCode(code) {
+      const c = this.normalizeMaterialCode(code)
+      if (!c) return ''
+      const raw = (this.rawMaterials || []).find(r => this.normalizeMaterialCode(r.materialCode) === c)
+      const text = String((raw && raw.unit) || '').trim()
+      if (!text) return ''
+      return this.normalizePricingUnit(text) || text
+    },
+    resolvePricingUnitByCode(code) {
+      return this.normalizePricingUnit(this.resolveMasterUnitByCode(code))
+    },
+    findInvalidUnitMaterialCodes(items) {
+      const invalid = []
+      ;(items || []).forEach(item => {
+        const code = this.normalizeMaterialCode(item && item.materialCode)
+        if (!code) return
+        const unit = this.resolveMasterUnitByCode(code)
+        if (!unit) {
+          invalid.push(code)
+        }
+      })
+      return Array.from(new Set(invalid))
+    },
+    isReleaseFilmCode(code) {
+      const c = this.normalizeMaterialCode(code)
+      return c.includes('LXM') || c.includes('LXZ')
+    },
+    resolveFilmPricingModeByCode(code) {
+      const unitFromMaster = this.resolvePricingUnitByCode(code)
+      if (unitFromMaster === '㎡') return 'sqm'
+      if (unitFromMaster === 'kg') return 'kg'
+      const c = this.normalizeMaterialCode(code)
+      if (!c) return 'sqm'
+      if (c.startsWith('PM')) return 'sqm'
+      if (KG_PRICING_FILM_CODES.includes(c)) return 'kg'
+      if (this.isReleaseFilmCode(c)) return 'sqm'
+      return 'kg'
+    },
     filmPricingText(mode) {
-      return mode === 'kg' ? '按kg计价' : '按㎡计价'
+      return mode === 'sqm' ? '按㎡计价' : '按kg计价'
     },
     filmPricePlaceholder(row) {
-      return row && row.pricingMode === 'kg' ? '单价(元/kg)' : '单价(元/㎡)'
+      return row && row.pricingMode === 'sqm' ? '单价(元/㎡)' : '单价(元/kg)'
     },
     formatFilmSpec(item) {
       if (!item) return ''
@@ -1014,6 +1125,12 @@ export default {
         row.materialName = raw.materialName
       }
       if (mode === 'film') {
+        row.pricingMode = this.resolveFilmPricingModeByCode(code)
+        if (row.pricingMode === 'sqm') {
+          row.filmWeight = ''
+        } else {
+          row.filmSqm = ''
+        }
         const spec = this.specs.find(s => s.materialCode === code)
         if (spec) {
           if (!row.materialName) row.materialName = spec.productName
@@ -1059,11 +1176,17 @@ export default {
       const w = Number(row.width)
       const l = Number(row.lengthDisplay)
       const r = Number(row.rolls)
-      if (!(w > 0 && l > 0 && r > 0)) return '0'
+      if (!(w > 0 && l > 0 && r > 0)) {
+        const explicit = Number(row.filmSqm)
+        if (Number.isFinite(explicit) && explicit > 0) return explicit.toFixed(2)
+        return '0'
+      }
       return ((w / 1000) * l * r).toFixed(2)
     },
     calcFilmAmount(row) {
-      const base = row && row.pricingMode === 'kg' ? Number(row.filmWeight || 0) : Number(this.calcFilmSqm(row))
+      const base = row && row.pricingMode === 'sqm'
+        ? Number(this.calcFilmSqm(row))
+        : Number(row.filmWeight || 0)
       const price = Number(row.unitPrice || 0)
       if (!(base > 0 && price > 0)) return '0'
       return (base * price).toFixed(2)
@@ -1091,42 +1214,66 @@ export default {
         this.$message.warning('请填写供应商')
         return
       }
+      const sourceItems = (this.form.materialMode || 'film') === 'raw' ? (this.form.rawItems || []) : (this.form.filmItems || [])
+      const invalidCodes = this.findInvalidUnitMaterialCodes(sourceItems.filter(item => item && (item.materialCode || item.materialName)))
+      if (invalidCodes.length) {
+        this.$message.error(`以下料号在料号表未维护单位：${invalidCodes.join('、')}`)
+        return
+      }
       const currentMode = this.form.materialMode || 'film'
       const filmItems = (this.form.filmItems || [])
         .filter(item => item.materialCode || item.materialName)
-        .map(item => ({
-          id: item.id,
-          materialCode: item.materialCode,
-          materialName: item.materialName,
-          specifications: [item.thicknessDisplay || '', item.width || '', item.lengthDisplay || ''].filter(Boolean).join('*'),
-          thickness: item.thicknessDisplay ? Number(item.thicknessDisplay) : null,
-          width: item.width ? Number(item.width) : null,
-          length: item.lengthDisplay ? Number(item.lengthDisplay) : null,
-          quantity: item.rolls ? Number(item.rolls) : null,
-          unit: item.pricingMode === 'kg' ? 'kg' : '㎡',
-          sqm: item.pricingMode === 'kg' ? Number(item.filmWeight || 0) : Number(this.calcFilmSqm(item)),
-          unitPrice: item.unitPrice ? Number(item.unitPrice) : null,
-          amount: Number(this.calcFilmAmount(item)),
-          remark: item.remark
-        }))
+        .map(item => {
+          const masterUnit = this.resolveMasterUnitByCode(item.materialCode)
+          const normalizedMaster = this.normalizePricingUnit(masterUnit)
+          const modeByUnit = normalizedMaster === '㎡' ? 'sqm' : (normalizedMaster === 'kg' ? 'kg' : item.pricingMode)
+          const unit = masterUnit || (modeByUnit === 'sqm' ? '㎡' : 'kg')
+          const baseQty = normalizedMaster === '㎡'
+            ? Number(this.calcFilmSqm(item) || 0)
+            : (normalizedMaster === 'kg'
+              ? Number(item.filmWeight || 0)
+              : Number(item.rolls || 0))
+          const unitPrice = item.unitPrice ? Number(item.unitPrice) : null
+          return {
+            id: item.id,
+            materialCode: item.materialCode,
+            materialName: item.materialName,
+            specifications: [item.thicknessDisplay || '', item.width || '', item.lengthDisplay || ''].filter(Boolean).join('*'),
+            thickness: item.thicknessDisplay ? Number(item.thicknessDisplay) : null,
+            width: item.width ? Number(item.width) : null,
+            length: item.lengthDisplay ? Number(item.lengthDisplay) : null,
+            quantity: item.rolls ? Number(item.rolls) : null,
+            unit,
+            sqm: baseQty,
+            unitPrice,
+            amount: (baseQty > 0 && unitPrice > 0) ? Number((baseQty * unitPrice).toFixed(2)) : 0,
+            remark: item.remark
+          }
+        })
 
       const rawItems = (this.form.rawItems || [])
         .filter(item => item.materialCode || item.materialName)
-        .map(item => ({
-          id: item.id,
-          materialCode: item.materialCode,
-          materialName: item.materialName,
-          specifications: item.rawSpec,
-          thickness: null,
-          width: null,
-          length: null,
-          quantity: item.quantity ? Number(item.quantity) : null,
-          unit: 'kg',
-          sqm: Number(this.calcRawTotalWeight(item)),
-          unitPrice: item.unitPrice ? Number(item.unitPrice) : null,
-          amount: Number(this.calcRawAmount(item)),
-          remark: item.remark
-        }))
+        .map(item => {
+          const unit = this.resolveMasterUnitByCode(item.materialCode) || 'kg'
+          const normalizedUnit = this.normalizePricingUnit(unit)
+          const totalWeight = normalizedUnit === 'kg' ? Number(this.calcRawTotalWeight(item)) : Number(item.quantity || 0)
+          const unitPrice = item.unitPrice ? Number(item.unitPrice) : null
+          return {
+            id: item.id,
+            materialCode: item.materialCode,
+            materialName: item.materialName,
+            specifications: item.rawSpec,
+            thickness: null,
+            width: null,
+            length: null,
+            quantity: item.quantity ? Number(item.quantity) : null,
+            unit,
+            sqm: totalWeight,
+            unitPrice,
+            amount: (totalWeight > 0 && unitPrice > 0) ? Number((totalWeight * unitPrice).toFixed(2)) : 0,
+            remark: item.remark
+          }
+        })
 
       const payload = {
         ...this.form,

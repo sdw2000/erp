@@ -1,0 +1,14 @@
+<view class="container">
+  <view class="card" wx:if="{{canSales}}">
+    <view class="title">销售工作台</view>
+    <view class="muted">在小程序中快速完成下单、样板单、发货</view>
+    <button class="btn-primary" bindtap="goSalesOrder">销售下单</button>
+    <button class="btn-secondary" bindtap="goSampleOrder">样板单</button>
+    <button class="btn-secondary" bindtap="goDelivery">发货通知</button>
+  </view>
+
+  <view class="card" wx:else>
+    <view class="title">销售工作台</view>
+    <view class="muted">当前账号无销售权限</view>
+  </view>
+</view>

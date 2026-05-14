@@ -21,26 +21,32 @@
               :value="item.value"
             />
           </el-select>
+          <el-button
+            size="small"
+            :type="filters.includeReceived ? 'success' : 'info'"
+            style="margin-right:8px"
+            @click="toggleIncludeReceived"
+          >{{ filters.includeReceived ? '显示已收货' : '隐藏已收货' }}</el-button>
           <el-button size="small" style="margin-right:8px" @click="handleSeedTestData">生成测试数据</el-button>
           <el-button size="small" type="warning" style="margin-right:8px" @click="handleCleanupTestData">清理测试数据</el-button>
           <el-button type="primary" icon="el-icon-plus" size="small" @click="openCreate">新增收货</el-button>
         </div>
       </div>
 
-      <el-table v-loading="loading" :data="records" stripe style="width:100%">
+      <el-table v-loading="loading" :data="records" stripe style="width:100%" @sort-change="handleTableSortChange">
         <el-table-column type="index" label="序号" width="60" align="center" />
-        <el-table-column prop="receiptNo" label="收货单号" width="160" />
-        <el-table-column prop="supplier" label="供应商" width="180" />
-        <el-table-column label="对账状态" width="110">
+        <el-table-column prop="receiptNo" label="收货单号" width="160" sortable="custom" />
+        <el-table-column prop="supplier" label="供应商" width="180" sortable="custom" />
+        <el-table-column prop="reconciliationStatus" label="对账状态" width="110" sortable="custom">
           <template slot-scope="scope">
             <el-tag :type="reconciliationTag(scope.row.reconciliationStatus)" size="small">
               {{ reconciliationText(scope.row.reconciliationStatus) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="expectedDate" label="预计日期" width="120" />
-        <el-table-column prop="receivedDate" label="实际日期" width="120" />
-        <el-table-column prop="status" label="状态" width="110">
+        <el-table-column prop="expectedDate" label="预计日期" width="120" sortable="custom" />
+        <el-table-column prop="receivedDate" label="实际日期" width="120" sortable="custom" />
+        <el-table-column prop="status" label="状态" width="110" sortable="custom">
           <template slot-scope="scope">
             <el-tag :type="statusTag(scope.row.status)" size="small">{{ statusText(scope.row.status) }}</el-tag>
           </template>
@@ -99,7 +105,7 @@
             <el-col :span="12">
               <el-form-item label="采购订单号">
                 <el-select v-model="form.purchaseOrderNo" filterable clearable placeholder="选择采购订单" style="width:100%" @change="onPurchaseOrderChange">
-                  <el-option v-for="order in purchaseOrderOptions" :key="order.orderNo" :label="`${order.orderNo} / ${order.supplier || '-'}`" :value="order.orderNo" />
+                  <el-option v-for="order in availablePurchaseOrderOptions" :key="order.orderNo" :label="`${order.orderNo} / ${order.supplier || '-'}`" :value="order.orderNo" />
                 </el-select>
               </el-form-item>
             </el-col>
@@ -134,20 +140,14 @@
             </el-col>
             <el-col :span="12">
               <el-form-item label="实际日期">
-                <el-date-picker v-model="form.receivedDate" type="date" value-format="yyyy-MM-dd" style="width:100%" />
+                <el-input :value="form.receivedDate || '-'" disabled placeholder="由仓库收货后自动回填" />
               </el-form-item>
             </el-col>
           </el-row>
           <el-row :gutter="12">
             <el-col :span="12">
               <el-form-item label="状态">
-                <el-select v-model="form.status" style="width:100%">
-                  <el-option label="计划中" value="planned" />
-                  <el-option label="收货中" value="receiving" />
-                  <el-option label="已收货" value="received" />
-                  <el-option label="部分收货" value="partial" />
-                  <el-option label="已取消" value="cancelled" />
-                </el-select>
+                <el-input :value="statusText(form.status)" disabled placeholder="状态由仓库收货自动变更" />
               </el-form-item>
             </el-col>
             <el-col :span="12">
@@ -161,6 +161,12 @@
           <el-alert
             title="说明：仅保留“应到数量”，表示本次到货数量；提交时会同步到兼容字段。"
             type="info"
+            :closable="false"
+            style="margin-bottom:8px"
+          />
+          <el-alert
+            title="采购仅维护预计到货时间；实际到货日期与状态由仓库在入库审批后自动回填。"
+            type="warning"
             :closable="false"
             style="margin-bottom:8px"
           />
@@ -224,12 +230,22 @@ import PurchaseStatusTag from '@/components/PurchaseStatusTag'
 export default {
   name: 'PurchaseReceipts',
   components: { PurchaseStatusTag },
+  computed: {
+    availablePurchaseOrderOptions() {
+      // 支持“同一采购订单多次到货”：不再按已使用订单号做去重限制
+      return (this.purchaseOrderOptions || []).filter(order => {
+        const orderNo = String((order && order.orderNo) || '').trim()
+        return !!orderNo
+      })
+    }
+  },
   data() {
     return {
       loading: false,
       records: [],
-      filters: { supplier: '', status: '', reconciliationStatus: '' },
+      filters: { supplier: '', status: '', reconciliationStatus: '', includeReceived: false },
       pagination: { page: 1, size: 10, total: 0 },
+      sortState: { prop: 'createdAt', order: 'descending' },
       purchaseOrderOptions: [],
       rawMaterials: [],
       reconciliationOptions: getPurchaseReconciliationOptions(),
@@ -266,7 +282,9 @@ export default {
         KG: 'kg',
         M2: '㎡',
         ROLL: '卷',
-        PCS: 'pcs'
+        PCS: '支',
+        EA: '支',
+        PC: '支'
       }
       return map[code] || uom
     },
@@ -325,8 +343,10 @@ export default {
     },
     mapOrderItemToReceiptItem(item, orderNo) {
       const raw = this.findRawMaterialByCode(item.materialCode)
-      const specification = item.specification || item.spec || (raw && raw.spec) || [item.thickness, item.width, item.length].filter(v => v !== null && v !== undefined && v !== '').join('*') || ''
-      const unitCode = item.purchaseUomCode || item.priceUomCode || item.stockUomCode || item.unit || (raw && raw.unit) || ''
+      // 薄膜规格优先使用 filmSpecRaw，避免误用 rawSpec 导致宽长维度串位
+      const specification = item.specification || item.filmSpecRaw || item.rawSpec || item.spec || [item.thickness, item.width, item.length].filter(v => v !== null && v !== undefined && v !== '').join('*') || ''
+      const unitCode = item.purchaseUomCode || item.priceUomCode || item.stockUomCode || item.unit || ''
+      const normalizedUnit = this.normalizeUomLabel(unitCode)
       return {
         materialCode: item.materialCode || '',
         materialName: item.materialName || '',
@@ -345,7 +365,7 @@ export default {
           : (item.purchaseQty !== undefined && item.purchaseQty !== null
             ? item.purchaseQty
             : (item.rolls !== undefined && item.rolls !== null ? item.rolls : 0)),
-        unit: this.normalizeUomLabel(unitCode),
+        unit: normalizedUnit,
         remark: item.remark || ''
       }
     },
@@ -386,7 +406,7 @@ export default {
         contactPhone: '',
         receiveAddress: '',
         expectedDate: '',
-        receivedDate: this.today(),
+        receivedDate: '',
         status: 'planned',
         remark: '',
         items: [this.emptyItem()]
@@ -437,7 +457,10 @@ export default {
           size: this.pagination.size,
           supplier: this.filters.supplier,
           status: this.filters.status,
-          reconciliationStatus: this.filters.reconciliationStatus
+          reconciliationStatus: this.filters.reconciliationStatus,
+          includeReceived: this.filters.status === 'received' ? true : this.filters.includeReceived,
+          sortField: this.sortState.prop,
+          sortOrder: this.sortState.order
         })
         if (res && (res.code === 200 || res.code === 20000)) {
           const data = res.data
@@ -459,6 +482,11 @@ export default {
       this.pagination.page = 1
       this.fetchList()
     },
+    toggleIncludeReceived() {
+      this.filters.includeReceived = !this.filters.includeReceived
+      this.pagination.page = 1
+      this.fetchList()
+    },
     onSizeChange(val) {
       this.pagination.size = val
       this.pagination.page = 1
@@ -466,6 +494,14 @@ export default {
     },
     onPageChange(val) {
       this.pagination.page = val
+      this.fetchList()
+    },
+    handleTableSortChange({ prop, order }) {
+      this.sortState = {
+        prop: prop || 'createdAt',
+        order: order || 'descending'
+      }
+      this.pagination.page = 1
       this.fetchList()
     },
     async openDetail(row) {

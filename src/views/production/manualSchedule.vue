@@ -66,7 +66,11 @@
           >
             <el-table-column type="selection" :reserve-selection="true" width="40" align="center" />
             <el-table-column type="index" label="序号" width="54" align="center" />
-            <el-table-column prop="order_no" label="订单编号" min-width="132" column-key="order_no" show-overflow-tooltip />
+            <el-table-column prop="order_no" label="订单编号" min-width="132" column-key="order_no" show-overflow-tooltip>
+              <template slot-scope="scope">
+                <el-button type="text" @click="handleOrderNoClick(scope.row)">{{ scope.row.order_no || '-' }}</el-button>
+              </template>
+            </el-table-column>
             <el-table-column label="订单信息" align="center" header-align="center" class-name="group-col" header-class-name="group-header">
               <el-table-column label="客户 / 产品 / 规格" min-width="250" class-name="order-card-col" header-class-name="order-card-header" column-key="material_code">
                 <template slot-scope="scope">
@@ -427,6 +431,27 @@
             <el-button type="primary" @click="handleSaveRemark">保存备注</el-button>
           </div>
         </el-dialog>
+
+        <el-dialog
+          title="订单信息"
+          :visible.sync="orderInfoDialogVisible"
+          width="560px"
+        >
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="订单号">
+              {{ orderInfoDialog.orderNo || '-' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="交货日期">
+              {{ orderInfoDialog.deliveryDate || '-' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="备注">
+              {{ orderInfoDialog.remark || '-' }}
+            </el-descriptions-item>
+          </el-descriptions>
+          <div slot="footer">
+            <el-button type="primary" @click="orderInfoDialogVisible = false">关闭</el-button>
+          </div>
+        </el-dialog>
       </el-tab-pane>
 
       <!-- Tab 2: 涂布排程 -->
@@ -434,6 +459,33 @@
         <el-card shadow="never">
           <div slot="header">
             <span>涂布排程列表</span>
+            <el-input
+              v-model.trim="coatingQuery.materialCode"
+              size="small"
+              clearable
+              placeholder="按料号搜索"
+              style="float: right; width: 200px; margin-left: 8px"
+              @keyup.enter.native="handleCoatingMaterialSearch"
+              @clear="handleCoatingMaterialSearch"
+            >
+              <el-button slot="append" icon="el-icon-search" @click="handleCoatingMaterialSearch" />
+            </el-input>
+            <el-select
+              v-model="coatingLineFilter"
+              size="small"
+              clearable
+              placeholder="线别筛选"
+              style="float: right; width: 170px; margin-left: 8px"
+              @change="handleCoatingLineFilterChange"
+            >
+              <el-option label="全部线别" value="" />
+              <el-option
+                v-for="eq in equipmentList"
+                :key="String(eq.id)"
+                :label="eq.equipmentName || ('机台' + eq.id)"
+                :value="String(eq.id)"
+              />
+            </el-select>
             <el-button style="float: right; margin-left: 8px" type="warning" size="small" icon="el-icon-printer" @click="openSchedulePrintDialog('coating')">打印</el-button>
             <el-button style="float: right; margin-left: 8px" type="success" size="small" icon="el-icon-plus" @click="handleAddManualCoating">新增手工排程</el-button>
             <el-button style="float: right" type="primary" size="small" icon="el-icon-refresh" @click="loadCoatingSchedules(true)">刷新</el-button>
@@ -607,6 +659,21 @@
                 {{ formatCoatingDuration(scope.row) }}
               </template>
             </el-table-column>
+            <el-table-column label="计划米数" width="90" align="right" sortable="custom" column-key="coating_planned_meters">
+              <template slot-scope="scope">
+                {{ Number(getCoatingPlannedMeters(scope.row) || 0).toFixed(2) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="已报工米数" width="96" align="right" sortable="custom" column-key="coating_report_qty">
+              <template slot-scope="scope">
+                {{ Number(scope.row.coating_report_qty || 0).toFixed(2) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="完成率" width="84" align="center" sortable="custom" column-key="coating_completion_rate">
+              <template slot-scope="scope">
+                {{ formatProcessCompletionRate(scope.row.coating_report_qty, getCoatingPlannedMeters(scope.row)) }}
+              </template>
+            </el-table-column>
             <el-table-column label="机台" width="146" align="center" sortable="custom" column-key="coating_equipment">
               <template slot-scope="scope">
                 <el-select
@@ -630,8 +697,8 @@
             </el-table-column>
             <el-table-column prop="status" label="状态" width="92" align="center" sortable="custom" column-key="status">
               <template slot-scope="scope">
-                <el-tag :type="statusType(scope.row.status)">
-                  {{ statusText(scope.row.status) }}
+                <el-tag :type="statusType(resolveCoatingDisplayStatus(scope.row))">
+                  {{ statusText(resolveCoatingDisplayStatus(scope.row)) }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -706,7 +773,7 @@
           >
             <el-table-column type="selection" width="40" align="center" />
             <el-table-column type="index" label="序号" width="52" align="center" />
-            <el-table-column label="排程号" width="102" align="center">
+            <el-table-column prop="schedule_id" label="排程号" width="102" align="center" sortable="custom" column-key="schedule_id">
               <template slot-scope="scope">
                 <el-input-number
                   v-if="scope.row.__editing && scope.row.__manual"
@@ -934,7 +1001,7 @@
           >
             <el-table-column type="selection" width="40" align="center" />
             <el-table-column type="index" label="序号" width="52" align="center" />
-            <el-table-column label="排程号" width="102" align="center">
+            <el-table-column prop="schedule_id" label="排程号" width="102" align="center" sortable="custom" column-key="schedule_id">
               <template slot-scope="scope">
                 <el-input-number
                   v-if="scope.row.__editing && scope.row.__manual"
@@ -990,6 +1057,21 @@
                 {{ Number(scope.row.schedule_qty || 0) }}
               </template>
             </el-table-column>
+            <el-table-column label="已报工卷数" width="96" align="right" sortable="custom" column-key="slitting_report_qty">
+              <template slot-scope="scope">
+                {{ Number(scope.row.slitting_report_qty || 0).toFixed(2) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="已报工面积(㎡)" width="120" align="right">
+              <template slot-scope="scope">
+                {{ formatArea(calcReportedAreaBySpec(scope.row, scope.row.slitting_report_qty)) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="完成率" width="84" align="center" sortable="custom" column-key="slitting_completion_rate">
+              <template slot-scope="scope">
+                {{ formatProcessCompletionRate(scope.row.slitting_report_qty, scope.row.schedule_qty) }}
+              </template>
+            </el-table-column>
             <el-table-column label="分切速度(卷/分)" width="118" align="center" sortable="custom" column-key="slitting_speed">
               <template slot-scope="scope">
                 <el-input-number
@@ -1010,14 +1092,14 @@
                 <el-date-picker
                   v-if="scope.row.__editing"
                   v-model="scope.row.packaging_date"
-                  type="datetime"
+                  type="date"
                   size="small"
                   placeholder=""
-                  format="yyyy-MM-dd HH:mm"
-                  value-format="yyyy-MM-dd HH:mm:ss"
+                  format="yyyy-MM-dd"
+                  value-format="yyyy-MM-dd"
                   @change="handleSlittingDateChange(scope.row)"
                 />
-                <span v-else>{{ formatDateTime(scope.row.packaging_date) }}</span>
+                <span v-else>{{ formatDateOnly(scope.row.packaging_date) }}</span>
               </template>
             </el-table-column>
             <el-table-column label="耗时" width="92" align="center" sortable="custom" column-key="slitting_duration">
@@ -1074,7 +1156,7 @@
             </el-table-column>
             <el-table-column label="状态" width="84" align="center" sortable="custom" column-key="status">
               <template slot-scope="scope">
-                <el-tag :type="formatSlittingStatus(scope.row.status).type">{{ formatSlittingStatus(scope.row.status).label }}</el-tag>
+                <el-tag :type="formatSlittingStatus(resolveSlittingDisplayStatus(scope.row)).type">{{ formatSlittingStatus(resolveSlittingDisplayStatus(scope.row)).label }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column label="操作" width="132" align="center">
@@ -1083,7 +1165,7 @@
                   <el-button
                     class="op-main-btn"
                     size="mini"
-                    :disabled="scope.row.__editing && (!scope.row.packaging_date || !scope.row.slitting_equipment || !scope.row.packaging_team)"
+                    :disabled="scope.row.__editing && !scope.row.packaging_date"
                     @click="handleSlittingEditAction(scope.row)"
                   >
                     {{ scope.row.__editing ? '确认' : '修改' }}
@@ -1244,6 +1326,9 @@
           <template slot-scope="scope">{{ formatDateTime(scope.row.end_time) }}</template>
         </el-table-column>
         <el-table-column prop="produced_qty" label="生产数量" width="110" align="right" />
+        <el-table-column label="生产面积(㎡)" width="120" align="right">
+          <template slot-scope="scope">{{ formatArea(computeWorkReportArea(scope.row)) }}</template>
+        </el-table-column>
         <el-table-column prop="operator_name" label="操作人" width="120" />
         <el-table-column label="下工序" width="90" align="center">
           <template slot-scope="scope">
@@ -1278,7 +1363,7 @@
     >
       <el-form :model="materialIssueForm" label-width="90px" inline>
         <el-form-item label="工序">
-          <el-select v-model="materialIssueForm.processType" size="small" style="width: 140px">
+          <el-select v-model="materialIssueForm.processType" size="small" style="width: 140px" @change="handleMaterialIssueProcessTypeChange">
             <el-option label="涂布" value="COATING" />
             <el-option label="复卷" value="REWINDING" />
             <el-option label="分切" value="SLITTING" />
@@ -1296,12 +1381,20 @@
       </el-form>
 
       <div style="margin-bottom: 8px;">
+        <el-button
+          v-if="materialIssueForm.processType === 'COATING'"
+          size="mini"
+          type="success"
+          plain
+          :loading="materialIssueBOMLoading"
+          @click="loadCoatingBomMaterialTemplate"
+        >按BOM带出</el-button>
         <el-button size="mini" type="primary" plain @click="addMaterialIssueRow">新增一行</el-button>
       </div>
       <el-table :data="materialIssueForm.materialIssues" border size="mini" max-height="220">
         <el-table-column label="物料类型" width="110">
           <template slot-scope="scope">
-            <el-select v-model="scope.row.materialType" size="mini" style="width: 96px">
+            <el-select v-model="scope.row.materialType" size="mini" style="width: 96px" @change="val => handleMaterialIssueTypeChange(scope.row, val)">
               <el-option label="原料" value="原料" />
               <el-option label="薄膜" value="薄膜" />
               <el-option label="母卷" value="母卷" />
@@ -1311,6 +1404,7 @@
         <el-table-column label="物料编码" min-width="150">
           <template slot-scope="scope">
             <el-input v-model="scope.row.materialCode" size="mini" placeholder="必填" />
+            <div v-if="scope.row.materialName" style="font-size: 12px; color: #909399; margin-top: 2px;">{{ scope.row.materialName }}</div>
           </template>
         </el-table-column>
         <el-table-column label="库存ID" width="88">
@@ -1320,22 +1414,43 @@
         </el-table-column>
         <el-table-column label="卷码/批次" min-width="120">
           <template slot-scope="scope">
-            <el-input v-model="scope.row.rollCode" size="mini" />
+            <el-select
+              v-model="scope.row.rollCode"
+              size="mini"
+              filterable
+              clearable
+              allow-create
+              default-first-option
+              placeholder="可输入或选择"
+              @change="val => handleMaterialIssueBatchChange(scope.row, val)"
+            >
+              <el-option
+                v-for="(opt, idx) in (scope.row.batchOptions || [])"
+                :key="`${idx}-${opt.batchNo || ''}`"
+                :label="formatMaterialIssueBatchLabel(opt)"
+                :value="opt.batchNo"
+              />
+            </el-select>
           </template>
         </el-table-column>
-        <el-table-column label="计划㎡" width="100">
+        <el-table-column label="计划数量" width="110">
           <template slot-scope="scope">
             <el-input-number v-model="scope.row.planArea" size="mini" :min="0" :step="0.01" :precision="2" :controls="false" />
           </template>
         </el-table-column>
-        <el-table-column label="实际㎡" width="100">
+        <el-table-column label="实际数量" width="110">
           <template slot-scope="scope">
             <el-input-number v-model="scope.row.actualArea" size="mini" :min="0" :step="0.01" :precision="2" :controls="false" />
           </template>
         </el-table-column>
-        <el-table-column label="损耗㎡" width="100">
+        <el-table-column label="损耗数量" width="110">
           <template slot-scope="scope">
             <el-input-number v-model="scope.row.lossArea" size="mini" :min="0" :step="0.01" :precision="2" :controls="false" />
+          </template>
+        </el-table-column>
+        <el-table-column label="单位" width="70" align="center">
+          <template slot-scope="scope">
+            <span>{{ scope.row.unit || (materialIssueForm.processType === 'COATING' ? 'kg' : '㎡') }}</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="70" align="center">
@@ -1351,9 +1466,9 @@
         <el-table-column prop="material_code" label="物料编码" min-width="130" />
         <el-table-column prop="stock_id" label="库存ID" width="88" />
         <el-table-column prop="roll_code" label="卷码" width="120" />
-        <el-table-column prop="plan_area" label="计划㎡" width="88" align="right" />
-        <el-table-column prop="actual_area" label="实际㎡" width="88" align="right" />
-        <el-table-column prop="loss_area" label="损耗㎡" width="88" align="right" />
+        <el-table-column prop="plan_area" label="计划数量" width="88" align="right" />
+        <el-table-column prop="actual_area" label="实际数量" width="88" align="right" />
+        <el-table-column prop="loss_area" label="损耗数量" width="88" align="right" />
         <el-table-column prop="operator_name" label="操作人" width="88" />
         <el-table-column prop="issue_time" label="领料时间" width="170" />
       </el-table>
@@ -1467,6 +1582,7 @@ import {
   reportWork,
   getReportWorkList,
   getProcessMaterialIssues,
+  getProcessMaterialIssueTemplate,
   issueProcessMaterial,
   getOrderItemsReadiness,
   updateReportWork,
@@ -1478,6 +1594,8 @@ import { getRewindingProcessParamsList, getRewindingProcessParams } from '@/api/
 import { getSlittingProcessParamsList, getSlittingProcessParams } from '@/api/slittingProcessParams'
 import { getSpecByMaterialCode, getSpecSuggestions } from '@/api/tapeSpec'
 import { getAllActiveTeams } from '@/api/staff'
+
+const SLITTING_SORT_STORAGE_KEY = 'manualSchedule:slittingSort:v1'
 
 export default {
   name: 'ManualSchedule',
@@ -1539,6 +1657,10 @@ export default {
         prop: null,
         order: null
       },
+      coatingQuery: {
+        materialCode: ''
+      },
+      coatingLineFilter: '',
       rewindingList: [],
       highlightRewindingDetailId: null,
       highlightRewindingScheduleId: null,
@@ -1571,6 +1693,7 @@ export default {
         prop: null,
         order: null
       },
+      slittingSortSyncing: false,
       slittingLockSummary: {
         unlockedRows: 0,
         unlockedArea: 0
@@ -1628,6 +1751,12 @@ export default {
       // 备注编辑对话框
       remarkDialogVisible: false,
       selectedRow: null,
+      orderInfoDialogVisible: false,
+      orderInfoDialog: {
+        orderNo: '',
+        deliveryDate: '',
+        remark: ''
+      },
 
       // 工序报工
       workReportDialogVisible: false,
@@ -1650,10 +1779,16 @@ export default {
         remark: ''
       },
       workReportList: [],
+      workReportContext: {
+        width: 0,
+        length: 0,
+        processType: 'COATING'
+      },
 
       materialIssueDialogVisible: false,
       materialIssueLoading: false,
       materialIssueSubmitting: false,
+      materialIssueBOMLoading: false,
       materialIssueForm: {
         scheduleId: null,
         orderDetailId: null,
@@ -1706,6 +1841,9 @@ export default {
         riskArea: Number(riskArea.toFixed(2))
       }
     },
+    materialIssueQtyLabel() {
+      return this.materialIssueForm && this.materialIssueForm.processType === 'COATING' ? 'kg' : '㎡'
+    },
     workReportRemainingQtyHint() {
       const planned = Number(this.workReportPlannedQty || 0)
       if (!(planned > 0)) return -1
@@ -1717,6 +1855,7 @@ export default {
     this.lockOuterScroll()
     this.updateTableMaxHeight()
     window.addEventListener('resize', this.updateTableMaxHeight)
+    this.restoreSlittingSortState()
     this.loadOrders()
     this.loadEquipmentList()
     this.loadCoatingTeamList()
@@ -1853,6 +1992,23 @@ export default {
       const s = String(value)
       return s.length >= 16 ? s.substring(0, 16) : s
     },
+    resolveOrderDeliveryDate(row) {
+      if (!row) return ''
+      const candidate = row.delivery_date || row.deliveryDate || row.delivery_time || row.deliveryTime || row.due_date || row.dueDate || row.delivery_deadline || row.plan_delivery_date || row.planDeliveryDate || ''
+      return candidate ? this.formatDateTime(candidate) : ''
+    },
+    resolveOrderRemark(row) {
+      if (!row) return ''
+      return String(row.remark || row.order_remark || row.schedule_remark || row.requirement || row.requirements || '').trim()
+    },
+    handleOrderNoClick(row) {
+      this.orderInfoDialog = {
+        orderNo: String((row && row.order_no) || ''),
+        deliveryDate: this.resolveOrderDeliveryDate(row),
+        remark: this.resolveOrderRemark(row)
+      }
+      this.orderInfoDialogVisible = true
+    },
     formatArea(value) {
       return Number(value || 0).toFixed(2)
     },
@@ -1876,6 +2032,17 @@ export default {
       const length = Number(row.length || 0)
       if (qty <= 0 || width <= 0 || length <= 0) return 0
       return (width / 1000) * length * qty
+    },
+    calcReportedAreaBySpec(row, qtyLike) {
+      const qty = Number(qtyLike || 0)
+      if (!(qty > 0)) return 0
+      const width = Number((row && row.width) || 0)
+      const length = Number((row && row.length) || 0)
+      if (!(width > 0)) return 0
+      if (length > 0) {
+        return Number(((width / 1000) * length * qty).toFixed(2))
+      }
+      return Number(((width / 1000) * qty).toFixed(2))
     },
     getCurrentSelectedArea() {
       return Number((this.pendingSelectedStats && this.pendingSelectedStats.area) || 0)
@@ -2124,6 +2291,40 @@ export default {
       this.workReportPlannedQty = 0
       this.workReportScanCode = ''
       this.workReportEditingId = null
+      this.workReportContext = {
+        width: 0,
+        length: 0,
+        processType: 'COATING'
+      }
+    },
+    computeWorkReportArea(item) {
+      const direct = Number((item && (
+        item.produced_area != null ? item.produced_area
+          : item.producedArea != null ? item.producedArea
+            : item.reported_area != null ? item.reported_area
+              : item.reportedArea
+      )) || 0)
+      if (Number.isFinite(direct) && direct > 0) {
+        return Number(direct.toFixed(2))
+      }
+      const qty = Number((item && item.produced_qty) || 0)
+      if (!(qty > 0)) return 0
+      const processType = String(
+        (item && (item.process_type || item.processType)) ||
+        (this.workReportContext && this.workReportContext.processType) ||
+        (this.workReportForm && this.workReportForm.processType) ||
+        ''
+      ).toUpperCase()
+      const width = Number((this.workReportContext && this.workReportContext.width) || 0)
+      const length = Number((this.workReportContext && this.workReportContext.length) || 0)
+      if (!(width > 0)) return 0
+      if (processType === 'COATING') {
+        return Number(((width / 1000) * qty).toFixed(2))
+      }
+      if (length > 0) {
+        return Number(((width / 1000) * length * qty).toFixed(2))
+      }
+      return 0
     },
     sumWorkReportProducedQty(list) {
       if (!Array.isArray(list) || !list.length) return 0
@@ -2171,6 +2372,11 @@ export default {
         proceedNextProcess: true,
         operator: '',
         remark: ''
+      }
+      this.workReportContext = {
+        width: Number((row && row.width) || 0),
+        length: Number((row && row.length) || 0),
+        processType: normalizedProcessType
       }
       this.workReportScanCode = ''
       this.workReportDialogVisible = true
@@ -2375,29 +2581,42 @@ export default {
         processType: 'COATING',
         operator: '',
         remark: '',
-        materialIssues: [
-          {
-            materialType: '原料',
-            materialCode: '',
-            stockId: null,
-            rollCode: '',
-            planArea: null,
-            actualArea: null,
-            lossArea: 0
-          }
-        ]
+        materialIssues: [this.buildDefaultMaterialIssueRow()]
       }
     },
-    addMaterialIssueRow() {
-      this.materialIssueForm.materialIssues.push({
-        materialType: '原料',
+    buildDefaultMaterialIssueRow() {
+      const defaultType = '原料'
+      return {
+        materialType: defaultType,
         materialCode: '',
+        materialName: '',
         stockId: null,
         rollCode: '',
         planArea: null,
         actualArea: null,
-        lossArea: 0
-      })
+        lossArea: 0,
+        unit: this.getMaterialIssueUnitByType(defaultType),
+        batchOptions: [],
+        sourceRef: '',
+        remark: ''
+      }
+    },
+    getMaterialIssueUnitByType(materialType) {
+      const type = String(materialType || '').trim()
+      if (type === '薄膜' || type === '母卷') {
+        return '㎡'
+      }
+      if (this.materialIssueForm && this.materialIssueForm.processType === 'COATING') {
+        return 'kg'
+      }
+      return '㎡'
+    },
+    handleMaterialIssueTypeChange(row, materialType) {
+      if (!row) return
+      row.unit = this.getMaterialIssueUnitByType(materialType)
+    },
+    addMaterialIssueRow() {
+      this.materialIssueForm.materialIssues.push(this.buildDefaultMaterialIssueRow())
     },
     removeMaterialIssueRow(index) {
       if (!Array.isArray(this.materialIssueForm.materialIssues)) return
@@ -2423,6 +2642,79 @@ export default {
         await this.loadMaterialIssueList()
       } else {
         this.materialIssueList = []
+      }
+      if (this.materialIssueForm.processType === 'COATING') {
+        this.loadCoatingBomMaterialTemplate(false)
+      }
+    },
+    async handleMaterialIssueProcessTypeChange() {
+      await this.loadMaterialIssueList()
+      if (this.materialIssueForm.processType === 'COATING') {
+        this.loadCoatingBomMaterialTemplate(false)
+      } else {
+        this.materialIssueForm.materialIssues = [this.buildDefaultMaterialIssueRow()]
+      }
+    },
+    formatMaterialIssueBatchLabel(opt) {
+      if (!opt) return ''
+      const batchNo = String(opt.batchNo || '')
+      const sourceLabel = String(opt.sourceLabel || '')
+      const qty = Number(opt.availableQty || 0)
+      const unit = String(opt.unit || '')
+      const qtyText = qty > 0 ? `${qty}${unit}` : ''
+      return [batchNo, sourceLabel, qtyText].filter(Boolean).join(' | ')
+    },
+    handleMaterialIssueBatchChange(row, batchNo) {
+      if (!row || !batchNo) return
+      const options = Array.isArray(row.batchOptions) ? row.batchOptions : []
+      const matched = options.find(opt => String(opt.batchNo || '') === String(batchNo))
+      if (matched) {
+        row.stockId = Number(matched.stockId || 0) > 0 ? Number(matched.stockId) : null
+      }
+    },
+    async loadCoatingBomMaterialTemplate(showToast = true) {
+      if (!this.materialIssueForm.scheduleId && !this.materialIssueForm.orderDetailId) {
+        this.$message.warning('缺少排程ID或订单明细ID，无法按BOM带出')
+        return
+      }
+      this.materialIssueBOMLoading = true
+      try {
+        const res = await getProcessMaterialIssueTemplate({
+          scheduleId: this.materialIssueForm.scheduleId,
+          orderDetailId: this.materialIssueForm.orderDetailId,
+          processType: this.materialIssueForm.processType
+        })
+        if (res.code === 200 || res.code === 20000) {
+          const rows = Array.isArray(res.data) ? res.data : []
+          if (rows.length) {
+            this.materialIssueForm.materialIssues = rows.map(r => ({
+              materialType: String((r && r.materialType) || '原料'),
+              materialCode: String((r && r.materialCode) || '').trim(),
+              materialName: String((r && r.materialName) || '').trim(),
+              stockId: Number((r && r.stockId) || 0) > 0 ? Number(r.stockId) : null,
+              rollCode: String((r && r.rollCode) || '').trim(),
+              planArea: Number((r && r.planArea) || 0),
+              actualArea: Number((r && r.actualArea) || 0),
+              lossArea: Number((r && r.lossArea) || 0),
+              unit: String((r && r.unit) || this.getMaterialIssueUnitByType(String((r && r.materialType) || '原料'))),
+              batchOptions: Array.isArray(r && r.batchOptions) ? r.batchOptions : [],
+              sourceRef: String((r && r.sourceRef) || ''),
+              remark: String((r && r.remark) || '')
+            }))
+            if (showToast) this.$message.success('已按BOM自动带出领料项')
+          } else {
+            this.materialIssueForm.materialIssues = [this.buildDefaultMaterialIssueRow()]
+            if (showToast) this.$message.warning('未找到可带出的BOM领料项')
+          }
+        } else if (showToast) {
+          this.$message.error(res.message || '按BOM带出失败')
+        }
+      } catch (e) {
+        if (showToast) {
+          this.$message.error(this.parseApiError(e, '按BOM带出失败'))
+        }
+      } finally {
+        this.materialIssueBOMLoading = false
       }
     },
     async loadMaterialIssueList() {
@@ -2460,7 +2752,9 @@ export default {
         rollCode: String((r && r.rollCode) || '').trim(),
         planArea: Number((r && r.planArea) || 0),
         actualArea: Number((r && r.actualArea) || 0),
-        lossArea: Number((r && r.lossArea) || 0)
+        lossArea: Number((r && r.lossArea) || 0),
+        unit: String((r && r.unit) || this.getMaterialIssueUnitByType(String((r && r.materialType) || '原料'))),
+        remark: [String((r && r.remark) || '').trim(), String((r && r.sourceRef) || '').trim()].filter(Boolean).join('; ')
       })).filter(r => r.materialCode && (r.actualArea > 0 || r.planArea > 0 || r.lossArea > 0))
 
       if (!rows.length) {
@@ -2802,6 +3096,53 @@ export default {
     getSortNumericValue(value) {
       return Number(value || 0)
     },
+    restoreSlittingSortState() {
+      try {
+        const raw = window.localStorage.getItem(SLITTING_SORT_STORAGE_KEY)
+        if (!raw) return
+        const parsed = JSON.parse(raw)
+        const prop = String((parsed && parsed.prop) || '').trim()
+        const order = parsed && parsed.order
+        if (!prop || !['ascending', 'descending'].includes(order)) {
+          return
+        }
+        this.slittingSort = { prop, order }
+      } catch (e) {
+        // ignore
+      }
+    },
+    persistSlittingSortState() {
+      try {
+        const { prop, order } = this.slittingSort || {}
+        if (!prop || !order) {
+          window.localStorage.removeItem(SLITTING_SORT_STORAGE_KEY)
+          return
+        }
+        window.localStorage.setItem(SLITTING_SORT_STORAGE_KEY, JSON.stringify({ prop, order }))
+      } catch (e) {
+        // ignore
+      }
+    },
+    syncSlittingTableSortIndicator() {
+      this.$nextTick(() => {
+        const table = this.$refs.slittingTable
+        if (!table) return
+        const { prop, order } = this.slittingSort || {}
+        if (!prop || !order) {
+          if (typeof table.clearSort === 'function') {
+            table.clearSort()
+          }
+          return
+        }
+        if (typeof table.sort === 'function') {
+          this.slittingSortSyncing = true
+          table.sort(prop, order)
+          this.$nextTick(() => {
+            this.slittingSortSyncing = false
+          })
+        }
+      })
+    },
     sortByState(list, sortState, valueGetter) {
       const src = Array.isArray(list) ? [...list] : []
       const { prop, order } = sortState || {}
@@ -2817,8 +3158,14 @@ export default {
     },
     getCoatingSortValue(row, key) {
       if (!row) return ''
-      if (['schedule_id', 'id', 'coating_area', 'locked_area', 'unlocked_area', 'coating_width', 'coating_length'].includes(key)) {
+      if (['schedule_id', 'id', 'coating_report_qty', 'coating_area', 'locked_area', 'unlocked_area', 'coating_width', 'coating_length'].includes(key)) {
         return this.getSortNumericValue(row[key] != null ? row[key] : row.id)
+      }
+      if (key === 'coating_planned_meters') {
+        return this.getSortNumericValue(this.getCoatingPlannedMeters(row))
+      }
+      if (key === 'coating_completion_rate') {
+        return this.getSortNumericValue(this.formatProcessCompletionRate(row.coating_report_qty, this.getCoatingPlannedMeters(row)).replace('%', ''))
       }
       if (key === 'coating_speed') {
         return this.getSortNumericValue(this.resolveCoatingSpeed(row))
@@ -2889,6 +3236,9 @@ export default {
     },
     getSlittingSortValue(row, key) {
       if (!row) return ''
+      if (key === 'schedule_id') {
+        return this.getSortNumericValue(row.schedule_id || row.scheduleId || row.id)
+      }
       if (key === 'spec') {
         const t = Number(row.thickness || 0)
         const w = Number(row.width || 0)
@@ -2897,6 +3247,12 @@ export default {
       }
       if (key === 'schedule_qty') {
         return this.getSortNumericValue(row.schedule_qty)
+      }
+      if (key === 'slitting_report_qty') {
+        return this.getSortNumericValue(row.slitting_report_qty)
+      }
+      if (key === 'slitting_completion_rate') {
+        return this.getSortNumericValue(this.formatProcessCompletionRate(row.slitting_report_qty, row.schedule_qty).replace('%', ''))
       }
       if (key === 'slitting_speed') {
         return this.getSortNumericValue(this.resolveSlittingSpeed(row))
@@ -2916,10 +3272,18 @@ export default {
       this.slittingList = this.sortByState(this.slittingList, this.slittingSort, (row, key) => this.getSlittingSortValue(row, key))
     },
     handleSlittingSortChange({ prop, order, column }) {
+      if (this.slittingSortSyncing) {
+        return
+      }
       const key = (column && column.columnKey) || prop
       this.slittingSort = {
         prop: key,
         order: order || null
+      }
+      this.persistSlittingSortState()
+      if (key === 'schedule_id') {
+        this.loadSlittingSchedules()
+        return
       }
       this.applySlittingSort()
     },
@@ -3013,8 +3377,54 @@ export default {
       if (s === 'PENDING') return { label: '待确认', type: 'info' }
       if (s === 'REWINDING_SCHEDULED') return { label: '待分切', type: 'warning' }
       if (s === 'CONFIRMED') return { label: '分切已排', type: 'success' }
+      if (s === 'COMPLETED') return { label: '已完成', type: 'success' }
       if (s === 'TERMINATED') return { label: '已终止', type: 'danger' }
       return { label: status || '-', type: 'info' }
+    },
+    formatProcessCompletionRate(reportedQty, plannedQty) {
+      const reported = Number(reportedQty || 0)
+      const planned = Number(plannedQty || 0)
+      if (!(planned > 0)) return '0%'
+      const ratio = Math.min(100, Math.max(0, (reported / planned) * 100))
+      return `${ratio.toFixed(1)}%`
+    },
+    getCoatingPlannedMeters(row) {
+      if (!row) return 0
+      const meters = Number(row.coating_length || 0)
+      if (meters > 0) return meters
+      const width = Number(row.coating_width || row.width || 0)
+      const area = Number(row.coating_area || 0)
+      if (width > 0 && area > 0) {
+        return Number((area / (width / 1000)).toFixed(2))
+      }
+      return 0
+    },
+    isCoatingCompleted(row) {
+      if (!row) return false
+      const stopNext = Number(row.coating_stop_next || 0)
+      return stopNext === 1
+    },
+    resolveCoatingDisplayStatus(row) {
+      if (this.isCoatingCompleted(row)) {
+        return 'COMPLETED'
+      }
+      return String((row && row.status) || '').toUpperCase()
+    },
+    resolveSlittingDisplayStatus(row) {
+      if (this.isScheduleProcessCompleted(row, 'SLITTING')) {
+        return 'COMPLETED'
+      }
+      const raw = String((row && row.status) || '').toUpperCase()
+      return raw || 'REWINDING_SCHEDULED'
+    },
+    isScheduleProcessCompleted(row, processType) {
+      const plannedQty = Number((row && row.schedule_qty) || 0)
+      if (!(plannedQty > 0)) return false
+      const process = String(processType || '').toUpperCase()
+      const reportedQty = process === 'COATING'
+        ? Number((row && row.coating_report_qty) || 0)
+        : Number((row && row.slitting_report_qty) || 0)
+      return reportedQty >= plannedQty
     },
     isRewindingLocked(row) {
       const s = String((row && row.status) || '').toUpperCase()
@@ -3741,7 +4151,8 @@ export default {
             const res = await getCoatingAvailability({
               scheduleId: scheduleId > 0 ? scheduleId : null,
               equipmentId: eq.id,
-              coatingDate: row.coating_schedule_date,
+              // 机台下拉“最早时间”应展示真实最早可排，不应受当前行已选时间影响
+              coatingDate: null,
               coatingLength: row.coating_length,
               manualCoatingSpeed: Number(row.manual_coating_speed || 0) > 0 ? Number(row.manual_coating_speed) : null,
               materialCode: row.material_code,
@@ -4346,6 +4757,27 @@ export default {
       }
     },
 
+    isInSundayBlockedWindow(date, config, startParts) {
+      if (!(date instanceof Date) || Number.isNaN(date.getTime())) return false
+      const day = date.getDay()
+      if (Number(config && config.weekendRest) === 1 && day === 0) {
+        return true
+      }
+      if (Number(config && config.sundayDisabled) !== 1) {
+        return false
+      }
+      const start = startParts || this.parseTimeText(config && config.nextWeekStartTime)
+      const hour = date.getHours()
+      const minute = date.getMinutes()
+      if (day === 0) {
+        return hour > start.hours || (hour === start.hours && minute >= start.minutes)
+      }
+      if (day === 1) {
+        return hour < start.hours || (hour === start.hours && minute < start.minutes)
+      }
+      return false
+    },
+
     nextPreviewWorkingStart(value, config) {
       const date = value instanceof Date ? new Date(value.getTime()) : this.toDateObj(value)
       if (!date) return null
@@ -4357,12 +4789,16 @@ export default {
           date.setHours(startParts.hours, startParts.minutes, startParts.seconds, 0)
           continue
         }
-        if ((Number(config && config.weekendRest) === 1 || Number(config && config.sundayDisabled) === 1) && day === 0) {
-          date.setDate(date.getDate() + 1)
+        if (this.isInSundayBlockedWindow(date, config, startParts)) {
+          if (day === 0) {
+            date.setDate(date.getDate() + 1)
+          }
           date.setHours(startParts.hours, startParts.minutes, startParts.seconds, 0)
           continue
         }
-        if (day === 1 && (date.getHours() < startParts.hours || (date.getHours() === startParts.hours && date.getMinutes() < startParts.minutes))) {
+        if ((Number(config && config.weekendRest) === 1 || Number(config && config.sundayDisabled) === 1)
+          && day === 1
+          && (date.getHours() < startParts.hours || (date.getHours() === startParts.hours && date.getMinutes() < startParts.minutes))) {
           date.setHours(startParts.hours, startParts.minutes, startParts.seconds, 0)
         }
         return date
@@ -4387,7 +4823,7 @@ export default {
           result = this.nextPreviewWorkingStart(result, config)
           continue
         }
-        if ((Number(config.weekendRest) === 1 || Number(config.sundayDisabled) === 1) && day === 0) {
+        if (this.isInSundayBlockedWindow(result, config)) {
           result = this.nextPreviewWorkingStart(result, config)
           continue
         }
@@ -4453,30 +4889,43 @@ export default {
       if (!rows.length) return
       const cursorByEquipment = {}
 
-      rows.forEach(row => {
-        const equipmentCode = this.resolveEquipmentCode(row)
-        if (!equipmentCode) return
+      const entries = rows
+        .map(row => {
+          const equipmentCode = this.resolveEquipmentCode(row)
+          if (!equipmentCode) return null
+          const startRaw = row.coating_start_time || row.coating_schedule_date
+          const start = this.toDateObj(startRaw)
+          if (!start) return null
+          const durationMinutes = this.calcCoatingMinutes(row)
+          if (durationMinutes <= 0) return null
+          return {
+            row,
+            equipmentCode,
+            start,
+            durationMinutes,
+            sortTs: start.getTime()
+          }
+        })
+        .filter(Boolean)
+        // 关键修复：按计划开始时间排序预览，避免因列表展示顺序导致时间级联推迟
+        .sort((a, b) => a.sortTs - b.sortTs)
 
-        const startRaw = row.coating_start_time || row.coating_schedule_date
-        let start = this.toDateObj(startRaw)
-        if (!start) return
-
-        const durationMinutes = this.calcCoatingMinutes(row)
-        if (durationMinutes <= 0) return
-
-        start = this.normalizePreviewStart(start, durationMinutes, equipmentCode)
+      entries.forEach(item => {
+        const { row, equipmentCode, durationMinutes } = item
+        let start = this.normalizePreviewStart(item.start, durationMinutes, equipmentCode)
 
         const cursor = cursorByEquipment[equipmentCode]
         if (cursor && start.getTime() < cursor.getTime()) {
-          start = new Date(cursor.getTime())
-          start = this.normalizePreviewStart(start, durationMinutes, equipmentCode)
           if (row.__editing) {
+            start = new Date(cursor.getTime())
+            start = this.normalizePreviewStart(start, durationMinutes, equipmentCode)
             this.$set(row, 'coating_schedule_date', this.toDateTimeString(start))
           }
         }
 
         const end = new Date(start.getTime() + durationMinutes * 60000)
-        cursorByEquipment[equipmentCode] = end
+        const existed = cursorByEquipment[equipmentCode]
+        cursorByEquipment[equipmentCode] = existed && existed.getTime() > end.getTime() ? existed : end
       })
     },
 
@@ -4528,7 +4977,8 @@ export default {
           this.$set(row, 'coating_schedule_date', rounded)
         }
       }
-      this.updateCoatingAvailability(row, true).then(() => {
+      // 切换机台后保留已选最早时间，避免被“latestEnd兜底”错误覆盖
+      this.updateCoatingAvailability(row, false, { keepManualTime: true }).then(() => {
         if (!row.coating_schedule_date) {
           const fallback = this.roundToTenMinuteDateTime(new Date())
           if (fallback) {
@@ -4716,7 +5166,7 @@ export default {
         const pageData = res.data || {}
         const records = pageData.records || pageData.list || []
         this.manualSlittingCandidates = records
-          .filter(item => Number(item.remaining_qty || 0) > 0)
+          .filter(item => this.isManualSlittingCandidate(item))
           .map(item => {
             const maxQty = Math.max(1, Math.floor(Number(item.remaining_qty || 0)))
             return {
@@ -4733,6 +5183,37 @@ export default {
       } finally {
         this.manualSlittingLoading = false
       }
+    },
+
+    isManualSlittingCandidate(item) {
+      if (!item) return false
+      const remainingQty = Number(item.remaining_qty || 0)
+      if (!(remainingQty > 0)) return false
+
+      const status = String(item.schedule_status || item.status || '').toUpperCase()
+      if (['COMPLETED', 'CANCELLED', 'CANCELED', 'TERMINATED'].includes(status)) {
+        return false
+      }
+
+      // 已完成分切报工的明细，不应再出现在“手动添加分切排程”候选中
+      const orderQty = Number(item.order_qty || 0)
+      const slittingReportedQty = Number(item.slitting_report_qty || 0)
+      if (orderQty > 0 && slittingReportedQty >= orderQty) {
+        return false
+      }
+
+      // 已有分切计划时间/包装时间，视为已排到分切工序，不再重复显示
+      const hasSlittingPlan = !!(item.packaging_date || item.slitting_schedule_date)
+      if (hasSlittingPlan) {
+        return false
+      }
+
+      // 手动分切已创建但未确认时，避免重复创建
+      if (String(item.schedule_type || '').toUpperCase() === 'SLITTING_MANUAL') {
+        return false
+      }
+
+      return true
     },
 
     handleManualSlittingSelectionChange(selection) {
@@ -4830,10 +5311,8 @@ export default {
         }
 
         if (createdRows.length) {
-          this.slittingList = [...createdRows, ...(this.slittingList || [])]
-          this.$nextTick(() => {
-            createdRows.forEach(item => this.refreshSlittingEquipmentOptions(item))
-          })
+          this.slittingPage = 1
+          await this.loadSlittingSchedules()
         }
 
         this.manualSlittingDialogVisible = false
@@ -4919,7 +5398,8 @@ export default {
               coating_date: item.coating_date || '',
               rewinding_date: item.rewinding_date || '',
               packaging_date: item.packaging_date || '',
-              remark: item.remark || '',
+              remark: item.remark || item.order_remark || '',
+              order_remark: item.order_remark || '',
               single_area: singleArea.toFixed(2),
               production_area: (singleArea * plannedQty).toFixed(2),
               owe_area: (singleArea * remainingQty).toFixed(2),
@@ -4934,15 +5414,26 @@ export default {
             row.is_completed = this.calcProductionCompleted(row) ? 'Y' : 'N'
             return row
           })
-          mapped.forEach(row => {
-            const id = this.pendingRowKey(row)
-            if (id) {
-              this.$set(this.pendingRowCache, id, row)
-            }
-          })
           const enrichedMapped = await this.enrichMaterialNamesFromSpec(mapped)
-          this.pendingRawList = enrichedMapped
-          this.orderList = enrichedMapped
+          const visibleMapped = this.showCompletedRows
+            ? enrichedMapped
+            : enrichedMapped.filter(row => !this.calcProductionCompleted(row))
+          const visibleIdSet = new Set()
+          visibleMapped.forEach(row => {
+            const id = this.pendingRowKey(row)
+            if (!id) return
+            visibleIdSet.add(id)
+            this.$set(this.pendingRowCache, id, row)
+          })
+          if (!this.showCompletedRows) {
+            Object.keys(this.pendingSelectionMap || {}).forEach(id => {
+              if (!visibleIdSet.has(id)) {
+                this.$delete(this.pendingSelectionMap, id)
+              }
+            })
+          }
+          this.pendingRawList = visibleMapped
+          this.orderList = visibleMapped
           if (!this.pendingDefaultSelectionInited) {
             this.pendingDefaultSelectionInited = true
             this.autoSelectPendingRowsByDailyTarget()
@@ -5503,7 +5994,9 @@ export default {
         }
         const res = await getCoatingSchedules({
           current: this.coatingPage,
-          size: this.coatingPageSize
+          size: this.coatingPageSize,
+          coatingEquipment: this.coatingLineFilter || null,
+          materialCode: this.coatingQuery.materialCode || null
         })
         if (res.code === 200 || res.code === 20000) {
           const pageData = res.data || {}
@@ -5559,6 +6052,16 @@ export default {
 
     handleCoatingSizeChange(size) {
       this.coatingPageSize = size
+      this.coatingPage = 1
+      this.loadCoatingSchedules()
+    },
+
+    handleCoatingLineFilterChange() {
+      this.coatingPage = 1
+      this.loadCoatingSchedules()
+    },
+
+    handleCoatingMaterialSearch() {
       this.coatingPage = 1
       this.loadCoatingSchedules()
     },
@@ -5669,7 +6172,9 @@ export default {
         const res = await getSlittingSchedules({
           current: this.slittingPage,
           size: this.slittingPageSize,
-          orderNo: (this.slittingQuery.orderNo || '').trim()
+          orderNo: (this.slittingQuery.orderNo || '').trim(),
+          sortProp: (this.slittingSort && this.slittingSort.prop) || null,
+          sortOrder: (this.slittingSort && this.slittingSort.order) || null
         })
         if (res.code === 200 || res.code === 20000) {
           const pageData = res.data || {}
@@ -5694,7 +6199,9 @@ export default {
           })
           this.slittingList = await this.enrichMaterialNamesFromSpec(mappedSlitting)
           this.refreshSlittingLockSummary()
-          this.applySlittingSort()
+          if ((this.slittingSort && this.slittingSort.prop) !== 'schedule_id') {
+            this.applySlittingSort()
+          }
           await this.ensureRewindingSpeedForRows(this.slittingList)
           await this.ensureSlittingSpeedForRows(this.slittingList)
           this.slittingTotal = Number(pageData.total || 0)
@@ -5709,6 +6216,7 @@ export default {
       } finally {
         this.slittingLoading = false
         this.relayoutTable('slittingTable')
+        this.syncSlittingTableSortIndicator()
       }
     },
 
@@ -5905,6 +6413,7 @@ export default {
         const planDate = this.getRowPlanDateByType(row, type)
         const spec = this.formatOrderSpec(row)
         const qty = Number(row.schedule_qty || row.order_qty || row.remaining_qty || 0)
+        const squareMeters = this.calculatePrintSquareMeters(row, qty)
         const remark = String(
           row.remark || row.schedule_remark || row.order_remark || row.requirement || row.requirements || ''
         ).trim()
@@ -5916,9 +6425,27 @@ export default {
           materialName: String(row.material_name || '-'),
           spec: spec || '-',
           qty: Number.isFinite(qty) ? qty : '-',
+          squareMeters,
           remark: remark || '-'
         }
       })
+    },
+
+    calculatePrintSquareMeters(row, qty) {
+      const directArea = Number(
+        (row && (row.schedule_area || row.planned_area || row.plan_area || row.slitting_area || row.total_area)) || 0
+      )
+      if (Number.isFinite(directArea) && directArea > 0) {
+        return directArea.toFixed(2)
+      }
+
+      const width = Number(row && row.width)
+      const length = Number(row && row.length)
+      const rollQty = Number(qty)
+      if (width > 0 && length > 0 && rollQty > 0) {
+        return ((width / 1000) * length * rollQty).toFixed(2)
+      }
+      return '-'
     },
 
     doPrintScheduleRows(rows, type, form) {
@@ -5934,6 +6461,15 @@ export default {
           : `日期范围：${(form.dateRange && form.dateRange[0]) || '-'} 至 ${(form.dateRange && form.dateRange[1]) || '-'}`
       }
 
+      const totalRolls = (rows || []).reduce((sum, item) => {
+        const n = Number(item && item.qty)
+        return Number.isFinite(n) ? (sum + n) : sum
+      }, 0)
+      const totalSquareMeters = (rows || []).reduce((sum, item) => {
+        const n = Number(item && item.squareMeters)
+        return Number.isFinite(n) ? (sum + n) : sum
+      }, 0)
+
       const bodyRows = rows.map(item => `
         <tr>
           <td>${item.index}</td>
@@ -5943,6 +6479,7 @@ export default {
           <td>${this.escapeHtml(item.materialName)}</td>
           <td>${this.escapeHtml(item.spec)}</td>
           <td>${this.escapeHtml(item.qty)}</td>
+          <td class="right">${this.escapeHtml(item.squareMeters)}</td>
           <td>${this.escapeHtml(item.remark)}</td>
         </tr>
       `).join('')
@@ -5955,7 +6492,8 @@ export default {
   <style>
     body { font-family: "Microsoft YaHei", Arial, sans-serif; color:#222; margin: 16px; }
     h2 { margin: 0 0 8px; }
-    .meta { margin: 0 0 12px; color:#666; font-size: 12px; }
+    .meta { margin: 0 0 12px; color:#666; font-size: 12px; display: flex; justify-content: space-between; gap: 12px; }
+    .meta-right { text-align: right; white-space: nowrap; }
     table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     th, td { border: 1px solid #333; padding: 6px 8px; font-size: 12px; word-break: break-word; }
     th { background: #f5f7fa; }
@@ -5965,17 +6503,21 @@ export default {
 </head>
 <body>
   <h2>${this.escapeHtml(title)}打印清单</h2>
-  <div class="meta">${this.escapeHtml(rangeText)}　|　条数：${rows.length}</div>
+  <div class="meta">
+    <div>${this.escapeHtml(rangeText)}　|　条数：${rows.length}</div>
+    <div class="meta-right">总卷数：${this.escapeHtml(totalRolls)}　|　总平米：${this.escapeHtml(totalSquareMeters.toFixed(2))}</div>
+  </div>
   <table>
     <thead>
       <tr>
         <th style="width:40px;">序号</th>
         <th style="width:130px;">计划时间</th>
-        <th style="width:170px;">订单号</th>
+        <th style="width:112px;">订单号</th>
         <th style="width:190px;">料号</th>
         <th style="width:150px;">物料名称</th>
         <th style="width:140px;">规格</th>
-        <th style="width:70px;">数量</th>
+        <th style="width:35px;">数量</th>
+        <th style="width:80px;">平米</th>
         <th>备注要求</th>
       </tr>
     </thead>
@@ -6640,15 +7182,7 @@ export default {
         return
       }
       if (!row.packaging_date) {
-        this.$message.warning('请选择包装日期')
-        return
-      }
-      if (!row.slitting_equipment && !row.rewinding_equipment) {
-        this.$message.warning('请选择分切机台')
-        return
-      }
-      if (!row.packaging_team) {
-        this.$message.warning('请选择包装班组')
+        this.$message.warning('请选择分切计划日期')
         return
       }
 

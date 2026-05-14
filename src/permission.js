@@ -5,13 +5,14 @@ import NProgress from 'nprogress' // progress bar
 import 'nprogress/nprogress.css' // progress bar style
 import { getToken } from '@/utils/auth' // get token from cookie
 import getPageTitle from '@/utils/get-page-title'
+import { normalizeRoles } from '@/utils/role'
 
 NProgress.configure({ showSpinner: false }) // NProgress Configuration
 
 const whiteList = ['/login', '/auth-redirect'] // no redirect whitelist
 
 function isCoatingRestrictedUser(roles) {
-  const normalizedRoles = (roles || []).map(role => String(role || '').trim().toLowerCase()).filter(Boolean)
+  const normalizedRoles = normalizeRoles(roles)
   return normalizedRoles.includes('coating') && !normalizedRoles.includes('admin')
 }
 

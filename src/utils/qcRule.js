@@ -106,10 +106,17 @@ function compareByRuleMode(normalized, actualValue, actualNumber) {
   }
 
   if (normalized.judgeMode === 'value' || hasStandard) {
-    if (actualNumber === null || normalized.standardValue === '') {
+    if (normalized.standardValue === '') {
       return { status: 'pending', passed: false, message: '标准值判定所需数据不足' }
     }
-    const passed = actualNumber === Number(normalized.standardValue)
+    const expectedNumber = extractNumber(normalized.standardValue)
+    if (actualNumber !== null && expectedNumber !== null) {
+      const passed = actualNumber === expectedNumber
+      return { status: passed ? 'pass' : 'fail', passed, message: passed ? '符合标准值' : `不等于标准值(${normalized.standardValue})` }
+    }
+    const actualText = safeText(actualValue)
+    const expectedText = safeText(normalized.standardValue)
+    const passed = actualText !== '' && expectedText !== '' && actualText === expectedText
     return { status: passed ? 'pass' : 'fail', passed, message: passed ? '符合标准值' : `不等于标准值(${normalized.standardValue})` }
   }
 

@@ -1,7 +1,8 @@
 import { asyncRoutes, constantRoutes } from '@/router'
+import { normalizeRoles } from '@/utils/role'
 
 function isCoatingRestrictedUser(roles) {
-  const normalizedRoles = (roles || []).map(role => String(role || '').trim().toLowerCase()).filter(Boolean)
+  const normalizedRoles = normalizeRoles(roles)
   return normalizedRoles.includes('coating') && !normalizedRoles.includes('admin')
 }
 
@@ -11,14 +12,13 @@ function isCoatingRestrictedUser(roles) {
  * @param route
  */
 function hasPermission(roles, route) {
-  // normalize roles
-  roles = (roles || []).map(role => String(role || '').trim().toLowerCase()).filter(Boolean)
+  roles = normalizeRoles(roles)
   // super admin bypasses all permission checks
   if (roles.includes('admin')) {
     return true
   }
   if (route.meta && route.meta.roles) {
-    const routeRoles = route.meta.roles.map(role => String(role || '').trim().toLowerCase()).filter(Boolean)
+    const routeRoles = normalizeRoles(route.meta.roles)
     return roles.some(role => routeRoles.includes(role))
   } else {
     return true
@@ -71,7 +71,7 @@ const actions = {
   generateRoutes({ commit }, roles) {
     return new Promise(resolve => {
       let accessedRoutes
-      const normalizedRoles = (roles || []).map(role => String(role || '').trim().toLowerCase()).filter(Boolean)
+      const normalizedRoles = normalizeRoles(roles)
       const coatingRestricted = isCoatingRestrictedUser(normalizedRoles)
 
       if (normalizedRoles.includes('admin')) {

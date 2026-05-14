@@ -1,0 +1,5 @@
+@import '../../app.wxss';
+
+.mt8 {
+  margin-top: 8rpx;
+}

@@ -113,6 +113,7 @@ export default {
       yearTrend: { xAxis: [], series: [] },
       todayReports: [],
       todayReportsLoading: false,
+      dashboardLoading: false,
       refreshTimer: null,
       refreshIntervalMs: 30000
     }
@@ -147,23 +148,35 @@ export default {
       this.loadDashboard()
     },
     async loadDashboard() {
+      if (this.dashboardLoading) return
+      this.dashboardLoading = true
       try {
         const params = this.currentGroupCode ? { shiftCode: this.currentGroupCode } : {}
         this.todayReportsLoading = true
-        const [summaryRes, topRes, trendRes, todayRes] = await Promise.all([
-          getProductionSummary(params),
-          getProductionTopProcesses(params),
-          getProductionYearTrend(params),
-          getProductionTodayReports(params)
+        const [summaryRes, topRes, trendRes, todayRes] = await Promise.allSettled([
+          getProductionSummary(params, { timeout: 20000 }),
+          getProductionTopProcesses(params, { timeout: 20000 }),
+          getProductionYearTrend(params, { timeout: 20000 }),
+          getProductionTodayReports(params, { timeout: 15000 })
         ])
-        this.summary = this.normalizeSummary(summaryRes && summaryRes.data)
-        this.topProcesses = this.normalizeTop(topRes && topRes.data)
-        this.yearTrend = this.normalizeTrend(trendRes && trendRes.data)
-        this.todayReports = this.normalizeTodayReports(todayRes && todayRes.data)
+
+        this.summary = summaryRes.status === 'fulfilled'
+          ? this.normalizeSummary(summaryRes.value && summaryRes.value.data)
+          : this.normalizeSummary()
+        this.topProcesses = topRes.status === 'fulfilled'
+          ? this.normalizeTop(topRes.value && topRes.value.data)
+          : { categories: [], data: [] }
+        this.yearTrend = trendRes.status === 'fulfilled'
+          ? this.normalizeTrend(trendRes.value && trendRes.value.data)
+          : { xAxis: [], series: [] }
+        this.todayReports = todayRes.status === 'fulfilled'
+          ? this.normalizeTodayReports(todayRes.value && todayRes.value.data)
+          : []
       } catch (e) {
         this.useFallbackData()
       } finally {
         this.todayReportsLoading = false
+        this.dashboardLoading = false
       }
     },
     normalizeSummary(data = {}) {

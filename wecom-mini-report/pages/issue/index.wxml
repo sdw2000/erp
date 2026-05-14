@@ -1,0 +1,202 @@
+<view class="container">
+  <view class="card">
+    <view class="title">{{pageTitle}}</view>
+    <view class="muted">{{pageDesc}}</view>
+
+    <view wx:if="{{isCoatingScene}}">
+      <view class="row row-middle">
+        <view class="label">步骤1：先选择涂布排程</view>
+        <button class="btn-secondary small" loading="{{scheduleLoading}}" bindtap="loadCoatingSchedules">刷新</button>
+      </view>
+
+      <view class="row">
+        <view>
+          <view class="label">线别</view>
+          <picker mode="selector" range="{{lineOptions}}" value="{{selectedLineIndex}}" bindchange="onLineChange">
+            <view class="input">{{lineOptions[selectedLineIndex]}}</view>
+          </picker>
+        </view>
+      </view>
+
+      <input class="input" value="{{scheduleKeyword}}" placeholder="输入订单号/料号/排程ID筛选" bindinput="onScheduleKeywordInput" />
+
+      <view class="row row-middle mt8">
+        <input class="input" value="{{scanCode}}" placeholder="扫码内容/排程ID/明细ID/订单号/料号" bindinput="onScanCodeInput" />
+        <button class="btn-secondary small" bindtap="onScanCodeTap">扫码</button>
+      </view>
+      <button class="btn-secondary small" bindtap="onScanSelectSchedule">按输入内容定位排程</button>
+
+      <view wx:if="{{scheduleDisplayList.length === 0}}" class="muted">暂无可领料排程</view>
+      <block wx:for="{{scheduleDisplayList}}" wx:key="index">
+        <view class="schedule-item {{item.scheduleId == selectedScheduleId ? 'schedule-item-active' : ''}}" data-index="{{index}}" bindtap="onSelectSchedule">
+          <view class="tag">排程ID: {{item.scheduleId || '-'}}</view>
+          <view class="muted">线别: {{item.line || '-'}}</view>
+          <view class="muted">订单: {{item.orderNo || '-'}}</view>
+          <view class="muted">料号: {{item.materialCode || '-'}}</view>
+          <view class="muted">计划面积: {{item.plannedArea || '-'}}</view>
+        </view>
+      </block>
+    </view>
+
+    <view wx:if="{{!isCoatingScene}}">
+      <view class="row">
+        <view>
+          <view class="label">排程ID scheduleId</view>
+          <input class="input" value="{{scheduleId}}" type="number" placeholder="建议必填" bindinput="onScheduleIdInput" />
+        </view>
+        <view>
+          <view class="label">订单明细ID orderDetailId</view>
+          <input class="input" value="{{orderDetailId}}" type="number" placeholder="可空" bindinput="onOrderDetailIdInput" />
+        </view>
+      </view>
+    </view>
+
+    <view class="row" wx:if="{{isCoatingScene}}">
+      <view>
+        <view class="label">排程ID scheduleId</view>
+        <input class="input" value="{{scheduleId}}" type="number" placeholder="请先选排程" bindinput="onScheduleIdInput" disabled="{{isCoatingScene}}" />
+      </view>
+      <view>
+        <view class="label">订单明细ID orderDetailId</view>
+        <input class="input" value="{{orderDetailId}}" type="number" placeholder="请先选排程" bindinput="onOrderDetailIdInput" disabled="{{isCoatingScene}}" />
+      </view>
+    </view>
+
+    <view class="row" wx:if="{{!isCoatingScene}}">
+      <view>
+        <view class="label">工序</view>
+        <picker mode="selector" range="{{processTypeOptions}}" range-key="label" value="{{processTypeIndex}}" bindchange="onProcessTypeChange">
+          <view class="input">{{processTypeOptions[processTypeIndex].label}}</view>
+        </picker>
+      </view>
+      <view>
+        <view class="label">操作人</view>
+        <input class="input" value="{{operator}}" placeholder="默认当前用户" bindinput="onOperatorInput" />
+      </view>
+    </view>
+
+    <view class="row" wx:if="{{isCoatingScene}}">
+      <view>
+        <view class="label">工序</view>
+        <view class="input">涂布 COATING</view>
+      </view>
+      <view>
+        <view class="label">操作人</view>
+        <input class="input" value="{{operator}}" placeholder="默认当前用户" bindinput="onOperatorInput" />
+      </view>
+    </view>
+
+    <view class="label">备注</view>
+    <input class="input" value="{{remark}}" placeholder="可空" bindinput="onRemarkInput" />
+
+    <view class="label">二维码编码（扫码或手输，快速带出第一行）</view>
+    <input class="input" value="{{qrCode}}" placeholder="用于快速带出库存" bindinput="onQrCodeInput" />
+
+    <view class="row mt8">
+      <button class="btn-secondary" bindtap="onScanQrCode">扫码二维码</button>
+      <button class="btn-secondary" loading="{{qrLoading}}" bindtap="fillByQrCode">按二维码带出</button>
+    </view>
+
+    <view class="row mt8">
+      <button class="btn-secondary" loading="{{loadingTemplate}}" bindtap="loadTemplate">步骤2：带出物料及用量</button>
+      <button class="btn-primary" loading="{{submitting}}" bindtap="submitIssue">提交领料登记</button>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="row row-middle">
+      <view class="title">领料项</view>
+      <view class="row row-actions">
+        <button class="btn-secondary small" bindtap="onAutoSplitAllByQty">全行按数量拆分</button>
+        <button class="btn-secondary small" bindtap="onAutoSplitAllByPack">全行按桶/卷拆分</button>
+      </view>
+    </view>
+    <block wx:for="{{materialIssues}}" wx:key="index">
+      <view class="issue-card">
+        <view class="row">
+          <view>
+            <view class="label">物料类型</view>
+            <input class="input" value="{{item.materialType}}" data-index="{{index}}" data-key="materialType" bindinput="onIssueInput" />
+          </view>
+          <view>
+            <view class="label">物料编码</view>
+            <input class="input" value="{{item.materialCode}}" data-index="{{index}}" data-key="materialCode" bindinput="onIssueInput" />
+          </view>
+        </view>
+
+        <view class="row">
+          <view>
+            <view class="label">库存ID</view>
+            <input class="input" value="{{item.stockId}}" type="number" data-index="{{index}}" data-key="stockId" bindinput="onIssueInput" />
+          </view>
+          <view>
+            <view class="label">卷号/批次号</view>
+            <input class="input" value="{{item.rollCode}}" data-index="{{index}}" data-key="rollCode" bindinput="onIssueInput" />
+          </view>
+        </view>
+
+        <view class="row">
+          <view>
+            <view class="label">{{item.planLabel || '计划数量'}}</view>
+            <input class="input" value="{{item.planArea}}" type="digit" data-index="{{index}}" data-key="planArea" bindinput="onIssueInput" />
+          </view>
+          <view>
+            <view class="label">{{item.actualLabel || '实际数量'}}</view>
+            <input class="input" value="{{item.actualArea}}" type="digit" data-index="{{index}}" data-key="actualArea" bindinput="onIssueInput" />
+          </view>
+        </view>
+
+        <view class="row">
+          <view>
+            <view class="label">单位</view>
+            <input class="input" value="{{item.unit}}" data-index="{{index}}" data-key="unit" bindinput="onIssueInput" placeholder="如：㎡/kg" />
+          </view>
+          <view>
+            <view class="label">按桶/卷数量</view>
+            <input class="input" value="{{item.packCount}}" type="number" data-index="{{index}}" data-key="packCount" bindinput="onIssueInput" placeholder="如：2" />
+          </view>
+        </view>
+
+        <view wx:if="{{item.batchOptions && item.batchOptions.length}}" class="muted">可用明细：{{item.batchOptions.length}}条（{{item.batchOptions[0].sourceLabel || item.batchOptions[0].source || '-'}}）</view>
+
+        <view class="row mt8" wx:if="{{item.batchOptions && item.batchOptions.length}}">
+          <button class="btn-secondary" data-index="{{index}}" bindtap="onAutoSplitByQty">按数量自动拆分</button>
+          <button class="btn-secondary" data-index="{{index}}" bindtap="onAutoSplitByPack">按桶/卷自动拆分</button>
+        </view>
+
+        <view class="row">
+          <view>
+            <view class="label">{{item.lossLabel || '损耗数量'}}</view>
+            <input class="input" value="{{item.lossArea}}" type="digit" data-index="{{index}}" data-key="lossArea" bindinput="onIssueInput" />
+          </view>
+          <view>
+            <view class="label">行备注</view>
+            <input class="input" value="{{item.remark}}" data-index="{{index}}" data-key="remark" bindinput="onIssueInput" />
+          </view>
+        </view>
+
+        <button class="btn-danger" data-index="{{index}}" bindtap="removeIssueRow">删除本行</button>
+      </view>
+    </block>
+
+    <button class="btn-secondary" bindtap="addIssueRow">+ 新增一行</button>
+  </view>
+
+  <view class="card">
+    <view class="row">
+      <view class="title">历史领料</view>
+      <button class="btn-secondary" loading="{{queryLoading}}" bindtap="queryIssueHistory">按 scheduleId 查询</button>
+    </view>
+
+    <view wx:if="{{issueHistory.length === 0}}" class="muted">暂无记录</view>
+    <block wx:for="{{issueHistory}}" wx:key="index">
+      <view class="issue-history">
+        <view class="tag">{{item.material_code || item.materialCode || '-'}}</view>
+        <view class="muted">实际: {{item.actual_area || item.actualArea || '-'}}</view>
+        <view class="muted">计划: {{item.plan_area || item.planArea || '-'}}</view>
+        <view class="muted">损耗: {{item.loss_area || item.lossArea || '-'}}</view>
+        <view class="muted">卷号: {{item.roll_code || item.rollCode || '-'}}</view>
+      </view>
+    </block>
+  </view>
+</view>

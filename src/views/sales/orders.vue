@@ -440,6 +440,7 @@
                   <div v-if="scope.row._rowEditing" class="unit-price-cell">
                     <el-input v-model="scope.row.unitPrice" :disabled="isUnitPriceLocked(scope.row)" class="small-input" type="text" inputmode="numeric" pattern="[0-9]*\.?[0-9]*" :placeholder="getUnitPricePlaceholder(scope.row)" @blur="formatOrderUnitPriceOnBlur(scope.row)" />
                     <div class="unit-price-text">{{ getPricingUnitText(scope.row) }}</div>
+                    <div v-if="scope.row._priceMatchReason && !scope.row._unitPriceLocked" class="unit-price-reason">{{ scope.row._priceMatchReason }}</div>
                   </div>
                   <span v-else>{{ formatUnitPriceWithUnit(scope.row) }}</span>
                 </template>
@@ -1205,6 +1206,7 @@ export default {
         _rowEditing: !this.isEditing,
         _unitPriceLocked: false,
         _quotationUnit: '㎡',
+        _priceMatchReason: '',
         historySpecOptions: [],
         historySpecKey: ''
       }
@@ -1665,24 +1667,37 @@ export default {
       if (this.isEditing) return
       if (!row) return
       const customerCode = this.editForm.customer
+      const normalizedCustomerCode = String(customerCode || '').trim().toUpperCase()
       const materialCode = this.normalizeMaterialCode(row.materialCode)
       const rowWidth = this.toNumber(row.width)
       const rowLength = this.toNumber(row.lengthDisplay || row.length)
 
       if (!customerCode || !materialCode) {
         this.$set(row, '_unitPriceLocked', false)
+        this.$set(row, '_priceMatchReason', !customerCode ? '未选择客户' : '未选择料号')
         return
       }
 
       const allCandidates = []
+      let totalQuoteCount = 0
+      let customerMatchedCount = 0
+      let acceptedMatchedCount = 0
+      let materialMatchedCount = 0
+      let specMatchedCount = 0
       ;(this.quotationList || []).forEach(q => {
-        if (!q || String(q.customer || '').trim() !== String(customerCode || '').trim()) return
-        const qStatus = String(q.status || '').toLowerCase()
+        totalQuoteCount += 1
+        if (!q) return
+        const quoteCustomerCode = String(q.customer || '').trim().toUpperCase()
+        if (quoteCustomerCode !== normalizedCustomerCode) return
+        customerMatchedCount += 1
+        const qStatus = String(q.status || '').trim().toLowerCase()
         if (qStatus !== 'accepted' && qStatus !== '已接受') return
+        acceptedMatchedCount += 1
 
         ;(q.items || []).forEach(item => {
           if (!item) return
           if (this.normalizeMaterialCode(item.materialCode) !== materialCode) return
+          materialMatchedCount += 1
           const itemThickness = this.toNumber(item.thickness)
           const itemWidth = this.toNumber(item.width)
           const itemLength = this.toNumber(item.length)
@@ -1712,6 +1727,10 @@ export default {
           return Number.isFinite(t) ? t : 0
         }
         const sorted = list.slice().sort((a, b) => {
+          // 先按最新更新时间，再按报价日期，再按版本号
+          const t1 = toTs(b.sortTime) - toTs(a.sortTime)
+          if (t1 !== 0) return t1
+
           const t2 = toTs(b.quotationDate) - toTs(a.quotationDate)
           if (t2 !== 0) return t2
 
@@ -1722,34 +1741,54 @@ export default {
         return sorted[0]
       }
 
-      const latestOverall = pickLatestCandidate(allCandidates)
-      const latestUnit = latestOverall ? latestOverall.unit : '㎡'
+      // 规格匹配规则（按业务）：
+      // m 计价：按宽度匹配
+      // 卷 计价：按宽度+长度匹配
+      // ㎡ 计价：不按规格卡控（客户+料号即可）
+      const matchedCandidates = allCandidates.filter(c => {
+        if (!c) return false
+        if (c.unit === 'm') {
+          const ok = this.numberEquals(c.width, rowWidth)
+          if (ok) specMatchedCount += 1
+          return ok
+        }
+        if (c.unit === '卷') {
+          const ok = this.numberEquals(c.width, rowWidth) && this.numberEquals(c.length, rowLength)
+          if (ok) specMatchedCount += 1
+          return ok
+        }
+        if (c.unit === '㎡') {
+          specMatchedCount += 1
+          return true
+        }
+        return false
+      })
 
-      let picked = null
-      if (latestUnit === '㎡') {
-        const sqmCandidates = allCandidates.filter(c => c.unit === '㎡')
-        const exactSpecCandidates = sqmCandidates.filter(c => this.numberEquals(c.width, rowWidth) && this.numberEquals(c.length, rowLength))
-        picked = pickLatestCandidate(exactSpecCandidates) || pickLatestCandidate(sqmCandidates)
-      } else if (latestUnit === 'm' || latestUnit === '卷') {
-        const sameUnitCandidates = allCandidates.filter(c => {
-          if (c.unit !== latestUnit) return false
-          if (latestUnit === 'm') {
-            return this.numberEquals(c.width, rowWidth)
-          }
-          return this.numberEquals(c.width, rowWidth) && this.numberEquals(c.length, rowLength)
-        })
-        picked = pickLatestCandidate(sameUnitCandidates)
-      }
+      const picked = pickLatestCandidate(matchedCandidates)
 
       if (picked) {
         this.$set(row, 'unitPrice', this.formatUnitPrice(picked.unitPrice))
         this.$set(row, '_quotationUnit', picked.unit || '㎡')
         this.$set(row, 'unit', picked.unit || '㎡')
         this.$set(row, '_unitPriceLocked', true)
+        this.$set(row, '_priceMatchReason', '')
       } else {
         this.$set(row, 'unitPrice', '')
         this.$set(row, '_quotationUnit', this.getPricingUnit(row))
         this.$set(row, '_unitPriceLocked', false)
+        let reason = '未命中报价'
+        if (totalQuoteCount <= 0) {
+          reason = '报价列表为空'
+        } else if (customerMatchedCount <= 0) {
+          reason = '客户不匹配（按客户代码精确匹配）'
+        } else if (acceptedMatchedCount <= 0) {
+          reason = '该客户无已接受报价'
+        } else if (materialMatchedCount <= 0) {
+          reason = '已接受报价中无该料号'
+        } else if (specMatchedCount <= 0) {
+          reason = '规格不匹配（仅m/卷按规格匹配）'
+        }
+        this.$set(row, '_priceMatchReason', reason)
       }
     },
     async onOrderDateChange() {
@@ -2071,7 +2110,7 @@ export default {
             item.unit = this.normalizePricingUnit(item.unit)
             item._quotationUnit = this.normalizePricingUnit(item.unit)
             item._unitPriceLocked = false
-            this.$set(item, '_rowEditing', false)
+            this.$set(item, '_rowEditing', true)
             this.$set(item, 'historySpecOptions', [])
             this.$set(item, 'historySpecKey', '')
             this.normalizeEditCompletionFields(item)
@@ -2137,11 +2176,14 @@ export default {
 
           // validate required fields on non-empty rows
           const missing = []
+          const isFee = /^fuwufei/i.test(it.materialCode)
           if (!it.materialCode) missing.push('产品编码')
           if (!it.materialName) missing.push('产品名称')
-          if (!it.lengthDisplay) missing.push('长度')
-          if (!it.width) missing.push('宽度')
-          if (!it.rolls) missing.push('卷数')
+          if (!isFee) {
+            if (!it.lengthDisplay) missing.push('长度')
+            if (!it.width) missing.push('宽度')
+            if (!it.rolls) missing.push('卷数')
+          }
           if (!it.unitPrice && it.unitPrice !== 0) missing.push('单价')
           if (missing.length) {
             this.$message.error(`第 ${i + 1} 行缺少必填项：${missing.join(', ')}`)
@@ -2163,6 +2205,10 @@ export default {
             amount: Number(this.calcAmountNumber(it).toFixed(2)),
             remark: it.remark || ''
           }
+          // 兼容后端不同字段命名/历史接口
+          converted.itemRemark = converted.remark
+          converted.detailRemark = converted.remark
+          converted.orderDetailRemark = converted.remark
           if (converted.deliveredQty > converted.rolls) {
             converted.deliveredQty = converted.rolls
           }
@@ -2211,6 +2257,9 @@ export default {
           return
         }
         const payload = JSON.parse(JSON.stringify(this.editForm))
+        payload.customerOrderNo = String((payload.customerOrderNo || '')).trim() || String(payload.orderNo || '').trim()
+        // 兼容后端 snake_case 命名策略
+        payload.customer_order_no = payload.customerOrderNo
         payload.items = preparedItems
         payload.removedItemIds = Array.from(new Set((this.removedItemIds || []).filter(id => !!id)))
         // 调试：打印实际发送的数据
@@ -2907,6 +2956,12 @@ export default {
   gap: 1px;
 }
 .unit-price-text {
+.unit-price-reason {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #f56c6c;
+  line-height: 1.2;
+}
   font-size: 10px;
   color: #909399;
   line-height: 1;

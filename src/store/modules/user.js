@@ -1,6 +1,7 @@
 import { login, logout, getInfo } from '@/api/user'
 import { getToken, setToken, removeToken } from '@/utils/auth'
 import router, { resetRouter } from '@/router'
+import { normalizeRoles } from '@/utils/role'
 
 const state = {
   token: getToken(),
@@ -68,9 +69,7 @@ const actions = {
 
         const { roles, name, realName, avatar, introduction } = data
         const workGroup = data.workGroup || data.groupName || data.teamName || data.classGroup || data.shiftGroup || data.deptName || ''
-        const normalizedRoles = (roles || [])
-          .map(role => String(role || '').trim().toLowerCase())
-          .filter(Boolean)
+        const normalizedRoles = normalizeRoles(roles)
 
         // roles must be a non-empty array
         if (!normalizedRoles || normalizedRoles.length <= 0) {

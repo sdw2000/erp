@@ -3,6 +3,7 @@
  * 在需要按钮级别权限控制的组件中使用
  */
 import store from '@/store'
+import { hasAnyRole } from '@/utils/role'
 
 export default {
   methods: {
@@ -13,13 +14,7 @@ export default {
      */
     $hasRole(roles) {
       const userRoles = store.getters.roles || []
-      if (typeof roles === 'string') {
-        return userRoles.includes(roles)
-      }
-      if (Array.isArray(roles)) {
-        return roles.some(role => userRoles.includes(role))
-      }
-      return false
+      return hasAnyRole(userRoles, roles)
     },
 
     /**

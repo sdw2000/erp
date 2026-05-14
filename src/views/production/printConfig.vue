@@ -177,18 +177,18 @@
             </el-form-item>
           </el-form>
 
-          <el-table :data="pagedGatewayTemplates" border stripe size="small">
-            <el-table-column label="模板键" min-width="160">
+          <el-table :data="pagedGatewayTemplates" border stripe size="small" @sort-change="onGatewayTemplateSortChange">
+            <el-table-column prop="templateKey" sortable="custom" label="模板键" min-width="160">
               <template slot-scope="scope">
                 <el-input v-model="scope.row.templateKey" placeholder="如 coating_label" />
               </template>
             </el-table-column>
-            <el-table-column label="模板文件路径" min-width="360">
+            <el-table-column prop="formatPath" sortable="custom" label="模板文件路径" min-width="360">
               <template slot-scope="scope">
                 <el-input v-model="scope.row.formatPath" placeholder="D:\\xxx\\template.btw" />
               </template>
             </el-table-column>
-            <el-table-column label="打印机" min-width="220">
+            <el-table-column prop="printer" sortable="custom" label="打印机" min-width="220">
               <template slot-scope="scope">
                 <el-select v-model="scope.row.printer" filterable allow-create default-first-option placeholder="选择或输入打印机" style="width: 100%;">
                   <el-option
@@ -638,6 +638,8 @@ const SLITTING_DEFAULT_TEMPLATE_BY_BIZ_TYPE = {
 const DEFAULT_TEMPLATE_PATH_HINT = {
   COATING_ROLL_LABEL: 'D:\\MES\\BarTender\\Templates\\coating.btw',
   COATING_INBOUND_SHEET: 'D:\\MES\\BarTender\\Templates\\coating.btw',
+  PURCHASE_RECEIPT_LABEL: 'D:\\MES\\BarTender\\Templates\\IncomingLabel.btw',
+  INCOMINGLABEL: 'D:\\MES\\BarTender\\Templates\\IncomingLabel.btw',
   REWINDING_ROLL_LABEL: 'D:\\MES\\BarTender\\Templates\\rolling.btw',
   SLITTING_CORE_LABEL: 'D:\\MES\\BarTender\\Templates\\rolling.btw',
   SLITTING_CORE_LABEL_NARROW: 'D:\\MES\\BarTender\\Templates\\rolling.btw',
@@ -741,6 +743,8 @@ export default {
       gatewayTemplateKeyword: '',
       gatewayTemplatePage: 1,
       gatewayTemplatePageSize: 10,
+      gatewayTemplateSortProp: '',
+      gatewayTemplateSortOrder: '',
       printers: [],
       printerPreview: '',
       bizRuleRows: [createBizRuleRow()],
@@ -840,9 +844,24 @@ export default {
         return text.includes(keyword)
       })
     },
+    sortedGatewayTemplates() {
+      const rows = Array.isArray(this.filteredGatewayTemplates) ? [...this.filteredGatewayTemplates] : []
+      const prop = String(this.gatewayTemplateSortProp || '').trim()
+      const order = String(this.gatewayTemplateSortOrder || '').trim()
+      if (!prop || !order) return rows
+
+      const isAsc = order === 'ascending'
+      rows.sort((a, b) => {
+        const va = String((a && a[prop]) || '').toLowerCase()
+        const vb = String((b && b[prop]) || '').toLowerCase()
+        const cmp = va.localeCompare(vb, 'zh-CN', { numeric: true, sensitivity: 'base' })
+        return isAsc ? cmp : -cmp
+      })
+      return rows
+    },
     pagedGatewayTemplates() {
       const start = (this.gatewayTemplatePage - 1) * this.gatewayTemplatePageSize
-      return this.filteredGatewayTemplates.slice(start, start + this.gatewayTemplatePageSize)
+      return this.sortedGatewayTemplates.slice(start, start + this.gatewayTemplatePageSize)
     },
     filteredBizRuleRows() {
       const keyword = String(this.bizRuleKeyword || '').trim().toLowerCase()
@@ -904,6 +923,8 @@ export default {
       this.gatewayTemplateKeyword = String(query.pcGk || '').trim()
       this.gatewayTemplatePage = toInt(query.pcGp, this.gatewayTemplatePage)
       this.gatewayTemplatePageSize = toInt(query.pcGs, this.gatewayTemplatePageSize)
+      this.gatewayTemplateSortProp = String(query.pcGsp || '').trim()
+      this.gatewayTemplateSortOrder = String(query.pcGso || '').trim()
 
       this.bizRuleKeyword = String(query.pcBrk || '').trim()
       this.bizRulePage = toInt(query.pcBrp, this.bizRulePage)
@@ -933,6 +954,8 @@ export default {
       setOrDelete('pcGk', this.gatewayTemplateKeyword, '')
       setOrDelete('pcGp', this.gatewayTemplatePage, 1)
       setOrDelete('pcGs', this.gatewayTemplatePageSize, 10)
+      setOrDelete('pcGsp', this.gatewayTemplateSortProp, '')
+      setOrDelete('pcGso', this.gatewayTemplateSortOrder, '')
 
       setOrDelete('pcBrk', this.bizRuleKeyword, '')
       setOrDelete('pcBrp', this.bizRulePage, 1)
@@ -1086,7 +1109,7 @@ export default {
       await this.loadRuleConfig()
       await this.loadGatewayDashboard()
       await this.loadGatewayConfig()
-      this.ensureGatewayTemplateMappingsForGlobalRules()
+      this.ensureGatewayTemplateMappingsForGlobalRules({ autoAppend: false, silent: true })
       await this.loadPrinters()
       await this.loadLastPrintRequest()
     },
@@ -1282,7 +1305,9 @@ export default {
 
       this.bizRuleRows = mergedRows.length ? mergedRows : [createBizRuleRow()]
     },
-    ensureGatewayTemplateMappingsForGlobalRules() {
+    ensureGatewayTemplateMappingsForGlobalRules(options = {}) {
+      const autoAppend = !!(options && options.autoAppend)
+      const silent = !!(options && options.silent)
       const rows = Array.isArray(this.gatewayTemplates) ? [...this.gatewayTemplates] : []
       const existing = {}
       rows.forEach(row => {
@@ -1324,13 +1349,25 @@ export default {
           bizType: String((item && item.bizType) || '').trim()
         })
       })
-      if (!uniqRequired.length) return
+      if (!uniqRequired.length) return []
+
+      const missing = uniqRequired.filter(({ templateKey }) => !existing[templateKey])
+      if (!missing.length) return []
+      if (!autoAppend) {
+        if (!silent) {
+          const preview = missing.slice(0, 5).map(x => x.templateKey).join('、')
+          this.$nextTick(() => {
+            this.$message.warning(`检测到 ${missing.length} 条规则引用的模板映射缺失（如：${preview}），可按需手动添加。`)
+          })
+        }
+        return missing
+      }
 
       const coatingSeed = existing.COATING_ROLL_LABEL || existing.COATING_INBOUND_SHEET || null
       const rollingSeed = existing.REWINDING_ROLL_LABEL || existing.SLITTING_CORE_LABEL || existing.SLITTING_INNER_LABEL || existing.SLITTING_OUTER_LABEL || existing.SLITTING_PALLET_LABEL || null
 
       let appendedCount = 0
-      uniqRequired.forEach(({ templateKey, bizType }) => {
+      missing.forEach(({ templateKey, bizType }) => {
         if (existing[templateKey]) return
 
         const upperKey = templateKey.toUpperCase()
@@ -1364,6 +1401,7 @@ export default {
           this.$message.success(`已自动补齐 ${appendedCount} 条模板映射，请点击“保存到本机”生效`)
         })
       }
+      return missing
     },
     applyScenePresetToRules() {
       if (!this.sceneContext.active) return
@@ -1739,7 +1777,11 @@ export default {
     async saveGatewayConfigAction() {
       this.gatewaySaving = true
       try {
-        this.ensureGatewayTemplateMappingsForGlobalRules()
+        const missing = this.ensureGatewayTemplateMappingsForGlobalRules({ autoAppend: false, silent: true })
+        if (Array.isArray(missing) && missing.length) {
+          const preview = missing.slice(0, 5).map(x => x.templateKey).join('、')
+          this.$message.warning(`本次未自动补齐缺失模板映射（${missing.length}条，如：${preview}），将按当前列表保存。`)
+        }
 
         const payload = this.buildSafeGatewayConfigPayload()
 
@@ -1817,6 +1859,12 @@ export default {
     },
     onGatewayTemplatePageSizeChange(size) {
       this.gatewayTemplatePageSize = size
+      this.gatewayTemplatePage = 1
+      this.persistUiStateToRoute()
+    },
+    onGatewayTemplateSortChange({ prop, order }) {
+      this.gatewayTemplateSortProp = String(prop || '')
+      this.gatewayTemplateSortOrder = String(order || '')
       this.gatewayTemplatePage = 1
       this.persistUiStateToRoute()
     },

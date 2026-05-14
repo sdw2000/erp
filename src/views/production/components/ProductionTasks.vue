@@ -86,6 +86,13 @@
         </span>
         <div class="table-summary-actions">
           <el-switch
+            v-model="showCompletedToggle"
+            class="taskno-switch"
+            active-text="显示已完成"
+            inactive-text="隐藏已完成"
+            @change="handleShowCompletedToggleChange"
+          />
+          <el-switch
             v-if="isCoating"
             v-model="showOrderNo"
             class="taskno-switch"
@@ -135,22 +142,22 @@
           </colgroup>
           <thead>
             <tr>
-              <th v-if="showTaskNo">任务号</th>
-              <th v-if="orderNoVisible">订单号</th>
+              <th v-if="showTaskNo" :class="taskSortHeaderClass('taskNo')" @click="handleTaskHeaderSort('taskNo')">任务号<span v-if="isCoating" class="task-grid-sort-caret">{{ taskSortMark('taskNo') }}</span></th>
+              <th v-if="orderNoVisible" :class="taskSortHeaderClass('orderNo')" @click="handleTaskHeaderSort('orderNo')">订单号<span v-if="isCoating" class="task-grid-sort-caret">{{ taskSortMark('orderNo') }}</span></th>
               <th v-if="!fixedType">类型</th>
-              <th>料号</th>
+              <th :class="taskSortHeaderClass('materialCode')" @click="handleTaskHeaderSort('materialCode')">料号<span v-if="isCoating" class="task-grid-sort-caret">{{ taskSortMark('materialCode') }}</span></th>
               <th v-if="showMaterialName">品名</th>
-              <th v-if="isCoating">颜色</th>
-              <th v-if="isCoating">厚度(μm)</th>
-              <th v-if="isCoating">宽度(mm)</th>
-              <th v-if="isCoating">长度(米)</th>
+              <th v-if="isCoating" :class="taskSortHeaderClass('colorName')" @click="handleTaskHeaderSort('colorName')">颜色<span class="task-grid-sort-caret">{{ taskSortMark('colorName') }}</span></th>
+              <th v-if="isCoating" :class="taskSortHeaderClass('thickness')" @click="handleTaskHeaderSort('thickness')">厚度(μm)<span class="task-grid-sort-caret">{{ taskSortMark('thickness') }}</span></th>
+              <th v-if="isCoating" :class="taskSortHeaderClass('jumboWidth')" @click="handleTaskHeaderSort('jumboWidth')">宽度(mm)<span class="task-grid-sort-caret">{{ taskSortMark('jumboWidth') }}</span></th>
+              <th v-if="isCoating" :class="taskSortHeaderClass('planLength')" @click="handleTaskHeaderSort('planLength')">长度(米)<span class="task-grid-sort-caret">{{ taskSortMark('planLength') }}</span></th>
               <th v-if="isRewinding || isSlitting">规格</th>
               <th v-if="isRewinding">复卷数量</th>
               <th v-if="isSlitting" class="task-grid-center">分切数量</th>
-              <th class="task-grid-center">设备</th>
-              <th>计划时间</th>
+              <th class="task-grid-center" :class="taskSortHeaderClass('equipmentCode')" @click="handleTaskHeaderSort('equipmentCode')">设备<span v-if="isCoating" class="task-grid-sort-caret">{{ taskSortMark('equipmentCode') }}</span></th>
+              <th :class="taskSortHeaderClass('planStartTime')" @click="handleTaskHeaderSort('planStartTime')">计划时间<span v-if="isCoating" class="task-grid-sort-caret">{{ taskSortMark('planStartTime') }}</span></th>
               <th class="task-grid-center">计划耗时</th>
-              <th class="task-grid-center">状态</th>
+              <th class="task-grid-center" :class="taskSortHeaderClass('status')" @click="handleTaskHeaderSort('status')">状态<span v-if="isCoating" class="task-grid-sort-caret">{{ taskSortMark('status') }}</span></th>
               <th v-if="isCoating && !isPlanMode">实际开始</th>
               <th v-if="isCoating && !isPlanMode">实际结束</th>
               <th>操作</th>
@@ -215,7 +222,14 @@
               </td>
               <td class="task-grid-actions">
                 <el-button class="task-op-btn" size="mini" @click="quickLoadLocksByTask(row)">领料</el-button>
-                <el-button class="task-op-btn" size="mini" type="success" plain @click="openLabelPrintDialog(row)">标签打印</el-button>
+                <el-button
+                  v-if="String((row && row.type) || fixedType || query.type || '').toLowerCase() !== 'coating'"
+                  class="task-op-btn"
+                  size="mini"
+                  type="success"
+                  plain
+                  @click="openLabelPrintDialog(row)"
+                >标签打印</el-button>
                 <el-button class="task-op-btn" size="mini" type="primary" @click="openReportDialog(row)">报工</el-button>
               </td>
             </tr>
@@ -293,7 +307,7 @@
           <el-input :value="formatAreaNum(reportForm.planQty)" size="small" style="width: 140px" disabled />
         </el-form-item>
         <el-form-item v-if="reportForm.processType === 'COATING'" label="实际数量(㎡)">
-          <el-input :value="formatAreaNum(calcProducedRollsArea())" size="small" style="width: 140px" disabled />
+          <el-input :value="formatAreaNum(calcCoatingOrderReportedTotalArea())" size="small" style="width: 140px" disabled />
         </el-form-item>
         <el-form-item v-else :label="reportForm.processType === 'SLITTING' ? '生产卷数' : '生产数量'">
           <el-input-number
@@ -349,6 +363,20 @@
       <div v-if="reportForm.processType === 'COATING'" class="section-head">
         <span style="font-weight: 600;">涂布母卷明细</span>
         <div>
+          <el-button
+            v-if="!isLabelPrintMode && !reportOrderStarted"
+            size="mini"
+            type="primary"
+            @click="handleCoatingOrderStart"
+          >订单开始</el-button>
+          <el-button
+            v-if="!isLabelPrintMode && reportOrderStarted && !reportOrderCompleted"
+            size="mini"
+            type="warning"
+            plain
+            @click="handleCoatingOrderEnd"
+          >订单结束</el-button>
+          <el-tag v-if="!isLabelPrintMode && reportOrderCompleted" size="mini" type="success" style="margin-right: 8px;">已确认完成</el-tag>
           <el-button v-if="isLabelPrintMode" size="mini" type="primary" plain icon="el-icon-printer" @click="printCoatingInboundSheet">打印入库单</el-button>
         </div>
       </div>
@@ -359,24 +387,87 @@
             <el-input v-model="scope.row.rollCode" size="mini" placeholder="如 MJ-20260306-001" />
           </template>
         </el-table-column>
+        <el-table-column label="数字号" width="110" align="right">
+          <template slot-scope="scope">
+            <el-input
+              v-model.trim="scope.row.sequenceNo"
+              size="mini"
+              clearable
+              placeholder="可留空"
+            />
+          </template>
+        </el-table-column>
         <el-table-column label="宽度(mm)" width="120" align="right">
           <template slot-scope="scope">
-            <el-input-number v-model="scope.row.widthMm" :min="0" :step="1" :precision="2" size="mini" controls-position="right" />
+            <el-input
+              v-model.trim="scope.row.widthMm"
+              size="mini"
+              clearable
+              placeholder="请输入"
+              @input="() => handleProducedRollWidthChanged(scope.row)"
+            />
           </template>
         </el-table-column>
         <el-table-column label="长度(m)" width="120" align="right">
           <template slot-scope="scope">
-            <el-input-number v-model="scope.row.lengthM" :min="0" :step="1" :precision="2" size="mini" controls-position="right" />
+            <el-input
+              v-model.trim="scope.row.lengthM"
+              size="mini"
+              clearable
+              placeholder="必填"
+            />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="160" align="center">
           <template slot-scope="scope">
             <el-button type="text" size="mini" @click="removeProducedRoll(scope.$index)">删除</el-button>
-            <el-button v-if="isLabelPrintMode" type="text" size="mini" @click="printRollLabel(scope.row, scope.$index)">打印标签</el-button>
+            <el-button type="text" size="mini" @click="printRollLabel(scope.row, scope.$index)">打印标签</el-button>
           </template>
         </el-table-column>
       </el-table>
-      <el-button v-if="reportForm.processType === 'COATING'" size="mini" icon="el-icon-plus" class="mb-10" @click="addProducedRoll">新增母卷</el-button>
+      <div
+        v-if="reportForm.processType === 'COATING' && (isLabelPrintMode || reportOrderStarted)"
+        class="mb-10"
+      >
+        <el-button
+          size="mini"
+          icon="el-icon-plus"
+          @click="addProducedRoll"
+        >新增母卷</el-button>
+        <el-button
+          size="mini"
+          type="primary"
+          plain
+          icon="el-icon-document-copy"
+          @click="addProducedRollWithPrevSize"
+        >新增上一行宽度长度</el-button>
+      </div>
+
+      <el-form v-if="reportForm.processType === 'COATING'" :inline="true" label-width="120px" class="mb-10">
+        <el-form-item label="小支标签模式">
+          <el-switch v-model="reportForm.coatingUseRewindingLabel" active-text="复卷模板" inactive-text="母卷模板" />
+        </el-form-item>
+        <template v-if="reportForm.coatingUseRewindingLabel">
+          <el-form-item label="母卷号前缀">
+            <el-input v-model="reportForm.rewindingMotherRollCode" size="small" clearable placeholder="可手填，如 MJ-20260502" style="width: 220px" />
+          </el-form-item>
+          <el-form-item>
+            <el-button size="small" @click="fillNextRewindingMotherRollCode">带出下一个母卷号</el-button>
+          </el-form-item>
+          <el-form-item label="序列起始号">
+            <el-input-number v-model="reportForm.rewindingSerialStart" size="small" :min="1" :step="1" controls-position="right" style="width: 140px" />
+          </el-form-item>
+          <el-form-item label="打印张数">
+            <el-input-number v-model="reportForm.rewindingPrintCount" size="small" :min="1" :step="1" controls-position="right" style="width: 140px" />
+          </el-form-item>
+          <el-form-item>
+            <el-button size="small" @click="generateCoatingProducedRollRowsByPrintCount">按张数生成母卷明细</el-button>
+          </el-form-item>
+          <el-form-item>
+            <el-button size="small" type="primary" plain icon="el-icon-printer" @click="printCoatingRewindingLabelBatch">按复卷模板批量打印</el-button>
+          </el-form-item>
+        </template>
+      </el-form>
 
       <div v-if="isLabelPrintMode && reportForm.processType === 'REWINDING'" class="section-head">
         <span style="font-weight: 600;">复卷标签</span>
@@ -546,7 +637,7 @@
             type="success"
             plain
             :loading="qrRuleSaving"
-            @click="saveCurrentCustomerQrRule"
+            @click="saveCurrentCustomerQrRule('SLITTING_OUTER_LABEL')"
           >保存当前客户二维码规则</el-button>
         </el-form-item>
         <el-form-item label="二维码预览">
@@ -652,13 +743,22 @@
         <el-table-column prop="produced_roll_count" label="母卷条数" width="90" align="right" />
         <el-table-column prop="material_issue_count" label="领料条数" width="90" align="right" />
         <el-table-column prop="operator_name" label="操作人" width="120" />
+        <el-table-column v-if="reportForm.processType === 'COATING'" label="订单状态" width="96" align="center">
+          <template slot-scope="scope">
+            <el-tag v-if="getReportOrderStatus(scope.row) === 'COMPLETED'" size="mini" type="success">已完成</el-tag>
+            <el-tag v-else-if="getReportOrderStatus(scope.row) === 'UNCOMPLETED'" size="mini" type="info">未完成</el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="120" align="center">
           <template slot-scope="scope">
             <el-button type="text" size="mini" @click="editHistoryReport(scope.row)">修改</el-button>
             <el-button type="text" size="mini" style="color:#F56C6C" @click="removeHistoryReport(scope.row)">删除</el-button>
           </template>
         </el-table-column>
-        <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
+        <el-table-column label="备注" min-width="160" show-overflow-tooltip>
+          <template slot-scope="scope">{{ formatReportRemarkDisplay(scope.row && scope.row.remark) }}</template>
+        </el-table-column>
       </el-table>
 
       <div slot="footer">
@@ -787,6 +887,9 @@
           <el-table-column v-if="isCoating" prop="finishedMaterialCode" label="成品料号" width="160" />
           <el-table-column v-if="isCoating" prop="rawMaterialCode" label="原材料代码" width="150" />
           <el-table-column v-if="isCoating" prop="rawMaterialName" label="原材料名称" min-width="160" show-overflow-tooltip />
+          <el-table-column v-if="isCoating" prop="sourceType" label="来源" width="80" align="center" />
+          <el-table-column v-if="isCoating" prop="specDesc" label="规格" min-width="140" show-overflow-tooltip />
+          <el-table-column v-if="isCoating" prop="unit" label="单位" width="70" align="center" />
           <el-table-column v-if="isCoating" prop="issuedQty" label="领料数量" width="120" />
           <el-table-column v-if="!isCoating" prop="materialCode" label="料号" width="160" />
           <el-table-column v-if="!isCoating" prop="filmStockId" :label="isSlitting ? '支料ID' : '母卷ID'" width="100" />
@@ -805,6 +908,168 @@
         <el-button @click="issueDialogVisible = false">关闭</el-button>
       </div>
     </el-dialog>
+
+    <el-dialog
+      title="涂布领料"
+      :visible.sync="coatingIssueDialogVisible"
+      width="1100px"
+      :close-on-click-modal="false"
+      @close="closeCoatingIssueDialog"
+    >
+      <el-row :gutter="8" style="margin-bottom: 10px; border:1px solid #ebeef5; border-radius:4px; padding:8px 10px;">
+        <el-col :span="6"><div><strong>任务号：</strong>{{ coatingIssueForm.taskNo || '-' }}</div></el-col>
+        <el-col :span="6"><div><strong>订单号：</strong>{{ coatingIssueForm.orderNo || '-' }}</div></el-col>
+        <el-col :span="6"><div><strong>成品料号：</strong>{{ coatingIssueForm.materialCode || '-' }}</div></el-col>
+        <el-col :span="6"><div><strong>产品名称：</strong>{{ coatingIssueForm.materialName || '-' }}</div></el-col>
+        <el-col :span="6" style="margin-top:6px;"><div><strong>规格：</strong>{{ coatingIssueForm.specText || '-' }}</div></el-col>
+        <el-col :span="6" style="margin-top:6px;"><div><strong>计划日期：</strong>{{ coatingIssueForm.planDate || '-' }}</div></el-col>
+        <el-col :span="6" style="margin-top:6px;"><div><strong>计划数量：</strong>{{ coatingIssueForm.planQty || '-' }}</div></el-col>
+        <el-col :span="6" style="margin-top:6px;"><div><strong>可领总量：</strong>{{ coatingIssueForm.lockTotalQty }}</div></el-col>
+      </el-row>
+
+      <el-alert
+        v-if="coatingIssueForm.requestNos.length"
+        :title="`已自动关联请购单：${coatingIssueForm.requestNos.join('、')}`"
+        type="info"
+        :closable="false"
+        style="margin-bottom: 10px;"
+      />
+
+      <el-alert
+        v-if="!coatingIssueForm.lockRows.length && coatingIssueForm.missingReason"
+        :title="`未生成配方分解明细：${coatingIssueForm.missingReason}`"
+        type="warning"
+        :closable="false"
+        style="margin-bottom: 10px;"
+      />
+
+      <div style="margin: 8px 0; font-weight: 600;">配方领料明细</div>
+      <div v-if="!coatingLockSections.length" style="padding: 14px 0; color:#909399; text-align:center; border:1px solid #ebeef5; border-radius:4px;">暂无配方分解明细</div>
+      <div v-for="sec in coatingLockSections" :key="sec.key" style="margin-bottom: 10px;">
+        <div style="margin: 4px 0 6px; font-weight: 600;">{{ sec.label }}</div>
+        <el-table v-loading="coatingIssueLoading" :data="sec.rows" border stripe size="mini" max-height="220">
+          <el-table-column type="index" label="#" width="50" align="center" />
+          <el-table-column prop="rawMaterialCode" label="物料代码" width="150" />
+          <el-table-column prop="rawMaterialName" label="物料名称" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="specDesc" label="规格" min-width="140" show-overflow-tooltip />
+          <el-table-column label="计划用量" width="110" align="right">
+            <template slot-scope="scope">
+              <span>{{ Number(scope.row.requiredKg || scope.row.plannedUsage || 0).toFixed(3) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column :label="isAreaSectionKey(sec.key) ? '可用卷数' : '可领桶/包'" width="110" align="right">
+            <template slot-scope="scope">{{ formatCoatingLockPackQty(scope.row) }}</template>
+          </el-table-column>
+          <el-table-column :label="isAreaSectionKey(sec.key) ? '可领长度(m)' : '仓库可用'" width="130" align="right">
+            <template slot-scope="scope">{{ formatCoatingLockQty(scope.row) }}</template>
+          </el-table-column>
+          <el-table-column label="单位" width="70" align="center">
+            <template slot-scope="scope">{{ resolveCoatingIssueUnit(scope.row) }}</template>
+          </el-table-column>
+          <el-table-column label="本次领料" width="130" align="right">
+            <template slot-scope="scope">
+              <el-input-number
+                v-model="scope.row.issueQty"
+                size="mini"
+                :min="0"
+                :max="Number(resolveCoatingLockAvailableQty(scope.row) || 0)"
+                :precision="0"
+                :step="1"
+                :controls="true"
+                :disabled="!canAutoIssueLockRow(scope.row)"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="100" align="center">
+            <template slot-scope="scope">
+              <el-tag size="mini" :type="lockStatusTag(scope.row.lockStatus)">{{ lockStatusText(scope.row.lockStatus) }}</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <div style="margin: 14px 0 8px; font-weight: 600; display:flex; justify-content:space-between; align-items:center;">
+        <span>手动领料（配方缺失时可补录）</span>
+        <el-button size="mini" icon="el-icon-plus" @click="addCoatingManualRow">新增一行</el-button>
+      </div>
+      <el-table :data="coatingIssueForm.manualRows" border stripe size="mini" max-height="220">
+        <el-table-column type="index" label="#" width="50" align="center" />
+        <el-table-column label="仓库" width="110" align="center">
+          <template slot-scope="scope">
+            <el-select
+              v-model="scope.row.warehouseType"
+              size="mini"
+              style="width: 90px"
+              @change="() => onManualWarehouseTypeChange(scope.row)"
+            >
+              <el-option label="化工仓" value="chemical" />
+              <el-option label="薄膜仓" value="film" />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="物料代码" width="200">
+          <template slot-scope="scope">
+            <el-autocomplete
+              v-model="scope.row.rawMaterialCode"
+              :fetch-suggestions="queryRawMaterialCode"
+              placeholder="输入或选择料号"
+              size="mini"
+              @select="item => onSelectManualMaterial(scope.row, item)"
+              @change="() => onChangeManualMaterial(scope.row)"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="物料名称" min-width="170">
+          <template slot-scope="scope">{{ scope.row.rawMaterialName || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="规格" min-width="140" show-overflow-tooltip>
+          <template slot-scope="scope">{{ scope.row.specDesc || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="单位" width="80" align="center">
+          <template slot-scope="scope">{{ scope.row.unit || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="批次" min-width="180">
+          <template slot-scope="scope">
+            <el-select
+              v-model="scope.row.detailId"
+              size="mini"
+              clearable
+              filterable
+              placeholder="先查库存再选批次"
+              style="width: 100%"
+              @focus="refreshManualStockQty(scope.row, true)"
+              @change="() => onManualBatchChange(scope.row)"
+            >
+              <el-option
+                v-for="opt in (scope.row.batchOptions || [])"
+                :key="`${opt.stockId}-${opt.detailId}`"
+                :label="opt.label"
+                :value="opt.detailId"
+              />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="仓库数量" width="120" align="right">
+          <template slot-scope="scope">{{ scope.row.warehouseQty }}</template>
+        </el-table-column>
+        <el-table-column label="本次领料" width="130" align="right">
+          <template slot-scope="scope">
+            <el-input-number v-model="scope.row.issueQty" size="mini" :min="0" :precision="3" :step="1" />
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" align="center">
+          <template slot-scope="scope">
+            <el-button type="text" size="mini" @click="refreshManualStockQty(scope.row)">查库存</el-button>
+            <el-button type="text" size="mini" style="color:#F56C6C" @click="removeCoatingManualRow(scope.$index)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div slot="footer">
+        <el-button @click="coatingIssueDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="coatingIssueSubmitting" @click="submitCoatingIssueDialog">确认领料</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -813,9 +1078,18 @@ import request from '@/utils/request'
 import { getProductionTasks } from '@/api/productionManagement'
 import { getStagePlanTaskPage } from '@/api/schedulePlan'
 import { getShiftProductionSummary } from '@/api/schedule'
-import { getCoatingSchedules, getPendingOrders, reportWork, getReportWorkList, getLatestScheduleId, getNextCoatingRollCode, updateReportWork, deleteReportWork } from '@/api/manualSchedule'
+import { getCoatingSchedules, getPendingOrders, reportWork, getReportWorkList, getReportWorkDetail, getLatestScheduleId, getNextCoatingRollCode, updateReportWork, deleteReportWork } from '@/api/manualSchedule'
 import { queryOrderLockedStocks, allocateMaterials, returnMaterials, createIssueOrder } from '@/api/scheduleMaterial'
 import { queryCoatingChemicalLocks, confirmCoatingChemicalIssue } from '@/api/chemicalRequisition'
+import { getRawMaterialPage } from '@/api/tapeRawMaterial'
+import {
+  getFilmStockList,
+  getFilmStockDetails,
+  getChemicalStockList,
+  getChemicalStockDetails,
+  createFilmOutbound,
+  createChemicalOutbound
+} from '@/api/rawMaterialStock'
 import { matchCustomerMaterialMapping } from '@/api/customerMaterialMapping'
 import { updateCoatingActualTimes } from '@/api/productionManagement'
 import { getCartonSpecList } from '@/api/rdCartonSpec'
@@ -842,6 +1116,8 @@ export default {
         reportedMaterialCodeCount: 0,
         reportedArea: 0
       },
+      taskSortField: '',
+      taskSortOrder: '',
       query: {
         type: '',
         status: '',
@@ -858,6 +1134,25 @@ export default {
       lockQuery: { orderNo: '', materialCode: '', rollCode: '', planDate: '', processType: '', requiredLength: null },
       locks: [],
       selected: [],
+      coatingIssueDialogVisible: false,
+      coatingIssueLoading: false,
+      coatingIssueSubmitting: false,
+      coatingIssueForm: {
+        taskNo: '',
+        orderNo: '',
+        materialCode: '',
+        materialName: '',
+        planDate: '',
+        planQty: 0,
+        specText: '',
+        missingReason: '',
+        lockRows: [],
+        lockTotalQty: 0,
+        requestNos: [],
+        manualRows: []
+      },
+      coatingChemicalStockCache: null,
+      coatingFilmStockCache: null,
       issueDialogVisible: false,
       issueSheet: null,
       slittingIssueDialogVisible: false,
@@ -878,6 +1173,8 @@ export default {
       reportDialogVisible: false,
       reportDialogMode: 'report',
       reportEditingId: null,
+      reportOrderStarted: false,
+      reportOrderCompleted: false,
       reportLoading: false,
       reportSubmitting: false,
       qrRuleSaving: false,
@@ -890,6 +1187,8 @@ export default {
         orderNo: '',
         customerOrderNo: '',
         customerCode: '',
+        orderDetailRemark: '',
+        lineNo: '',
         materialCode: '',
         materialName: '',
         batchNo: '',
@@ -898,9 +1197,11 @@ export default {
         widthMm: null,
         lengthM: null,
         rewindingSpec: '',
+        coatingUseRewindingLabel: false,
+        coatingWidthSeedMm: null,
         rewindingMotherRollCode: '',
         rewindingSerialStart: 1,
-        rewindingPrintCount: 1,
+        rewindingPrintCount: null,
         coreOuterDiameterMm: 87.5,
         cartonPreset: '',
         cartonLengthMm: 0,
@@ -955,6 +1256,7 @@ export default {
       detailOrderItemsCache: {},
       detailOrderCustomerCache: {},
       detailOrderCustomerOrderNoCache: {},
+      detailOrderRemarkCache: {},
       deliveryNoticeNoCache: {},
       detailResolveCache: {},
       cartonPresetOptions: [],
@@ -986,6 +1288,15 @@ export default {
     isCoating() { return this.fixedType === 'coating' || this.query.type === 'coating' },
     isRewinding() { return this.fixedType === 'rewinding' || this.query.type === 'rewinding' },
     isSlitting() { return this.fixedType === 'slitting' || this.query.type === 'slitting' },
+    showCompletedToggle: {
+      get() {
+        const finishFilter = String((this.query && this.query.finishState) || '').toUpperCase()
+        return finishFilter !== 'UNCOMPLETED'
+      },
+      set(val) {
+        this.query.finishState = val ? '' : 'UNCOMPLETED'
+      }
+    },
     isLabelPrintMode() { return this.reportDialogMode === 'print' },
     isPlanMode() { return ['coating', 'rewinding', 'slitting'].includes((this.fixedType || '').toLowerCase()) },
     orderNoVisible() { return !this.isCoating || this.showOrderNo },
@@ -995,11 +1306,12 @@ export default {
     liveFilteredList() {
       const source = Array.isArray(this.list) ? this.list : []
       if (!source.length) return []
-      return this.applyTaskKeywordFilters(source, {
+      const filtered = this.applyTaskKeywordFilters(source, {
         ft: (this.fixedType || this.query.type || '').toLowerCase(),
         materialCodeKeyword: this.query.materialCodeKeyword,
         specKeyword: this.query.specKeyword
       })
+      return this.sortTaskList(filtered)
     },
     taskMaterialCodeCount() {
       if (!this.hasRealtimeKeywordFilter) return Number(this.taskSummary.reportedMaterialCodeCount || 0)
@@ -1024,6 +1336,33 @@ export default {
     },
     currentOperatorName() {
       return this.$store.getters.realName || this.$store.getters.name || 'unknown'
+    },
+    coatingLockSections() {
+      const rows = Array.isArray(this.coatingIssueForm && this.coatingIssueForm.lockRows) ? this.coatingIssueForm.lockRows : []
+      if (!rows.length) return []
+      const keyOrder = ['GLUE', 'ISOLATOR', 'RELEASE', 'BASE', 'FILM', 'OTHER']
+      const labelMap = {
+        GLUE: '胶水',
+        ISOLATOR: '隔离剂',
+        RELEASE: '离型剂',
+        BASE: '基材',
+        FILM: '基材',
+        OTHER: '其他'
+      }
+      const normalize = (v) => {
+        const key = String(v || '').trim().toUpperCase()
+        return key || 'OTHER'
+      }
+      const groups = {}
+      rows.forEach(row => {
+        if (!row) return
+        const key = normalize(row.sectionKey)
+        if (!groups[key]) groups[key] = []
+        groups[key].push(row)
+      })
+      return keyOrder
+        .filter(k => Array.isArray(groups[k]) && groups[k].length > 0)
+        .map(k => ({ key: k, label: labelMap[k] || '其他', rows: groups[k] }))
     },
     reportOrderSpecText() {
       return this.getOrderItemSpec(this.reportForm || {})
@@ -1065,10 +1404,25 @@ export default {
     }
   },
   watch: {
-    fixedType(val) { this.query.type = val || ''; this.loadTasks() },
+    fixedType(val) {
+      this.query.type = val || ''
+      if (String(val || '').toLowerCase() !== 'coating') {
+        this.taskSortField = ''
+        this.taskSortOrder = ''
+      }
+      this.loadTasks()
+    },
     reportDialogVisible(val) {
       if (!val) {
         this.focusDetailQrScanInput()
+      }
+    },
+    'reportForm.coatingUseRewindingLabel': {
+      async handler(val) {
+        if (!val) return
+        if (!this.reportForm || this.reportForm.processType !== 'COATING') return
+        await this.ensureRewindingMotherRollCodeAuto()
+        this.normalizeCoatingFirstRowForRewindingMode()
       }
     },
     'query.dateRange'(val) {
@@ -1092,6 +1446,95 @@ export default {
     this.focusDetailQrScanInput()
   },
   methods: {
+    taskSortHeaderClass(field) {
+      if (!this.isCoating) return ''
+      return {
+        'task-grid-sortable': true,
+        'is-active': this.taskSortField === field
+      }
+    },
+    taskSortMark(field) {
+      if (!this.isCoating || this.taskSortField !== field || !this.taskSortOrder) return '↕'
+      return this.taskSortOrder === 'asc' ? '↑' : '↓'
+    },
+    handleTaskHeaderSort(field) {
+      if (!this.isCoating || !field) return
+      if (this.taskSortField !== field) {
+        this.taskSortField = field
+        this.taskSortOrder = 'asc'
+        return
+      }
+      if (this.taskSortOrder === 'asc') {
+        this.taskSortOrder = 'desc'
+        return
+      }
+      if (this.taskSortOrder === 'desc') {
+        this.taskSortField = ''
+        this.taskSortOrder = ''
+        return
+      }
+      this.taskSortOrder = 'asc'
+    },
+    sortTaskList(rows) {
+      const list = Array.isArray(rows) ? rows.slice() : []
+      if (!this.isCoating || !this.taskSortField || !this.taskSortOrder) return list
+      const direction = this.taskSortOrder === 'asc' ? 1 : -1
+      return list.sort((a, b) => {
+        const result = this.compareTaskSortRow(a, b, this.taskSortField)
+        if (result !== 0) return result * direction
+        const fallbackA = this.normalizeCompareText(a && (a.taskNo || a.id || ''))
+        const fallbackB = this.normalizeCompareText(b && (b.taskNo || b.id || ''))
+        if (fallbackA === fallbackB) return 0
+        return fallbackA > fallbackB ? 1 : -1
+      })
+    },
+    compareTaskSortRow(a, b, field) {
+      const left = this.resolveTaskSortValue(a, field)
+      const right = this.resolveTaskSortValue(b, field)
+      const leftNum = Number(left)
+      const rightNum = Number(right)
+      const leftIsNum = Number.isFinite(leftNum)
+      const rightIsNum = Number.isFinite(rightNum)
+      if (leftIsNum && rightIsNum) {
+        if (leftNum === rightNum) return 0
+        return leftNum > rightNum ? 1 : -1
+      }
+      const leftText = this.normalizeCompareText(left)
+      const rightText = this.normalizeCompareText(right)
+      if (leftText === rightText) return 0
+      return leftText > rightText ? 1 : -1
+    },
+    resolveTaskSortValue(row, field) {
+      const item = row || {}
+      if (field === 'orderNo') {
+        return item.customerOrderNo || item.customer_order_no || item.orderNo || ''
+      }
+      if (field === 'planStartTime') {
+        return this.resolveTaskSortTimestamp(item.planStartTime, item.planEndTime)
+      }
+      if (field === 'status') {
+        const status = String(item.status || '').trim().toUpperCase()
+        const rankMap = { PENDING: 1, SCHEDULED: 2, IN_PROGRESS: 3, PROCESSING: 3, PARTIAL: 4, COMPLETED: 5, DONE: 5 }
+        return rankMap[status] || 0
+      }
+      if (['thickness', 'jumboWidth', 'planLength'].includes(field)) {
+        const raw = item[field]
+        const num = Number(raw)
+        return Number.isFinite(num) ? num : -Infinity
+      }
+      return item[field] || ''
+    },
+    resolveTaskSortTimestamp(startTime, endTime) {
+      const start = this.parseDateTimeValue(startTime)
+      if (start instanceof Date) return start.getTime()
+      const end = this.parseDateTimeValue(endTime)
+      if (end instanceof Date) return end.getTime()
+      return -Infinity
+    },
+    handleShowCompletedToggleChange() {
+      this.query.pageNum = 1
+      this.loadTasks()
+    },
     resolveSelectedSlittingCoreBizType() {
       const selected = String((this.reportForm && this.reportForm.slittingCoreLabelBizType) || '').trim().toUpperCase()
       return selected === 'SLITTING_CORE_LABEL_NARROW' ? 'SLITTING_CORE_LABEL_NARROW' : 'SLITTING_CORE_LABEL'
@@ -1718,24 +2161,34 @@ export default {
             const area = this.calcRollArea(width, length)
             const materialCode = String((this.reportForm && this.reportForm.materialCode) || '').trim()
             const materialName = this.resolveMaterialNameByCode(materialCode)
-            const thickness = String((this.reportForm && this.reportForm.thickness) || '').trim()
-            const spec = `${thickness || ''}*${Number.isFinite(width) ? width : ''}*${Number.isFinite(length) ? length : ''}`
+            const spec = this.getOrderItemSpec({
+              ...(this.reportForm || {}),
+              widthMm: Number.isFinite(width) ? width : '-',
+              lengthM: Number.isFinite(length) ? length : '-'
+            })
             const printTime = this.toDateTimeString(new Date())
+            const productionDate = this.toDateString(String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() || this.toDateString((this.reportForm && this.reportForm.startTime) || printTime))
+            const groupNo = `${this.currentWorkGroup || 'A'}组`
             const labelOrderNo = this.resolveLabelOrderNo(this.reportForm)
 
             const payload = {
               rollCode,
+              groupNo,
+              workGroup: groupNo,
+              teamName: groupNo,
               qty: 1,
               spec,
               widthMm: Number.isFinite(width) ? width : 0,
               lengthM: Number.isFinite(length) ? length : 0,
               areaM2: Number(this.formatAreaNum(area)),
+              productionDate,
+              produtionDate: productionDate,
               scheduleId: this.reportForm.scheduleId || '',
               orderNo: labelOrderNo,
               internalOrderNo: this.reportForm.orderNo || '',
               customerOrderNo: this.reportForm.customerOrderNo || '',
               qrText: rollCode,
-              printDate: String(printTime || '').slice(0, 10),
+              printDate: productionDate,
               operator: this.reportForm.operator || '-',
               printTime
             }
@@ -1757,24 +2210,43 @@ export default {
           buildData: (source, runtime = {}) => {
             const materialCode = String((this.reportForm && this.reportForm.materialCode) || '').trim()
             const materialName = this.resolveMaterialNameByCode(materialCode)
-            const spec = this.resolveRewindingSpecText()
+            const spec = this.resolveRewindingTemplateSpec(source)
             const printTime = this.toDateTimeString(new Date())
             const serialNo = Number(source && source.serialNo)
             const rollSerialCode = this.buildRewindingRollSerialCode(serialNo)
-            const productionDate = String((this.reportForm && this.reportForm.startTime) || printTime || '').slice(0, 10)
+            const productionDate = this.toDateString(
+              String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() ||
+              this.toDateString((this.reportForm && this.reportForm.startTime) || printTime)
+            )
+            const groupNo = `${this.currentWorkGroup || 'A'}组`
             const labelOrderNo = this.resolveLabelOrderNo(this.reportForm)
+            const srcWidth = Number(source && source.widthMm)
+            const srcLength = Number(source && source.lengthM)
+            const widthMm = Number.isFinite(srcWidth) && srcWidth > 0
+              ? srcWidth
+              : Number((this.reportForm && this.reportForm.widthMm) || 0)
+            const lengthM = Number.isFinite(srcLength) && srcLength > 0
+              ? srcLength
+              : Number((this.reportForm && this.reportForm.lengthM) || 0)
 
             const payload = {
               spec,
               rollCode: rollSerialCode,
+              qrText: rollSerialCode,
               rollSerialCode,
               serialNo: Number.isFinite(serialNo) ? serialNo : Number(this.reportForm.rewindingSerialStart || 1),
+              groupNo,
+              workGroup: groupNo,
+              teamName: groupNo,
               productionDate,
+              produtionDate: productionDate,
               printDate: productionDate,
               scheduleId: this.reportForm.scheduleId || '',
               orderNo: labelOrderNo,
               internalOrderNo: this.reportForm.orderNo || '',
               customerOrderNo: this.reportForm.customerOrderNo || '',
+              widthMm: Number.isFinite(widthMm) ? widthMm : 0,
+              lengthM: Number.isFinite(lengthM) ? lengthM : 0,
               processType: 'REWINDING',
               operator: this.reportForm.operator || '-',
               printTime
@@ -1821,9 +2293,20 @@ export default {
             const isOuterLabel = sceneType === 'slitting-outer-label'
             const quantityUnit = isOuterLabel ? '卷/箱' : '卷/筒'
             const currentBoxRollCount = isOuterLabel ? quantityPerLabel : perBoxRolls
+            const packageQty = this.calcPackagingQtyByLength((this.reportForm && this.reportForm.lengthM), currentBoxRollCount)
+            const packageQtyValue = this.formatPackagingQtyByLength((this.reportForm && this.reportForm.lengthM), currentBoxRollCount)
             const coreOuterDiameterMm = Number((this.reportForm && this.reportForm.coreOuterDiameterMm) || 0)
             const tapeOuterDiameterMm = this.calcSlittingTapeOuterDiameterMm(this.reportForm || {})
-            const batchNo = String((this.reportForm && this.reportForm.batchNo) || '').trim()
+            const batchNo = String(
+              (this.reportForm && (
+                this.reportForm.batchNo ||
+                this.reportForm.issueBatchNo ||
+                this.reportForm.slittingBatchNo ||
+                this.reportForm.batch_no
+              )) || ''
+            ).trim()
+            const lineNo = String((this.reportForm && (this.reportForm.lineNo || this.reportForm.orderDetailRemark)) || '').trim()
+            const batchNo2 = batchNo ? `FN${batchNo}` : ''
             const productionDateText = this.toDateString(String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() || this.toDateString((this.reportForm && this.reportForm.startTime) || printTime))
             const shipDateText = this.toDateString(String((this.reportForm && this.reportForm.labelShipDate) || '').trim() || this.resolveDateTextFromRow(this.reportForm || {}))
             const productionDate = this.toCompactDateStringStrict(productionDateText)
@@ -1848,8 +2331,15 @@ export default {
               customerOrderNo: (this.reportForm && this.reportForm.customerOrderNo) || '',
               taskNo: (this.reportForm && this.reportForm.taskNo) || '',
               batchNo,
+              batchNo2,
+              batchchNo2: batchNo2,
               issueBatchNo: batchNo,
               slittingBatchNo: batchNo,
+              lineNo,
+              line_no: lineNo,
+              hanghao: lineNo,
+              xinghao: lineNo,
+              orderDetailRemark: lineNo,
               spec: this.formatSlittingSpec(this.reportForm || {}),
               scheduleId: (this.reportForm && this.reportForm.scheduleId) || '',
               orderDetailId: (this.reportForm && this.reportForm.orderDetailId) || '',
@@ -1876,6 +2366,15 @@ export default {
               quantityUnit,
               quantityText: `${currentBoxRollCount}${quantityUnit}`,
               boxRollCountText: `${currentBoxRollCount}卷/箱`,
+              packageQty,
+              packageQtyM: packageQty,
+              packageQtyValue,
+              packageQtyText: packageQtyValue ? `${packageQtyValue}米` : '',
+              packagingQty: packageQtyValue,
+              packagingQuantity: packageQtyValue,
+              baozhuangshuliang: packageQtyValue,
+              shuliangzhongliang: packageQtyValue,
+              shuliangzhgongliang: packageQtyValue,
               productionDate: productionDate,
               productionDateText,
               productionDateCompact: productionDate,
@@ -2018,10 +2517,274 @@ export default {
       const motherRollCode = String((this.reportForm && this.reportForm.rewindingMotherRollCode) || '').trim()
       const start = Number((this.reportForm && this.reportForm.rewindingSerialStart) || 1)
       const serial = Number.isFinite(Number(serialNo)) ? Number(serialNo) : start
-      const serialWidth = Math.max(1, String(Math.trunc(start)).length)
+      const serialWidth = Math.max(3, String(Math.trunc(start)).length)
       const serialText = String(Math.trunc(serial)).padStart(serialWidth, '0')
       if (motherRollCode && serialText) return `${motherRollCode}-${serialText}`
       return motherRollCode || serialText || ''
+    },
+    resolveCoatingRewindingPrintSpec(source) {
+      const src = source || {}
+      const widthRaw = src.widthMm != null ? src.widthMm : (this.reportForm && this.reportForm.widthMm)
+      const lengthRaw = src.lengthM != null ? src.lengthM : (this.reportForm && this.reportForm.lengthM)
+      const thickness = (this.reportForm && this.reportForm.thickness) || '-'
+      const width = Number(widthRaw)
+      const length = Number(lengthRaw)
+      const widthText = Number.isFinite(width) && width > 0 ? width : '-'
+      const lengthText = Number.isFinite(length) && length > 0 ? length : '-'
+      return `${thickness}μm*${widthText}mm*${lengthText}m`
+    },
+    resolveRewindingTemplateSpec(source) {
+      if (this.reportForm && this.reportForm.processType === 'COATING') {
+        return this.resolveCoatingRewindingPrintSpec(source)
+      }
+      return this.resolveRewindingSpecText()
+    },
+    async fillNextRewindingMotherRollCode() {
+      if (!this.reportForm || this.reportForm.processType !== 'COATING') return
+      const scheduleId = this.reportForm.scheduleId
+      const productionDateTime = this.reportForm.startTime || this.toDateTimeString(new Date())
+      const nextCode = await this.generateNextRollCode(scheduleId, productionDateTime)
+      const code = String(nextCode || '').trim()
+      if (!code) {
+        this.$message.warning('未获取到下一个母卷号，请手工输入')
+        return
+      }
+      const matched = code.match(/^(.*)-(\d{2,})$/)
+      this.reportForm.rewindingMotherRollCode = matched ? matched[1] : code
+      this.reportForm.rewindingSerialStart = 1
+      this.$message.success('已带出母卷号前缀')
+    },
+    async ensureRewindingMotherRollCodeAuto(force = false) {
+      if (!this.reportForm || this.reportForm.processType !== 'COATING') return
+      if (!this.reportForm.coatingUseRewindingLabel) return
+      const existed = String((this.reportForm && this.reportForm.rewindingMotherRollCode) || '').trim()
+      if (existed && !force) return
+
+      const rows = Array.isArray(this.reportForm.producedRolls) ? this.reportForm.producedRolls : []
+      const firstCode = String(((rows.find(x => x && x.rollCode) || {}).rollCode) || '').trim()
+      if (firstCode) {
+        const matched = firstCode.match(/^(.*)-\d{2,}$/)
+        this.reportForm.rewindingMotherRollCode = matched ? matched[1] : firstCode
+        if (!(Number(this.reportForm.rewindingSerialStart) > 0)) {
+          this.reportForm.rewindingSerialStart = 1
+        }
+        return
+      }
+
+      const scheduleId = this.reportForm.scheduleId
+      const productionDateTime = this.reportForm.startTime || this.toDateTimeString(new Date())
+      const nextCode = await this.generateNextRollCode(scheduleId, productionDateTime)
+      const code = String(nextCode || '').trim()
+      if (!code) return
+      const matched = code.match(/^(.*)-\d{2,}$/)
+      this.reportForm.rewindingMotherRollCode = matched ? matched[1] : code
+      if (!(Number(this.reportForm.rewindingSerialStart) > 0)) {
+        this.reportForm.rewindingSerialStart = 1
+      }
+    },
+    normalizeCoatingFirstRowForRewindingMode() {
+      if (!this.reportForm || this.reportForm.processType !== 'COATING') return
+      if (!this.reportForm.coatingUseRewindingLabel) return
+      const rows = Array.isArray(this.reportForm.producedRolls) ? this.reportForm.producedRolls : []
+      if (!rows.length) return
+      const first = rows[0] || {}
+      const firstCode = String(first.rollCode || '').trim()
+      if (!firstCode || /-\d{2,}$/.test(firstCode)) return
+
+      const startNo = Number((this.reportForm && this.reportForm.rewindingSerialStart) || 1)
+      const serialCode = this.buildRewindingRollSerialCode(startNo)
+      if (!serialCode) return
+      const duplicateIndex = rows.findIndex((x, idx) => idx !== 0 && String((x && x.rollCode) || '').trim() === serialCode)
+      if (duplicateIndex >= 0) {
+        rows.splice(0, 1)
+      } else {
+        rows[0].rollCode = serialCode
+      }
+    },
+    generateCoatingProducedRollRowsByPrintCount() {
+      if (!this.reportForm || this.reportForm.processType !== 'COATING') return
+      const motherRollCode = String((this.reportForm && this.reportForm.rewindingMotherRollCode) || '').trim()
+      const startNo = Number((this.reportForm && this.reportForm.rewindingSerialStart) || 1)
+      const printCount = Number(this.reportForm && this.reportForm.rewindingPrintCount)
+      if (!motherRollCode) {
+        this.$message.warning('请先填写母卷号前缀')
+        return
+      }
+      if (!Number.isFinite(startNo) || startNo < 1) {
+        this.$message.warning('序列起始号必须大于0')
+        return
+      }
+      if (!Number.isFinite(printCount) || !Number.isInteger(printCount) || printCount < 1) {
+        this.$message.warning('请先填写打印张数（必须为大于0的整数）')
+        return
+      }
+
+      const seedWidth = Number(
+        this.reportForm.coatingWidthSeedMm ||
+        (this.reportForm.producedRolls && this.reportForm.producedRolls[0] && this.reportForm.producedRolls[0].widthMm) ||
+        this.reportForm.widthMm ||
+        0
+      )
+      const existedRows = Array.isArray(this.reportForm.producedRolls) ? this.reportForm.producedRolls : []
+      const firstLengthRow = existedRows.find(x => Number(x && x.lengthM) > 0)
+      const seedLength = Number((firstLengthRow && firstLengthRow.lengthM) || this.reportForm.lengthM || 0)
+      const rows = existedRows.slice()
+      const existedCodeSet = new Set(existedRows.map(x => String((x && x.rollCode) || '').trim()).filter(Boolean))
+
+      const plainPrefixIndex = rows.findIndex(x => String((x && x.rollCode) || '').trim() === motherRollCode)
+      if (plainPrefixIndex >= 0) {
+        const firstSerialCode = this.buildRewindingRollSerialCode(Math.trunc(startNo))
+        if (firstSerialCode) {
+          const duplicateSerialIndex = rows.findIndex((x, idx) => idx !== plainPrefixIndex && String((x && x.rollCode) || '').trim() === firstSerialCode)
+          if (duplicateSerialIndex >= 0) {
+            rows.splice(plainPrefixIndex, 1)
+          } else {
+            rows[plainPrefixIndex].rollCode = firstSerialCode
+            if (!(Number(rows[plainPrefixIndex].widthMm) > 0) && Number.isFinite(seedWidth) && seedWidth > 0) {
+              rows[plainPrefixIndex].widthMm = seedWidth
+            }
+            if (!(Number(rows[plainPrefixIndex].lengthM) > 0) && Number.isFinite(seedLength) && seedLength > 0) {
+              rows[plainPrefixIndex].lengthM = seedLength
+            }
+          }
+          existedCodeSet.delete(motherRollCode)
+          existedCodeSet.add(firstSerialCode)
+        }
+      }
+
+      let appended = 0
+      for (let i = 0; i < printCount; i++) {
+        const serialNo = Math.trunc(startNo) + i
+        const rollCode = this.buildRewindingRollSerialCode(serialNo)
+        if (existedCodeSet.has(rollCode)) continue
+        rows.push({
+          rollCode,
+          sequenceNo: null,
+          batchNo: '',
+          widthMm: Number.isFinite(seedWidth) && seedWidth > 0 ? seedWidth : null,
+          lengthM: Number.isFinite(seedLength) && seedLength > 0 ? seedLength : null,
+          weightKg: null,
+          remark: ''
+        })
+        existedCodeSet.add(rollCode)
+        appended += 1
+      }
+      this.reportForm.producedRolls = rows
+      if (appended > 0) {
+        this.$message.success(`已新增${appended}条母卷明细，原有已填写长度已保留`)
+      } else {
+        this.$message.info('目标序号范围已存在母卷明细，未新增记录')
+      }
+    },
+    backfillProducedRollsFromPrintCount(startNo, printCount) {
+      if (!this.reportForm || this.reportForm.processType !== 'COATING') return
+      const normalizedStart = Math.trunc(Number(startNo || this.reportForm.rewindingSerialStart || 1))
+      const normalizedCount = Math.trunc(Number(printCount || this.reportForm.rewindingPrintCount || 0))
+      if (!(normalizedStart > 0) || !(normalizedCount > 0)) return
+
+      this.reportForm.rewindingSerialStart = normalizedStart
+      this.reportForm.rewindingPrintCount = normalizedCount
+      this.generateCoatingProducedRollRowsByPrintCount()
+
+      const rows = Array.isArray(this.reportForm.producedRolls) ? this.reportForm.producedRolls : []
+      const widthFallback = Number(this.reportForm.widthMm || this.reportForm.coatingWidthSeedMm || 0)
+      const lengthFallback = Number(this.reportForm.lengthM || 0)
+      for (let i = 0; i < normalizedCount; i++) {
+        const serialNo = normalizedStart + i
+        const rollCode = this.buildRewindingRollSerialCode(serialNo)
+        const row = rows.find(x => String((x && x.rollCode) || '').trim() === rollCode)
+        if (!row) continue
+        if (!(Number(row.widthMm) > 0) && Number.isFinite(widthFallback) && widthFallback > 0) {
+          row.widthMm = widthFallback
+        }
+        if (!(Number(row.lengthM) > 0) && Number.isFinite(lengthFallback) && lengthFallback > 0) {
+          row.lengthM = lengthFallback
+        }
+      }
+    },
+    async printCoatingRewindingLabelBatch() {
+      if (!this.reportForm || this.reportForm.processType !== 'COATING') return
+      const motherRollCode = String((this.reportForm && this.reportForm.rewindingMotherRollCode) || '').trim()
+      const startNo = Number((this.reportForm && this.reportForm.rewindingSerialStart) || 1)
+      const printCount = Number(this.reportForm && this.reportForm.rewindingPrintCount)
+      if (!motherRollCode) {
+        this.$message.warning('请先填写母卷号前缀（可点“带出下一个母卷号”）')
+        return
+      }
+      if (!Number.isFinite(startNo) || startNo < 1) {
+        this.$message.warning('序列起始号必须大于0')
+        return
+      }
+      if (!Number.isFinite(printCount) || !Number.isInteger(printCount) || printCount < 1) {
+        this.$message.warning('请先填写打印张数（必须为大于0的整数）')
+        return
+      }
+      // 打印前：按打印张数自动回填报工母卷明细，便于操作员核对后一次性报工
+      this.backfillProducedRollsFromPrintCount(startNo, printCount)
+      // 同步操作人班组（与母卷模板保持一致）
+      this.reportForm.operator = this.buildOperatorWithGroup()
+      const materialCode = String((this.reportForm && this.reportForm.materialCode) || '').trim()
+      const width = Number((this.reportForm && this.reportForm.widthMm) || 0)
+      const length = Number((this.reportForm && this.reportForm.lengthM) || 0)
+      const producedRollRows = Array.isArray(this.reportForm.producedRolls) ? this.reportForm.producedRolls : []
+      const firstFilled = producedRollRows.find(x => Number(x && x.widthMm) > 0 || Number(x && x.lengthM) > 0) || null
+      const previewSpec = this.resolveCoatingRewindingPrintSpec(firstFilled)
+      const producedRollCodeMap = new Map()
+      producedRollRows.forEach((row) => {
+        const code = String((row && row.rollCode) || '').trim()
+        if (!code) return
+        if (!producedRollCodeMap.has(code)) producedRollCodeMap.set(code, row)
+      })
+      const producedRollSerialMap = new Map()
+      producedRollRows.forEach((row) => {
+        const code = String((row && row.rollCode) || '').trim()
+        if (!code) return
+        const m = code.match(/-(\d+)$/)
+        if (!m) return
+        const serial = Number(m[1])
+        if (Number.isFinite(serial) && !producedRollSerialMap.has(serial)) {
+          producedRollSerialMap.set(serial, row)
+        }
+      })
+      const alias = await this.resolveCustomerMaterialAliasForPrint({
+        customerCode: this.reportForm.customerCode,
+        materialCode,
+        customerOrderNo: this.reportForm.customerOrderNo,
+        thickness: this.reportForm.thickness,
+        width,
+        length
+      })
+      const ok = await this.confirmPrintPreview('涂布小支标签（复卷模板）', [
+        { label: '母卷号前缀', value: motherRollCode },
+        { label: '起始序号', value: startNo },
+        { label: '打印张数', value: printCount },
+        { label: '订单号', value: this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo) },
+        { label: '规格', value: previewSpec || '-' }
+      ])
+      if (!ok) return
+
+      try {
+        this.loadBarTenderConfig()
+        for (let i = 0; i < printCount; i++) {
+          const serialNo = Math.trunc(startNo) + i
+          const rollCode = this.buildRewindingRollSerialCode(serialNo)
+          const row = producedRollCodeMap.get(rollCode) || producedRollSerialMap.get(serialNo) || firstFilled || {}
+          await printByScene(this.getPrintScene('rewinding-label'), {
+            serialNo,
+            widthMm: row.widthMm,
+            lengthM: row.lengthM
+          }, {
+            config: this.barTenderConfig,
+            vm: this,
+            alias
+          })
+        }
+        this.reportForm.rewindingSerialStart = Math.trunc(startNo) + printCount
+        this.$message.success(`已提交BarTender打印任务（复卷模板）${printCount}张`)
+      } catch (e) {
+        const msg = (e && e.message) || '未知错误'
+        this.$message.error(`BarTender打印失败：${msg}`)
+      }
     },
     async callBarTenderPrint(payload) {
       this.barTenderConfig = getBarTenderConfig(this.barTenderConfig)
@@ -2043,6 +2806,8 @@ export default {
       const candidates = [
         row && row.planStartTime,
         row && row.plan_start_time,
+        row && row.coatingScheduleDate,
+        row && row.coating_schedule_date,
         row && row.slittingScheduleDate,
         row && row.slitting_schedule_date,
         row && row.packagingDate,
@@ -2141,6 +2906,18 @@ export default {
       }
       return ''
     },
+    calcPackagingQtyByLength(lengthM, rollCount) {
+      const length = Number(lengthM || 0)
+      const rolls = Number(rollCount || 0)
+      if (!(length > 0) || !(rolls > 0)) return 0
+      return Number((length * rolls).toFixed(2))
+    },
+    formatPackagingQtyByLength(lengthM, rollCount) {
+      const qty = this.calcPackagingQtyByLength(lengthM, rollCount)
+      if (!(qty > 0)) return ''
+      const rounded = Number(qty.toFixed(2))
+      return Number.isInteger(rounded) ? String(rounded) : String(rounded)
+    },
     resolveDateTextFromRow(row, keys = []) {
       const target = row || {}
       const list = Array.isArray(keys) && keys.length
@@ -2227,6 +3004,9 @@ export default {
       const boxRollCount = Number(outerQuantities[0] || 0) > 0
         ? Number(outerQuantities[0] || 0)
         : (producedQty > 0 ? producedQty : rollPerTube)
+      const packageQty = this.calcPackagingQtyByLength(form.lengthM, boxRollCount)
+      const packageQtyValue = this.formatPackagingQtyByLength(form.lengthM, boxRollCount)
+      const lineNo = String((form && (form.lineNo || form.orderDetailRemark)) || '').trim()
       const productionDateText = this.toDateString(String(form.labelProductionDate || '').trim() || this.toDateString(form.startTime))
       const shipDateText = this.toDateString(String(form.labelShipDate || '').trim())
       const productionDate = this.toCompactDateStringStrict(productionDateText)
@@ -2248,6 +3028,20 @@ export default {
         batchNo,
         materialCode,
         boxRollCount,
+        packageQty,
+        packageQtyM: packageQty,
+        packageQtyValue,
+        packageQtyText: packageQtyValue ? `${packageQtyValue}米` : '',
+        packagingQty: packageQtyValue,
+        packagingQuantity: packageQtyValue,
+        baozhuangshuliang: packageQtyValue,
+        shuliangzhongliang: packageQtyValue,
+        shuliangzhgongliang: packageQtyValue,
+        lineNo,
+        line_no: lineNo,
+        hanghao: lineNo,
+        xinghao: lineNo,
+        orderDetailRemark: lineNo,
         currentBoxRollCount: boxRollCount,
         slittingQty: boxRollCount,
         grossWeightKg: grossWeightValue,
@@ -2276,14 +3070,23 @@ export default {
     async loadCustomerQrRuleForSlitting(customerCode, bizType = 'SLITTING_OUTER_LABEL') {
       const code = String(customerCode || '').trim()
       if (!code) return
+      const safeBizType = this.normalizeQrRuleBizType(bizType)
       try {
-        const res = await getCustomerLabelQrRule(code, bizType)
+        const res = await getCustomerLabelQrRule(code, safeBizType)
         if (res && (res.code === 200 || res.code === 20000) && res.data && res.data.qrTemplate) {
           this.reportForm.qrTemplate = String(res.data.qrTemplate || '').trim() || this.getDefaultSlittingQrTemplate()
         }
       } catch (e) {
         // 忽略加载失败，保持本地默认模板
       }
+    },
+    normalizeQrRuleBizType(input) {
+      const text = String(input == null ? '' : input).trim()
+      const upper = text.toUpperCase()
+      if (!text || upper === '[OBJECT POINTEREVENT]' || upper === '[OBJECT MOUSEEVENT]' || upper.indexOf('ISTRUSTED') > -1) {
+        return 'SLITTING_OUTER_LABEL'
+      }
+      return text
     },
     async saveCurrentCustomerQrRule(bizType = 'SLITTING_OUTER_LABEL', silent = false) {
       const form = this.reportForm || {}
@@ -2292,12 +3095,13 @@ export default {
         if (!silent) this.$message.warning('客户代码为空，无法保存二维码规则')
         return false
       }
+      const safeBizType = this.normalizeQrRuleBizType(bizType)
       const qrTemplate = String(form.qrTemplate || '').trim() || this.getDefaultSlittingQrTemplate()
       this.qrRuleSaving = true
       try {
         const res = await saveCustomerLabelQrRule({
           customerCode,
-          bizType,
+          bizType: safeBizType,
           qrTemplate,
           enabled: 1
         })
@@ -2545,10 +3349,49 @@ export default {
         this.$message.warning('请先填写母卷号后再打印标签')
         return
       }
+      if (this.reportForm && this.reportForm.processType === 'COATING' && this.reportForm.coatingUseRewindingLabel) {
+        const existedPrefix = String((this.reportForm && this.reportForm.rewindingMotherRollCode) || '').trim()
+        if (!existedPrefix) {
+          const matched = rollCode.match(/^(.*)-(\d{2,})$/)
+          this.reportForm.rewindingMotherRollCode = matched ? matched[1] : rollCode
+        }
+        const serialNo = Number(roll.sequenceNo || (Number(this.reportForm.rewindingSerialStart || 1) + Number(index || 0)))
+        const materialCode = String((this.reportForm && this.reportForm.materialCode) || '').trim()
+        const width = Number(roll.widthMm || 0)
+        const length = Number(roll.lengthM || 0)
+        const alias = await this.resolveCustomerMaterialAliasForPrint({
+          customerCode: this.reportForm.customerCode,
+          materialCode,
+          customerOrderNo: this.reportForm.customerOrderNo,
+          thickness: this.reportForm.thickness,
+          width,
+          length
+        })
+        try {
+          this.loadBarTenderConfig()
+          await printByScene(this.getPrintScene('rewinding-label'), { serialNo, widthMm: roll.widthMm, lengthM: roll.lengthM }, {
+            config: this.barTenderConfig,
+            vm: this,
+            alias
+          })
+          this.$message.success('已提交BarTender打印任务（复卷模板）')
+          return
+        } catch (e) {
+          const msg = (e && e.message) || '未知错误'
+          this.$message.error(`BarTender打印失败：${msg}`)
+          return
+        }
+      }
       const width = Number(roll.widthMm || 0)
       const length = Number(roll.lengthM || 0)
       const area = this.calcRollArea(width, length)
-      const spec = `${Number.isFinite(width) ? width : '-'} * ${Number.isFinite(length) ? length : '-'}`
+      const spec = this.getOrderItemSpec({
+        ...(this.reportForm || {}),
+        widthMm: Number.isFinite(width) ? width : '-',
+        lengthM: Number.isFinite(length) ? length : '-'
+      })
+      const productionDate = this.toDateString(String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() || this.toDateString((this.reportForm && this.reportForm.startTime) || new Date()))
+      const groupNo = `${this.currentWorkGroup || 'A'}组`
       const materialCode = String((this.reportForm && this.reportForm.materialCode) || '').trim()
       const materialName = this.resolveMaterialNameByCode(materialCode)
       const alias = await this.resolveCustomerMaterialAliasForPrint({
@@ -2560,14 +3403,16 @@ export default {
         length
       })
       const ok = await this.confirmPrintPreview('母卷标签', [
-        { label: '母卷号', value: rollCode },
-        { label: '订单号', value: this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo) },
-        { label: '客户订单号', value: this.reportForm.customerOrderNo || '-' },
-        { label: '物料代码', value: (alias && alias.customerMaterialCode) || materialCode || '-' },
-        { label: '物料名称', value: (alias && alias.customerMaterialName) || materialName || '-' },
-        { label: '客户规格', value: (alias && alias.customerSpec) || spec || '-' },
-        { label: '规格(mm*m)', value: `${Number.isFinite(width) ? width : '-'} * ${Number.isFinite(length) ? length : '-'}` },
-        { label: '面积(m²)', value: this.formatAreaNum(area) }
+        { label: '母卷号', value: rollCode, field: 'rollCode | qrText' },
+        { label: '订单号', value: this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo), field: 'orderNo | orderNoDisplay | internalOrderNo' },
+        { label: '客户订单号', value: this.reportForm.customerOrderNo || '-', field: 'customerOrderNo' },
+        { label: '生产日期', value: productionDate || '-', field: 'productionDate | produtionDate | printDate' },
+        { label: '班组号', value: groupNo, field: 'groupNo | workGroup | teamName' },
+        { label: '物料代码', value: (alias && alias.customerMaterialCode) || materialCode || '-', field: 'materialCode | customerMaterialCode | internalMaterialCode' },
+        { label: '物料名称', value: (alias && alias.customerMaterialName) || materialName || '-', field: 'materialName | productName | product_name | customerMaterialName | internalMaterialName' },
+        { label: '客户规格', value: (alias && alias.customerSpec) || spec || '-', field: 'customerSpec | customerSpecText | spec' },
+        { label: '规格', value: spec || '-', field: 'spec | widthMm | lengthM | thickness' },
+        { label: '面积(m²)', value: this.formatAreaNum(area), field: 'areaM2' }
       ])
       if (!ok) return
 
@@ -2682,7 +3527,7 @@ export default {
     async printRewindingLabel() {
       const motherRollCode = String((this.reportForm && this.reportForm.rewindingMotherRollCode) || '').trim()
       const startNo = Number((this.reportForm && this.reportForm.rewindingSerialStart) || 1)
-      const printCount = Number((this.reportForm && this.reportForm.rewindingPrintCount) || 1)
+      const printCount = Number(this.reportForm && this.reportForm.rewindingPrintCount)
 
       if (!motherRollCode) {
         this.$message.warning('请先填写母卷号（可扫码）后再打印标签')
@@ -2692,8 +3537,8 @@ export default {
         this.$message.warning('序列起始号必须大于0')
         return
       }
-      if (!Number.isFinite(printCount) || printCount < 1) {
-        this.$message.warning('打印个数必须大于0')
+      if (!Number.isFinite(printCount) || !Number.isInteger(printCount) || printCount < 1) {
+        this.$message.warning('请先填写打印张数（必须为大于0的整数）')
         return
       }
 
@@ -2732,6 +3577,7 @@ export default {
             alias
           })
         }
+        this.reportForm.rewindingSerialStart = Math.trunc(startNo) + printCount
         this.$message.success(`已提交BarTender打印任务（复卷标签）${printCount}张`)
       } catch (e) {
         const msg = (e && e.message) || '未知错误'
@@ -2804,6 +3650,7 @@ export default {
       const expiryDate = this.calcExpiryDate(productionDate, shelfLifeDays) || '-'
       const boxWeightKg = Number((this.reportForm && this.reportForm.boxWeightKg) || 0)
       const boxWeightText = Number.isFinite(boxWeightKg) && boxWeightKg > 0 ? `${Number(boxWeightKg.toFixed(2))}kg` : '-'
+      const packageQtyValue = this.formatPackagingQtyByLength((this.reportForm && this.reportForm.lengthM), Number(quantities && quantities.length ? quantities[0] : 0)) || '-'
       const ok = await this.confirmPrintPreview(labelName, [
         { label: '订单号', value: this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo), field: 'orderNo | orderNoDisplay' },
         { label: '客户订单号', value: this.reportForm.customerOrderNo || '-', field: 'customerOrderNo' },
@@ -2814,6 +3661,7 @@ export default {
         { label: '客户规格', value: (alias && alias.customerSpec) || this.formatSlittingSpec(this.reportForm || {}) || '-', field: 'customerSpec | customerSpecText | spec' },
         { label: '卷/筒', value: tubeRollCount, field: 'rollPerTube | tubeRollCount | quantityPerLabel | quantityText' },
         { label: '本箱卷数', value: (quantities && quantities.length) ? quantities.join(' / ') : '-', field: 'boxRollCount | currentBoxRollCount | cartonRollCount | rollsPerBox | rollsInBox | slittingQty' },
+        { label: '包装数量(米)', value: packageQtyValue, field: 'packageQtyValue | packageQty | packageQtyM | baozhuangshuliang | shuliangzhongliang | shuliangzhgongliang' },
         { label: '满箱卷数', value: standardBoxRollCount || '-', field: 'standardBoxRollCount | boxRollCountCapacity' },
         { label: '生产日期', value: productionDate || '-', field: 'productionDate | shengchanriqi | printDate' },
         { label: '出货日期', value: shipDate, field: 'shipDate | deliveryDate | chuhuoriqi' },
@@ -2947,6 +3795,43 @@ export default {
         total += this.calcRollArea(x.widthMm, x.lengthM)
       })
       return Number(total.toFixed(2))
+    },
+    calcCoatingHistoryReportedArea() {
+      const rows = Array.isArray(this.reportList) ? this.reportList : []
+      const total = rows.reduce((sum, row) => {
+        const areaDirect = Number((row && (
+          row.produced_area != null ? row.produced_area
+            : row.producedArea != null ? row.producedArea
+              : row.output_sqm != null ? row.output_sqm
+                : row.outputSqm
+        )) || 0)
+        if (Number.isFinite(areaDirect) && areaDirect > 0) {
+          return sum + areaDirect
+        }
+
+        const lengthM = Number((row && (row.produced_qty != null ? row.produced_qty : row.producedQty)) || 0)
+        const widthMm = Number((row && (
+          row.width_mm != null ? row.width_mm
+            : row.widthMm != null ? row.widthMm
+              : row.width
+        )) || (this.reportForm && this.reportForm.widthMm) || 0)
+        if (Number.isFinite(lengthM) && lengthM > 0 && Number.isFinite(widthMm) && widthMm > 0) {
+          return sum + (widthMm / 1000) * lengthM
+        }
+        return sum
+      }, 0)
+      return Number(total.toFixed(2))
+    },
+    calcCoatingOrderReportedTotalArea() {
+      if (!this.reportForm || this.reportForm.processType !== 'COATING') return 0
+      const historyArea = this.calcCoatingHistoryReportedArea()
+      const currentArea = Number(this.calcProducedRollsArea() || 0)
+      // 新增报工：展示“历史累计 + 当前录入”；
+      // 修改历史报工时，避免与历史列表重复计入，仅展示历史累计。
+      if (this.reportEditingId) {
+        return Number(historyArea.toFixed(2))
+      }
+      return Number((historyArea + (Number.isFinite(currentArea) ? currentArea : 0)).toFixed(2))
     },
     calcSlittingDefaultRollPerTube(widthMm) {
       const width = Number(widthMm || 0)
@@ -3299,6 +4184,8 @@ export default {
       const reportAreaDirect = Number((row && (
         row.reportedArea != null ? row.reportedArea
           : row.reported_area != null ? row.reported_area
+            : row.produced_area != null ? row.produced_area
+              : row.producedArea != null ? row.producedArea
             : row.output_sqm != null ? row.output_sqm
               : row.outputSqm
       )) || 0)
@@ -3308,6 +4195,8 @@ export default {
 
       const reportedQty = this.extractReportedQty(row)
       if (!(reportedQty > 0)) return 0
+
+      const type = String((row && (row._type || row.type || row.processType)) || '').toLowerCase()
 
       const widthMm = Number((row && (
         row.widthMm != null ? row.widthMm
@@ -3328,6 +4217,13 @@ export default {
                     : row.planLength != null ? row.planLength
                       : row.coating_length
       )) || 0)
+
+      // 涂布：reportedQty 语义是“已报工长度(米)”，面积=宽度(m)*长度(m)
+      if (type === 'coating') {
+        // 涂布报工 producedQty/coating_report_qty 当前口径为“面积(㎡)”，无需再乘宽度
+        return Number(reportedQty.toFixed(2))
+      }
+
       if (Number.isFinite(widthMm) && widthMm > 0 && Number.isFinite(lengthM) && lengthM > 0) {
         return Number(((widthMm / 1000) * lengthM * reportedQty).toFixed(2))
       }
@@ -3744,6 +4640,7 @@ export default {
         }
         const now = this.toDateTimeString(new Date())
         const processType = this.inferProcessType(row)
+        const orderDetailRemark = await this.resolveOrderDetailRemarkForReportRow(row)
         const customerCode = await this.resolveCustomerCodeForReportRow(row)
         const customerOrderNo = await this.resolveCustomerOrderNoForReportRow(row)
         if (processType === 'SLITTING' && !this.cartonPresetOptions.length) {
@@ -3776,11 +4673,7 @@ export default {
         const defaultInnerPrintCount = processType === 'SLITTING'
           ? this.calcSlittingInnerLabelCount(defaultProducedQty, defaultTubeRollCount)
           : 0
-        let producedRolls = []
-        if (processType === 'COATING') {
-          const rollCode = await this.generateNextRollCode(scheduleId, now)
-          producedRolls = [this.newProducedRoll(rollCode)]
-        }
+        const producedRolls = []
         this.reportForm = {
           scheduleId,
           orderDetailId: Number.isFinite(orderDetailId) && orderDetailId > 0 ? orderDetailId : null,
@@ -3791,15 +4684,19 @@ export default {
           materialCode,
           materialName: row.materialName || row.material_name || row.productName || row.product_name || row.name || '',
           customerCode: customerCode || '',
+          orderDetailRemark,
+          lineNo: orderDetailRemark,
           batchNo: '',
           batchNoRequired: true,
           thickness: row.thickness || row.totalThickness || row.total_thickness || row.order_thickness || row.orderThickness || '',
           widthMm,
           lengthM: Number(row.length || row.lengthM || row.order_length || row.orderLength || row.processLength || row.process_length || 0) || null,
           rewindingSpec: processType === 'REWINDING' ? this.resolveRewindingTaskSpec(row) : '',
+          coatingUseRewindingLabel: false,
+          coatingWidthSeedMm: null,
           rewindingMotherRollCode: '',
           rewindingSerialStart: 1,
-          rewindingPrintCount: Math.max(1, Math.round(defaultQty || planQty || 1)),
+          rewindingPrintCount: null,
           coreOuterDiameterMm: Number(row.coreOuterDiameterMm || row.core_outer_diameter || row.coreDiameter || 87.5) || 87.5,
           cartonPreset: processType === 'SLITTING' ? String(defaultCarton.value || '') : '',
           cartonLengthMm: processType === 'SLITTING' ? Number(defaultCarton.lengthMm || 0) : 0,
@@ -3841,6 +4738,8 @@ export default {
           await this.loadCustomerQrRuleForSlitting(this.reportForm.customerCode, 'SLITTING_OUTER_LABEL')
         }
         this.slittingTubePerBoxManual = false
+        this.reportOrderStarted = this.reportDialogMode === 'print' && processType === 'COATING'
+        this.reportOrderCompleted = false
         this.$nextTick(() => this.handleSlittingInputChanged())
         if (this.reportDialogMode === 'print' && processType === 'SLITTING') {
           await this.loadSlittingIssuedBatchOptions()
@@ -3852,7 +4751,9 @@ export default {
           await this.loadReportList()
         } else {
           this.reportList = []
+          this.syncCoatingOrderProgressFromHistory([])
         }
+        await this.ensureCoatingRollRowsByState()
       } catch (e) {
         console.error('[openReportDialog] failed:', e)
         this.$message.error(this.resolveErrorMessage(e, '打开报工失败'))
@@ -4308,6 +5209,7 @@ export default {
     async loadReportList() {
       if (!this.reportForm.scheduleId) {
         this.reportList = []
+        this.syncCoatingOrderProgressFromHistory([])
         return
       }
       this.reportLoading = true
@@ -4319,11 +5221,15 @@ export default {
         if (res.code === 200 || res.code === 20000) {
           this.reportList = res.data || []
           this.applyRemainingProducedQtyFromHistory()
+          this.syncCoatingOrderProgressFromHistory(this.reportList)
+          await this.syncCoatingWidthSeedFromHistory()
         } else {
           this.reportList = []
+          this.syncCoatingOrderProgressFromHistory([])
         }
       } catch (e) {
         this.reportList = []
+        this.syncCoatingOrderProgressFromHistory([])
       } finally {
         this.reportLoading = false
       }
@@ -4348,17 +5254,235 @@ export default {
       this.reportForm.producedQty = remaining
       this.handleSlittingInputChanged()
     },
-    editHistoryReport(row) {
+    parseOrderStatusFromRemark(remark) {
+      const text = String(remark || '')
+      const matched = text.match(/\[ORDER_STATUS:(COMPLETED|UNCOMPLETED)\]/i)
+      return matched ? String(matched[1] || '').toUpperCase() : ''
+    },
+    getReportOrderStatus(row) {
+      return this.parseOrderStatusFromRemark(row && row.remark)
+    },
+    formatReportRemarkDisplay(remark) {
+      const text = String(remark || '')
+      const cleaned = text
+        .replace(/\[ORDER_STATUS:(COMPLETED|UNCOMPLETED)\]/ig, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim()
+      return cleaned || '-'
+    },
+    buildReportRemarkWithOrderStatus(rawRemark, completed) {
+      const base = String(rawRemark || '').trim()
+      const marker = `[ORDER_STATUS:${completed ? 'COMPLETED' : 'UNCOMPLETED'}]`
+      const existed = base.match(/\[ORDER_STATUS:(COMPLETED|UNCOMPLETED)\]/i)
+      if (!base) return marker
+      if (existed) {
+        return base.replace(/\[ORDER_STATUS:(COMPLETED|UNCOMPLETED)\]/i, marker)
+      }
+      return `${base} ${marker}`.trim()
+    },
+    syncCoatingOrderProgressFromHistory(list) {
+      if (!this.reportForm || this.reportForm.processType !== 'COATING') return
+      const rows = Array.isArray(list) ? list : []
+      const hasHistory = rows.length > 0
+      let status = ''
+      rows.forEach(row => {
+        const current = this.parseOrderStatusFromRemark(row && row.remark)
+        if (current) status = current
+      })
+      this.reportOrderStarted = this.reportOrderStarted || hasHistory
+      if (status) {
+        this.reportOrderCompleted = status === 'COMPLETED'
+      } else if (!hasHistory) {
+        this.reportOrderCompleted = false
+      }
+    },
+    rememberCoatingWidthSeedFromRows(rows) {
+      if (!this.reportForm || this.reportForm.processType !== 'COATING') return
+      const list = Array.isArray(rows) ? rows : []
+      const last = [...list].reverse().find(x => Number(x && x.widthMm) > 0)
+      if (last) {
+        this.reportForm.coatingWidthSeedMm = Number(last.widthMm)
+      }
+    },
+    async syncCoatingWidthSeedFromHistory() {
+      if (!this.reportForm || this.reportForm.processType !== 'COATING') return
+      const fromCurrent = (this.reportForm.producedRolls || []).find(x => Number(x && x.widthMm) > 0)
+      if (fromCurrent) {
+        this.reportForm.coatingWidthSeedMm = Number(fromCurrent.widthMm)
+        return
+      }
+      const latest = Array.isArray(this.reportList) && this.reportList.length ? this.reportList[0] : null
+      const reportId = Number(latest && latest.id)
+      if (!(reportId > 0)) return
+      try {
+        const res = await getReportWorkDetail({ reportId })
+        if (!(res && (res.code === 200 || res.code === 20000) && res.data)) return
+        const producedRollRows = Array.isArray(res.data.producedRolls) ? res.data.producedRolls : []
+        const normalized = producedRollRows.map(item => this.normalizeReportDetailProducedRoll(item))
+        this.rememberCoatingWidthSeedFromRows(normalized)
+      } catch (e) {
+        // ignore
+      }
+    },
+    async ensureCoatingRollRowsByState() {
+      if (!this.reportForm || this.reportForm.processType !== 'COATING') return
+      const shouldHaveRows = this.isLabelPrintMode || this.reportOrderStarted
+      if (!shouldHaveRows) {
+        this.reportForm.producedRolls = []
+        return
+      }
+      const rows = Array.isArray(this.reportForm.producedRolls) ? this.reportForm.producedRolls : []
+      if (!rows.length) {
+        await this.addProducedRoll()
+      }
+    },
+    async handleCoatingOrderStart() {
+      if (!this.reportForm || this.reportForm.processType !== 'COATING') return
+      this.reportOrderStarted = true
+      this.reportOrderCompleted = false
+      await this.ensureCoatingRollRowsByState()
+      this.$message.success('已开始当前订单报工')
+    },
+    async handleCoatingOrderEnd() {
+      if (!this.reportForm || this.reportForm.processType !== 'COATING') return
+      try {
+        await this.$confirm('确认将当前订单标记为“本工序已完成”？', '订单结束', {
+          type: 'warning',
+          confirmButtonText: '确认结束',
+          cancelButtonText: '取消'
+        })
+      } catch (e) {
+        return
+      }
+
+      // 后端按 start_time DESC 返回，索引 0 才是最新一条
+      const latest = Array.isArray(this.reportList) && this.reportList.length
+        ? this.reportList[0]
+        : null
+      const reportId = Number(latest && latest.id)
+      const startTime = latest && (latest.start_time || latest.startTime)
+      const endTime = latest && (latest.end_time || latest.endTime)
+      const producedQty = Number((latest && (latest.produced_qty != null ? latest.produced_qty : latest.producedQty)) || 0)
+
+      if (reportId > 0 && startTime && endTime && producedQty > 0) {
+        try {
+          const res = await updateReportWork({
+            reportId,
+            startTime,
+            endTime,
+            producedQty,
+            operator: (latest && (latest.operator_name || latest.operatorName)) || this.reportForm.operator || '',
+            remark: this.buildReportRemarkWithOrderStatus(latest && latest.remark, true)
+          })
+          if (!(res.code === 200 || res.code === 20000)) {
+            this.$message.error(res.message || '订单结束状态保存失败')
+            return
+          }
+          await this.loadReportList()
+          await this.loadTasks()
+          this.loadShiftProductionSummary()
+          window.dispatchEvent(new Event('dashboard:refresh'))
+          window.dispatchEvent(new CustomEvent('sales:orders:refresh'))
+        } catch (e) {
+          this.$message.error(this.resolveErrorMessage(e, '订单结束状态保存失败'))
+          return
+        }
+      }
+
+      this.reportOrderStarted = true
+      this.reportOrderCompleted = true
+      this.$message.success('已确认当前订单本工序完成')
+    },
+    async confirmCoatingOrderCompletedBeforeSubmit() {
+      if (this.reportOrderCompleted) {
+        return true
+      }
+      try {
+        await this.$confirm('当前报工后，订单是否已完成本工序？', '订单完成确认', {
+          type: 'warning',
+          distinguishCancelAndClose: true,
+          closeOnClickModal: false,
+          closeOnPressEscape: false,
+          confirmButtonText: '已完成',
+          cancelButtonText: '未完成'
+        })
+        return true
+      } catch (e) {
+        if (e === 'cancel') return false
+        return null
+      }
+    },
+    normalizeReportDetailProducedRoll(row) {
+      const source = row || {}
+      return {
+        rollCode: source.rollCode || source.roll_code || '',
+        sequenceNo: source.sequenceNo != null ? source.sequenceNo : source.sequence_no,
+        batchNo: source.batchNo || source.batch_no || '',
+        widthMm: Number(source.widthMm != null ? source.widthMm : source.width_mm) || null,
+        lengthM: Number(source.lengthM != null ? source.lengthM : source.length_m) || null,
+        weightKg: source.weightKg != null ? source.weightKg : source.weight_kg,
+        remark: source.remark || ''
+      }
+    },
+    normalizeReportDetailMaterialIssue(row) {
+      const source = row || {}
+      return {
+        materialType: source.materialType || source.material_type || 'MOTHER_ROLL',
+        materialCode: source.materialCode || source.material_code || '',
+        stockId: source.stockId != null ? source.stockId : source.stock_id,
+        rollCode: source.rollCode || source.roll_code || '',
+        planArea: source.planArea != null ? source.planArea : source.plan_area,
+        actualArea: source.actualArea != null ? source.actualArea : source.actual_area,
+        lossArea: source.lossArea != null ? source.lossArea : source.loss_area,
+        remark: source.remark || ''
+      }
+    },
+    applyHistoryReportBaseFields(row = {}) {
+      this.reportForm.startTime = row.start_time || row.startTime || this.reportForm.startTime
+      this.reportForm.endTime = row.end_time || row.endTime || this.reportForm.endTime
+      const qty = Number(row.produced_qty != null ? row.produced_qty : row.producedQty)
+      if (Number.isFinite(qty) && qty > 0) {
+        this.reportForm.producedQty = qty
+      }
+      this.reportForm.operator = row.operator_name || row.operatorName || this.reportForm.operator
+      this.reportForm.remark = row.remark || ''
+    },
+    async editHistoryReport(row) {
       if (!row || !row.id) {
         this.$message.warning('缺少报工记录ID')
         return
       }
-      this.reportEditingId = Number(row.id)
-      this.reportForm.startTime = row.start_time || this.reportForm.startTime
-      this.reportForm.endTime = row.end_time || this.reportForm.endTime
-      this.reportForm.producedQty = Number(row.produced_qty || 0) > 0 ? Number(row.produced_qty) : this.reportForm.producedQty
-      this.reportForm.operator = row.operator_name || this.reportForm.operator
-      this.reportForm.remark = row.remark || ''
+      this.reportEditingId = Number(row.id) > 0 ? Number(row.id) : null
+      this.applyHistoryReportBaseFields(row)
+      if (!this.reportEditingId) {
+        return
+      }
+      try {
+        const res = await getReportWorkDetail({ reportId: this.reportEditingId })
+        if (!(res && (res.code === 200 || res.code === 20000) && res.data)) {
+          this.$message.warning((res && res.message) || '未获取到完整报工详情，已回填基础字段')
+          return
+        }
+
+        const detail = res.data || {}
+        const report = detail.report || row || {}
+        this.applyHistoryReportBaseFields(report)
+
+        const producedRollRows = Array.isArray(detail.producedRolls) ? detail.producedRolls : []
+        this.reportForm.producedRolls = producedRollRows.length
+          ? producedRollRows.map(item => this.normalizeReportDetailProducedRoll(item))
+          : []
+        this.rememberCoatingWidthSeedFromRows(this.reportForm.producedRolls)
+
+        const materialIssueRows = Array.isArray(detail.materialIssues) ? detail.materialIssues : []
+        this.reportForm.materialIssues = materialIssueRows.length
+          ? materialIssueRows.map(item => this.normalizeReportDetailMaterialIssue(item))
+          : [this.newMaterialIssue()]
+
+        this.handleSlittingInputChanged()
+      } catch (e) {
+        this.$message.warning(this.resolveErrorMessage(e, '读取报工详情失败，已回填基础字段'))
+      }
     },
     async removeHistoryReport(row) {
       if (!row || !row.id) {
@@ -4408,6 +5532,10 @@ export default {
         this.$message.warning(this.reportForm.processType === 'COATING' ? '请先填写母卷宽度和长度，生成实际数量(m²)' : '生产数量必须大于0')
         return
       }
+      if (this.reportForm.processType === 'COATING' && !this.reportOrderStarted) {
+        this.$message.warning('请先点击“订单开始”后再报工')
+        return
+      }
       if (this.reportForm.processType === 'SLITTING') {
         this.commitSlittingBatchNoInput()
         const batchNoRequired = !!(this.reportForm && this.reportForm.batchNoRequired)
@@ -4421,7 +5549,7 @@ export default {
           return
         }
       }
-      const producedRolls = (this.reportForm.producedRolls || [])
+      let producedRolls = (this.reportForm.producedRolls || [])
         .map(x => {
           if (!x) return null
           const area = this.calcRollArea(x.widthMm, x.lengthM)
@@ -4430,7 +5558,38 @@ export default {
             area
           }
         })
-        .filter(x => x && x.rollCode && Number(x.area || 0) > 0)
+        .filter(x => x)
+      if (this.reportForm.processType === 'COATING') {
+        if (!producedRolls.length) {
+          this.$message.warning('请先新增母卷明细')
+          this.reportSubmitting = false
+          return
+        }
+        for (let i = 0; i < producedRolls.length; i++) {
+          const row = producedRolls[i] || {}
+          const rollCode = String(row.rollCode || '').trim()
+          const width = Number(row.widthMm || 0)
+          const length = Number(row.lengthM || 0)
+          if (!rollCode) {
+            this.$message.warning(`第${i + 1}行母卷号不能为空`)
+            this.reportSubmitting = false
+            return
+          }
+          if (!(width > 0)) {
+            this.$message.warning(`第${i + 1}行宽度必须大于0`)
+            this.reportSubmitting = false
+            return
+          }
+          if (!(length > 0)) {
+            this.$message.warning(`第${i + 1}行长度为必填，且必须大于0`)
+            this.reportSubmitting = false
+            return
+          }
+        }
+        producedRolls = producedRolls.filter(x => Number(x.area || 0) > 0)
+      } else {
+        producedRolls = producedRolls.filter(x => x && x.rollCode && Number(x.area || 0) > 0)
+      }
       const materialIssues = (this.reportForm.materialIssues || [])
         .map(x => {
           if (!x) return null
@@ -4442,7 +5601,16 @@ export default {
         .filter(x => x && (x.materialCode || x.rollCode) && (Number(x.actualArea || 0) > 0 || Number(x.planArea || 0) > 0 || Number(x.lossArea || 0) > 0))
       this.reportSubmitting = true
       try {
-        const normalizedRemark = this.buildReportRemarkWithSlittingBatchNo(this.reportForm.remark)
+        let normalizedRemark = this.buildReportRemarkWithSlittingBatchNo(this.reportForm.remark)
+        if (!this.reportEditingId && this.reportForm.processType === 'COATING') {
+          const completed = await this.confirmCoatingOrderCompletedBeforeSubmit()
+          if (completed === null) {
+            this.reportSubmitting = false
+            return
+          }
+          this.reportOrderCompleted = !!completed
+          normalizedRemark = this.buildReportRemarkWithOrderStatus(normalizedRemark, this.reportOrderCompleted)
+        }
         if (this.reportForm.processType === 'SLITTING') {
           const batchSaved = await this.persistSlittingBatchNoForDeliveryNote()
           if (!batchSaved) {
@@ -4455,6 +5623,11 @@ export default {
           scheduleId: this.reportForm.scheduleId,
           orderDetailId: this.reportForm.orderDetailId,
           processType: this.reportForm.processType,
+          materialCode: this.reportForm.materialCode,
+          materialName: this.reportForm.materialName,
+          thickness: this.reportForm.thickness,
+          widthMm: this.reportForm.widthMm,
+          lengthM: this.reportForm.lengthM,
           startTime: this.reportForm.startTime,
           endTime: this.reportForm.endTime,
           producedQty: qty,
@@ -4529,6 +5702,8 @@ export default {
       const defaultCarton = this.getDefaultCartonPreset()
       this.reportDialogMode = 'report'
       this.reportEditingId = null
+      this.reportOrderStarted = false
+      this.reportOrderCompleted = false
       this.lastScannedQrText = ''
       this.reportList = []
       this.slittingTubePerBoxManual = false
@@ -4540,6 +5715,8 @@ export default {
         orderNo: '',
         customerOrderNo: '',
         customerCode: '',
+        orderDetailRemark: '',
+        lineNo: '',
         materialCode: '',
         materialName: '',
         batchNo: '',
@@ -4548,9 +5725,11 @@ export default {
         widthMm: null,
         lengthM: null,
         rewindingSpec: '',
+        coatingUseRewindingLabel: false,
+        coatingWidthSeedMm: null,
         rewindingMotherRollCode: '',
         rewindingSerialStart: 1,
-        rewindingPrintCount: 1,
+        rewindingPrintCount: null,
         coreOuterDiameterMm: 87.5,
         cartonPreset: String(defaultCarton.value || ''),
         cartonLengthMm: Number(defaultCarton.lengthMm || 0),
@@ -4580,7 +5759,23 @@ export default {
       }
     },
     newProducedRoll(rollCode = '') {
-      return { rollCode: rollCode || '', batchNo: '', widthMm: 500, lengthM: 4000, weightKg: null, remark: '' }
+      const seedWidth = Number(this.reportForm && this.reportForm.coatingWidthSeedMm)
+      return {
+        rollCode: rollCode || '',
+        sequenceNo: null,
+        batchNo: '',
+        widthMm: Number.isFinite(seedWidth) && seedWidth > 0 ? seedWidth : null,
+        lengthM: null,
+        weightKg: null,
+        remark: ''
+      }
+    },
+    handleProducedRollWidthChanged(row) {
+      if (!this.reportForm || this.reportForm.processType !== 'COATING') return
+      const width = Number(row && row.widthMm)
+      if (Number.isFinite(width) && width > 0) {
+        this.reportForm.coatingWidthSeedMm = width
+      }
     },
     buildReportRemarkWithSlittingBatchNo(rawRemark) {
       const baseRemark = String(rawRemark || '').trim()
@@ -4611,7 +5806,30 @@ export default {
         rollCode = firstExisting ? String(firstExisting.rollCode) : ''
       }
       rollCode = this.buildUniqueRollCode(rollCode)
+      const rows = Array.isArray(this.reportForm.producedRolls) ? this.reportForm.producedRolls : []
+      const prev = rows.length ? rows[rows.length - 1] : null
+      const prevWidth = Number(prev && prev.widthMm)
+      if (Number.isFinite(prevWidth) && prevWidth > 0) {
+        this.reportForm.coatingWidthSeedMm = prevWidth
+      }
       this.reportForm.producedRolls.push(this.newProducedRoll(rollCode))
+    },
+    async addProducedRollWithPrevSize() {
+      const rows = Array.isArray(this.reportForm.producedRolls) ? this.reportForm.producedRolls : []
+      const prev = rows.length ? rows[rows.length - 1] : null
+      await this.addProducedRoll()
+      const latestRows = Array.isArray(this.reportForm.producedRolls) ? this.reportForm.producedRolls : []
+      const current = latestRows.length ? latestRows[latestRows.length - 1] : null
+      if (!current || !prev) return
+
+      const prevWidth = Number(prev.widthMm)
+      const prevLength = Number(prev.lengthM)
+      if (Number.isFinite(prevWidth) && prevWidth > 0) {
+        current.widthMm = prevWidth
+      }
+      if (Number.isFinite(prevLength) && prevLength > 0) {
+        current.lengthM = prevLength
+      }
     },
     removeProducedRoll(index) {
       this.reportForm.producedRolls.splice(index, 1)
@@ -4752,6 +5970,61 @@ export default {
       }
       return `${this.formatSpecPartWithUnit(thickness, 'μm')}*${this.formatSpecPartWithUnit(width, 'mm')}*${this.formatSpecPartWithUnit(length, 'm')}`
     },
+    resolveOrderDetailRemarkText(row) {
+      const r = row || {}
+      const val = r.orderDetailRemark != null ? r.orderDetailRemark
+        : r.order_detail_remark != null ? r.order_detail_remark
+          : r.itemRemark != null ? r.itemRemark
+            : r.item_remark != null ? r.item_remark
+              : r.detailRemark != null ? r.detailRemark
+                : r.detail_remark != null ? r.detail_remark
+                  : r.remark
+      return String(val || '').trim()
+    },
+    async resolveOrderDetailRemarkForReportRow(row) {
+      const direct = this.resolveOrderDetailRemarkText(row)
+      if (direct) return direct
+
+      const detailId = Number(row && (row.orderItemId || row.order_detail_id || row.orderDetailId))
+      if (Number.isFinite(detailId) && detailId > 0) {
+        if (Object.prototype.hasOwnProperty.call(this.detailOrderRemarkCache, detailId)) {
+          return String(this.detailOrderRemarkCache[detailId] || '').trim()
+        }
+        try {
+          const res = await resolveOrderItemByDetailId(detailId)
+          const d = (res && (res.code === 200 || res.code === 20000)) ? (res.data || {}) : {}
+          const remark = this.resolveOrderDetailRemarkText(d)
+          this.$set(this.detailOrderRemarkCache, detailId, remark)
+          if (remark) return remark
+        } catch (e) {
+          this.$set(this.detailOrderRemarkCache, detailId, '')
+        }
+      }
+
+      const orderNo = this.resolvePrintableOrderNo((row && (row.orderNo || row.order_no)) || '')
+      if (orderNo) {
+        const items = await this.getOrderItemsByOrderNo(orderNo)
+        if (Array.isArray(items) && items.length) {
+          let matched = null
+          if (Number.isFinite(detailId) && detailId > 0) {
+            matched = items.find(it => Number(it && (it.id || it.orderItemId || it.orderDetailId || it.order_detail_id)) === detailId) || null
+          }
+          if (!matched) {
+            const materialCode = String((row && (row.materialCode || row.material_code)) || '').trim()
+            if (materialCode) {
+              matched = items.find(it => String((it && (it.materialCode || it.material_code)) || '').trim() === materialCode) || null
+            }
+          }
+          const remark = this.resolveOrderDetailRemarkText(matched || {})
+          if (Number.isFinite(detailId) && detailId > 0) {
+            this.$set(this.detailOrderRemarkCache, detailId, remark)
+          }
+          return String(remark || '').trim()
+        }
+      }
+
+      return ''
+    },
     isSlittingRowCompleted(row) {
       const status = String((row && row.status) || '').trim().toUpperCase()
       if (['COMPLETED', 'DONE'].includes(status)) return true
@@ -4789,12 +6062,42 @@ export default {
       if (Number.isFinite(remaining) && remaining <= 0) return true
       return false
     },
+    hasPositivePendingDemand(row) {
+      const r = row || {}
+      const direct = Number(
+        r.pending_qty != null ? r.pending_qty
+          : r.pendingQty != null ? r.pendingQty
+            : r.remaining_qty != null ? r.remaining_qty
+              : r.remainingQty != null ? r.remainingQty
+                : r.unscheduled_qty != null ? r.unscheduled_qty
+                  : r.unscheduledQty
+      )
+      if (Number.isFinite(direct)) {
+        return direct > 0
+      }
+      const orderQty = Number(
+        r.orderQty != null ? r.orderQty
+          : r.order_qty != null ? r.order_qty
+            : r.rolls
+      )
+      const scheduledQty = Number(
+        r.scheduled_qty != null ? r.scheduled_qty
+          : r.scheduledQty != null ? r.scheduledQty
+            : r.planned_qty != null ? r.planned_qty
+              : r.plannedQty
+      )
+      if (Number.isFinite(orderQty) && Number.isFinite(scheduledQty)) {
+        return (orderQty - scheduledQty) > 0
+      }
+      return true
+    },
 
     async loadTasks() {
       this.loading = true
       try {
         this.detailOrderItemsCache = {}
         this.detailOrderCustomerOrderNoCache = {}
+        this.detailOrderRemarkCache = {}
         this.detailResolveCache = {}
         const ft = (this.fixedType || '').toLowerCase()
         const normalizedOrderNo = this.normalizeOrderNoKeyword(this.query.orderNo)
@@ -4820,6 +6123,7 @@ export default {
           res = await getCoatingSchedules({
             current: this.query.pageNum,
             size: this.query.pageSize,
+            includeCompleted: finishFilter !== 'UNCOMPLETED',
             orderNo: normalizedOrderNo || undefined,
             planDateStart: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[0] : undefined,
             planDateEnd: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[1] : undefined,
@@ -4870,7 +6174,8 @@ export default {
               const pendingFiltered = pendingListRaw
                 .filter(x => {
                   const deletedFlag = Number(x && (x.is_deleted != null ? x.is_deleted : x.deleted))
-                  return !(Number.isFinite(deletedFlag) && deletedFlag === 1)
+                  if (Number.isFinite(deletedFlag) && deletedFlag === 1) return false
+                  return this.hasPositivePendingDemand(x)
                 })
                 .map(x => ({
                   ...x,
@@ -4881,20 +6186,26 @@ export default {
                   sourceType: 'PENDING_ORDER'
                 }))
 
+              // pending接口偶发同一order_detail_id返回多条，先去重，避免未排程重复展示
+              const pendingUniqueMap = new Map()
+              pendingFiltered.forEach(x => {
+                const odId = Number(x && (x.order_detail_id || x.orderItemId || x.orderDetailId))
+                const key = Number.isFinite(odId) && odId > 0 ? `OD:${odId}` : `ROW:${x && x.id ? x.id : Math.random()}`
+                if (!pendingUniqueMap.has(key)) {
+                  pendingUniqueMap.set(key, x)
+                }
+              })
+              const pendingUnique = Array.from(pendingUniqueMap.values())
+
               const merged = [...scheduledList]
               const existingOrderDetailIds = new Set(
                 scheduledList
                   .map(x => Number(x && (x.order_detail_id || x.orderItemId || x.orderDetailId)))
                   .filter(v => Number.isFinite(v) && v > 0)
               )
-              pendingFiltered.forEach(x => {
+              pendingUnique.forEach(x => {
                 const odId = Number(x && (x.order_detail_id || x.orderItemId || x.orderDetailId))
                 if (!(Number.isFinite(odId) && odId > 0) || !existingOrderDetailIds.has(odId)) {
-                  merged.push(x)
-                  return
-                }
-                const allCompleted = detailAllCompletedMap.get(odId)
-                if (allCompleted === true) {
                   merged.push(x)
                 }
               })
@@ -5093,7 +6404,7 @@ export default {
         return
       }
       if (this.isCoating) {
-        this.handleCoatingTaskIssue(row)
+        this.openCoatingIssueDialog(row)
         return
       }
       this.lockQuery.materialCode = row.materialCode || ''
@@ -5107,6 +6418,593 @@ export default {
       this.loadOrderLocks().then(() => {
         this.issueByCurrentQuery()
       })
+    },
+
+    resetCoatingIssueForm() {
+      this.coatingIssueForm = {
+        taskRow: null,
+        taskNo: '',
+        orderNo: '',
+        materialCode: '',
+        materialName: '',
+        planDate: this.todayDate(),
+        planQty: 0,
+        specText: '',
+        missingReason: '',
+        lockRows: [],
+        lockTotalQty: 0,
+        requestNos: [],
+        manualRows: []
+      }
+    },
+    closeCoatingIssueDialog() {
+      this.resetCoatingIssueForm()
+      this.coatingIssueSubmitting = false
+      this.coatingIssueLoading = false
+    },
+    resolveCoatingTaskNo(row) {
+      return String((row && (row.taskNo || row.task_no || row.scheduleNo || row.schedule_no)) || '').trim()
+    },
+    resolveCoatingPlanQty(row) {
+      const n = Number((row && (row.planArea || row.planSqm || row.plan_qty || row.qty || row.planQuantity)) || 0)
+      return Number.isFinite(n) ? n : 0
+    },
+    resolveCoatingSpecText(row) {
+      const t = row && (row.thickness != null ? row.thickness : '')
+      const w = row && (row.jumboWidth != null ? row.jumboWidth : '')
+      const l = row && (row.planLength != null ? row.planLength : '')
+      if (t !== '' || w !== '' || l !== '') {
+        return `${t || '-'}μm×${w || '-'}mm×${l || '-'}m`
+      }
+      return String((row && (row.specDesc || row.spec || row.specification)) || '').trim()
+    },
+    isAreaSectionKey(sectionKey) {
+      const key = String(sectionKey || '').trim().toUpperCase()
+      return key === 'BASE' || key === 'FILM'
+    },
+    canAutoIssueLockRow(row) {
+      return !!row
+    },
+    resolveCoatingLockAvailableQty(row) {
+      if (!row) return 0
+      if (this.isAreaSectionKey(row.sectionKey)) {
+        return this.resolveCoatingLockAvailableLength(row)
+      }
+      return Number(row.lockedQty || 0)
+    },
+    resolveCoatingLockAvailableLength(row) {
+      if (!row) return 0
+      const n = Number(row.stockAvailableLengthM || row.availableLengthM || 0)
+      return Number.isFinite(n) && n > 0 ? n : 0
+    },
+    resolveCoatingLockPackQty(row) {
+      if (!row) return 0
+      if (this.isAreaSectionKey(row.sectionKey)) {
+        const n = Number(row.stockAvailableRolls || row.availableRolls || row.stockAvailablePackCount || 0)
+        return Number.isFinite(n) && n > 0 ? n : 0
+      }
+      return Number(row.stockAvailableQty || row.availableQty || row.availableQuantity || 0)
+    },
+    resolveCoatingLockUnit(row) {
+      if (!row) return '-'
+      if (this.isAreaSectionKey(row.sectionKey)) return '卷'
+      return String(row.unit || 'kg')
+    },
+    resolveCoatingIssueUnit(row) {
+      if (!row) return '-'
+      if (this.isAreaSectionKey(row.sectionKey)) return 'm'
+      return String(row.unit || 'kg')
+    },
+    formatCoatingLockQty(row) {
+      if (this.isAreaSectionKey(row && row.sectionKey)) {
+        const n = this.resolveCoatingLockAvailableLength(row)
+        if (!Number.isFinite(n)) return '0'
+        return n.toFixed(0)
+      }
+      const n = Number((row && (row.stockAvailableQty || row.availableQty || row.availableQuantity)) || 0)
+      if (!Number.isFinite(n)) return '0'
+      return n.toFixed(0)
+    },
+    formatCoatingLockPackQty(row) {
+      const n = this.resolveCoatingLockPackQty(row)
+      if (!Number.isFinite(n) || n <= 0) return '-'
+      return String(Math.max(0, Math.round(n)))
+    },
+    newCoatingManualRow(partial = {}) {
+      return {
+        warehouseType: partial.warehouseType || 'chemical',
+        rawMaterialCode: partial.rawMaterialCode || '',
+        rawMaterialName: partial.rawMaterialName || '',
+        specDesc: partial.specDesc || '',
+        unit: partial.unit || '',
+        stockId: partial.stockId || null,
+        detailId: partial.detailId || null,
+        batchNo: partial.batchNo || '',
+        batchOptions: Array.isArray(partial.batchOptions) ? partial.batchOptions : [],
+        warehouseQty: partial.warehouseQty != null ? Number(partial.warehouseQty) : 0,
+        issueQty: partial.issueQty != null ? Number(partial.issueQty) : 0
+      }
+    },
+    addCoatingManualRow() {
+      this.coatingIssueForm.manualRows.push(this.newCoatingManualRow())
+    },
+    removeCoatingManualRow(index) {
+      this.coatingIssueForm.manualRows.splice(index, 1)
+    },
+    normalizeWarehouseType(type) {
+      return String(type || '').toLowerCase() === 'film' ? 'film' : 'chemical'
+    },
+    async ensureCoatingStockCache(type) {
+      const t = this.normalizeWarehouseType(type)
+      if (t === 'film') {
+        if (Array.isArray(this.coatingFilmStockCache)) return this.coatingFilmStockCache
+        const res = await getFilmStockList()
+        this.coatingFilmStockCache = (res && (res.code === 200 || res.code === 20000) && Array.isArray(res.data)) ? res.data : []
+        return this.coatingFilmStockCache
+      }
+      if (Array.isArray(this.coatingChemicalStockCache)) return this.coatingChemicalStockCache
+      const res = await getChemicalStockList()
+      this.coatingChemicalStockCache = (res && (res.code === 200 || res.code === 20000) && Array.isArray(res.data)) ? res.data : []
+      return this.coatingChemicalStockCache
+    },
+    findStockByMaterial(materialCode, type = 'chemical') {
+      const code = String(materialCode || '').trim().toUpperCase()
+      if (!code) return null
+      const t = this.normalizeWarehouseType(type)
+      const list = t === 'film'
+        ? (Array.isArray(this.coatingFilmStockCache) ? this.coatingFilmStockCache : [])
+        : (Array.isArray(this.coatingChemicalStockCache) ? this.coatingChemicalStockCache : [])
+      const matched = list.filter(item => String((item && item.materialCode) || '').trim().toUpperCase() === code)
+      if (!matched.length) return null
+      if (t === 'film') {
+        return matched.sort((a, b) => Number((b && b.availableArea) || 0) - Number((a && a.availableArea) || 0))[0]
+      }
+      return matched.sort((a, b) => Number((b && b.availableQuantity) || 0) - Number((a && a.availableQuantity) || 0))[0]
+    },
+    isFilmLikeRawMaterial(item) {
+      if (!item) return false
+      const category = String(item.materialCategory || '').toLowerCase()
+      const type = String(item.materialType || '').toLowerCase()
+      const name = String(item.materialName || '').toLowerCase()
+      const text = `${category} ${type} ${name}`
+      return text.includes('film') || text.includes('薄膜') || text.includes('离型')
+    },
+    onManualWarehouseTypeChange(row) {
+      if (!row) return
+      row.warehouseType = this.normalizeWarehouseType(row.warehouseType)
+      row.stockId = null
+      row.detailId = null
+      row.batchNo = ''
+      row.batchOptions = []
+      row.specDesc = ''
+      row.unit = ''
+      row.warehouseQty = 0
+      if (row.rawMaterialCode) {
+        this.refreshManualStockQty(row)
+      }
+    },
+    onManualBatchChange(row) {
+      if (!row) return
+      const options = Array.isArray(row.batchOptions) ? row.batchOptions : []
+      const hit = options.find(x => String(x.detailId) === String(row.detailId))
+      if (!hit) {
+        row.stockId = null
+        row.batchNo = ''
+        row.specDesc = ''
+        row.unit = ''
+        row.warehouseQty = 0
+        return
+      }
+      row.stockId = hit.stockId
+      row.batchNo = hit.batchNo || ''
+      row.specDesc = hit.specDesc || ''
+      row.unit = hit.unit || row.unit || ''
+      row.warehouseQty = Number(hit.availableQty || 0)
+      row.rawMaterialName = row.rawMaterialName || hit.materialName || ''
+    },
+    async refreshManualStockQty(row, silent = false) {
+      if (!row) return
+      const code = String(row.rawMaterialCode || '').trim()
+      const warehouseType = this.normalizeWarehouseType(row.warehouseType)
+      if (!code) {
+        row.stockId = null
+        row.detailId = null
+        row.batchNo = ''
+        row.batchOptions = []
+        row.specDesc = ''
+        row.unit = ''
+        row.warehouseQty = 0
+        return
+      }
+
+      await this.ensureCoatingStockCache(warehouseType)
+      const stock = this.findStockByMaterial(code, warehouseType)
+      row.batchOptions = []
+      row.stockId = null
+      row.detailId = null
+      row.batchNo = ''
+      row.specDesc = ''
+      row.unit = ''
+      row.warehouseQty = 0
+
+      if (!stock) {
+        if (!silent) {
+          this.$message.warning(`料号 ${code} 在${warehouseType === 'film' ? '薄膜仓' : '化工仓'}未找到库存`)
+        }
+        return
+      }
+
+      row.rawMaterialName = row.rawMaterialName || stock.materialName || ''
+      const detailsRes = warehouseType === 'film'
+        ? await getFilmStockDetails(stock.id)
+        : await getChemicalStockDetails(stock.id)
+      const ok = detailsRes && (detailsRes.code === 200 || detailsRes.code === 20000)
+      const details = ok ? (detailsRes.data || []) : []
+
+      row.batchOptions = (details || [])
+        .map(d => {
+          const status = String((d && d.status) || '').toLowerCase()
+          const availableQty = warehouseType === 'film'
+            ? Number((d && d.area) || 0)
+            : Number((d && (d.remainingWeight != null ? d.remainingWeight : d.weight)) || 0)
+          const batchNo = String((d && (d.batchNo || d.rollNo || d.barrelNo || d.containerNo)) || '').trim()
+          return {
+            stockId: stock.id,
+            detailId: d.id,
+            batchNo,
+            materialName: stock.materialName || '',
+            specDesc: warehouseType === 'film'
+              ? `${stock.thickness || '-'}μm×${d.width || stock.width || '-'}mm×${d.length || '-'}m`
+              : String((d && (d.specDesc || d.specification || d.remark)) || '').trim(),
+            unit: warehouseType === 'film' ? '㎡' : String((d && d.unit) || (stock && stock.unit) || 'kg'),
+            availableQty,
+            status,
+            label: `${batchNo || '无批次'} / 可用${Number.isFinite(availableQty) ? availableQty : 0}${warehouseType === 'film' ? '㎡' : 'kg'}`
+          }
+        })
+        .filter(x => {
+          const status = String(x.status || '').toLowerCase()
+          if (status === 'locked') return false
+          return Number(x.availableQty || 0) > 0
+        })
+
+      if (!row.batchOptions.length) {
+        if (!silent) {
+          this.$message.warning(`料号 ${code} 在${warehouseType === 'film' ? '薄膜仓' : '化工仓'}无可用批次`)
+        }
+        return
+      }
+
+      row.detailId = row.batchOptions[0].detailId
+      this.onManualBatchChange(row)
+    },
+    onSelectManualMaterial(row, item) {
+      if (!row) return
+      row.rawMaterialCode = String((item && item.materialCode) || row.rawMaterialCode || '').trim()
+      row.rawMaterialName = String((item && item.materialName) || row.rawMaterialName || '').trim()
+      const preferFilm = this.isFilmLikeRawMaterial(item)
+      row.warehouseType = preferFilm ? 'film' : 'chemical'
+      this.refreshManualStockQty(row)
+    },
+    onChangeManualMaterial(row) {
+      if (!row) return
+      row.stockId = null
+      row.detailId = null
+      row.batchNo = ''
+      row.batchOptions = []
+      row.specDesc = ''
+      row.unit = ''
+      row.warehouseQty = 0
+    },
+    async queryRawMaterialCode(queryString, cb) {
+      const keyword = String(queryString || '').trim()
+      if (!keyword) {
+        cb([])
+        return
+      }
+      try {
+        const res = await getRawMaterialPage({ page: 1, size: 20, materialCode: keyword, status: 1 })
+        const ok = res && (res.code === 200 || res.code === 20000)
+        const rows = ok ? ((((res.data || {}).records) || ((res.data || {}).list) || [])) : []
+        cb((rows || []).map(item => ({
+          value: `${item.materialCode || ''} - ${item.materialName || ''}`,
+          materialCode: item.materialCode,
+          materialName: item.materialName,
+          materialCategory: item.materialCategoryRaw || item.materialCategory,
+          materialType: item.materialType
+        })))
+      } catch (e) {
+        cb([])
+      }
+    },
+    normalizeMaterialCodeText(v) {
+      return String(v == null ? '' : v).replace(/\s+/g, '').toUpperCase()
+    },
+    extractEmbeddedFinishedCodes(text) {
+      const normalized = this.normalizeMaterialCodeText(text)
+      if (!normalized) return []
+      const found = normalized.match(/[A-Z0-9]{2,8}-R\d{2}-\d{3,5}-T\d{2}-\d{3,6}/g) || []
+      const set = new Set(found)
+      found.forEach(code => {
+        const parts = String(code || '').split('-')
+        if (parts.length >= 5 && /^\d{4,8}$/.test(parts[0])) {
+          const t = parts[0].replace(/^0+/, '')
+          if (t && t.length >= 3) set.add(`${t}-${parts[1]}-${parts[2]}-${parts[3]}-${parts[4]}`)
+          if (parts[0].length > 3) {
+            const tail3 = parts[0].slice(-3)
+            set.add(`${tail3}-${parts[1]}-${parts[2]}-${parts[3]}-${parts[4]}`)
+          }
+        }
+      })
+      return Array.from(set)
+    },
+    isCompatibleMaterialCode(leftCode, rightCode) {
+      const left = this.normalizeMaterialCodeText(leftCode)
+      const right = this.normalizeMaterialCodeText(rightCode)
+      if (!left || !right) return true
+      if (left === right) return true
+      if (left.includes(right) || right.includes(left)) return true
+
+      const leftSet = new Set([left, ...this.extractEmbeddedFinishedCodes(left)])
+      const rightSet = new Set([right, ...this.extractEmbeddedFinishedCodes(right)])
+      for (const a of leftSet) {
+        for (const b of rightSet) {
+          if (!a || !b) continue
+          if (a === b) return true
+          if (a.includes(b) || b.includes(a)) return true
+        }
+      }
+      return false
+    },
+    async openCoatingIssueDialog(row) {
+      const planDate = this.resolveTaskLockDate(row) || this.lockQuery.planDate || this.todayDate()
+      const orderNo = row.orderNo || row.order_no || ''
+      const materialCode = row.materialCode || row.material_code || ''
+      const scheduleId = Number(row.id || row.scheduleId || row.schedule_id || 0)
+      const norm = v => this.normalizeMaterialCodeText(v)
+      const normOrderNo = norm(orderNo)
+      const normMaterialCode = norm(materialCode)
+      if (!orderNo && !materialCode) {
+        this.$message.warning('缺少订单号或料号，无法执行涂布领料')
+        return
+      }
+
+      this.resetCoatingIssueForm()
+      this.coatingIssueForm.taskRow = row
+      this.coatingIssueForm.taskNo = this.resolveCoatingTaskNo(row)
+      this.coatingIssueForm.orderNo = orderNo
+      this.coatingIssueForm.materialCode = materialCode
+      this.coatingIssueForm.materialName = row.materialName || row.material_name || ''
+      this.coatingIssueForm.planDate = planDate
+      this.coatingIssueForm.planQty = this.resolveCoatingPlanQty(row)
+      this.coatingIssueForm.specText = this.resolveCoatingSpecText(row)
+      this.coatingIssueDialogVisible = true
+      this.coatingIssueLoading = true
+      try {
+        const res = await queryCoatingChemicalLocks({
+          planDate,
+          scheduleId: scheduleId > 0 ? scheduleId : undefined,
+          orderNo,
+          materialCode
+        })
+        if (!(res && (res.code === 200 || res.code === 20000))) {
+          this.$message.error((res && (res.message || res.msg)) || '原料分解失败')
+          return
+        }
+
+        const allLocks = (res.data && res.data.locks) || []
+        const summary = (res.data && res.data.summary) || {}
+        const missingFormulaPlansAll = Array.isArray(summary.missingFormulaPlans) ? summary.missingFormulaPlans : []
+        let filteredLocks = allLocks.filter(x => {
+          const sid = Number((x && x.scheduleId) || 0)
+          if (scheduleId > 0 && sid > 0) return sid === scheduleId
+          if (materialCode && x && x.finishedMaterialCode && !this.isCompatibleMaterialCode(x.finishedMaterialCode, materialCode)) return false
+          return true
+        })
+        let missingFormulaPlans = missingFormulaPlansAll.filter(x => {
+          const sid = Number((x && x.scheduleId) || 0)
+          if (scheduleId > 0 && sid > 0) return sid === scheduleId
+          if (materialCode && x && x.materialCode && !this.isCompatibleMaterialCode(x.materialCode, materialCode)) return false
+          return true
+        })
+
+        if (!filteredLocks.length) {
+          filteredLocks = allLocks.filter(x => {
+            const codeOk = !normMaterialCode || this.isCompatibleMaterialCode(x && x.finishedMaterialCode, materialCode)
+            const orderOk = !normOrderNo || norm(x && x.orderNo).includes(normOrderNo)
+            return codeOk && orderOk
+          })
+        }
+        if (!missingFormulaPlans.length) {
+          missingFormulaPlans = missingFormulaPlansAll.filter(x => {
+            const codeOk = !normMaterialCode || this.isCompatibleMaterialCode(x && x.materialCode, materialCode)
+            const orderOk = !normOrderNo || norm(x && x.orderNo).includes(normOrderNo)
+            return codeOk && orderOk
+          })
+        }
+
+        this.coatingIssueForm.requestNos = summary.requestNos || []
+        this.coatingIssueForm.missingReason = ''
+        this.coatingRequestNos = this.coatingIssueForm.requestNos
+        this.locks = filteredLocks
+        this.coatingIssueForm.lockRows = filteredLocks.map(x => ({
+          ...x,
+          sectionKey: x.sectionKey || 'OTHER',
+          sectionLabel: x.sectionLabel || '其他',
+          specDesc: x.specDesc || x.rawMaterialSpec || x.spec || '-',
+          warehouseQty: Number(x.stockAvailableQty || x.availableQty || x.availableQuantity || 0),
+          requiredQty: Number(x.requiredQty || 0),
+          requiredKg: Number(x.requiredKg || x.plannedUsage || 0),
+          lockedQty: Number(x.lockedQty || 0),
+          issueQty: this.isAreaSectionKey(x.sectionKey)
+            ? Math.max(0, Math.round(Number(row.planLength || row.processLength || row.length || 0)))
+            : Number(x.lockedQty || 0),
+          unit: String(x.unit || 'kg')
+        }))
+        this.coatingIssueForm.lockTotalQty = this.coatingIssueForm.lockRows.reduce((sum, x) => sum + Number(x.issueQty || 0), 0)
+
+        if (!this.coatingIssueForm.lockRows.length) {
+          this.addCoatingManualRow()
+        }
+        if (missingFormulaPlans.length > 0 && !this.coatingIssueForm.lockRows.length) {
+          const topReason = (missingFormulaPlans[0] && missingFormulaPlans[0].reason) || '配胶单缺失'
+          this.coatingIssueForm.missingReason = topReason
+          this.$message.warning(`该任务未找到可领配方：${topReason}。请手动选择料号领料`)
+        }
+      } catch (e) {
+        this.$message.error('加载涂布领料信息失败')
+      } finally {
+        this.coatingIssueLoading = false
+      }
+    },
+    async submitCoatingIssueDialog() {
+      const lockRows = (this.coatingIssueForm.lockRows || []).filter(x => Number(x.issueQty || 0) > 0)
+      const chemicalLockRows = lockRows.filter(x => !this.isAreaSectionKey(x.sectionKey))
+      const filmLockRows = lockRows.filter(x => this.isAreaSectionKey(x.sectionKey))
+      const issueItems = chemicalLockRows
+        .map(x => ({
+          lockId: Number(x.id || x.lockId),
+          issueQty: Math.max(0, Math.round(Number(x.issueQty || 0)))
+        }))
+        .filter(x => Number.isFinite(x.lockId) && x.lockId > 0 && x.issueQty > 0)
+      const manualRows = (this.coatingIssueForm.manualRows || [])
+        .map(x => ({ ...x, rawMaterialCode: String((x && x.rawMaterialCode) || '').trim() }))
+        .filter(x => x.rawMaterialCode && Number(x.issueQty || 0) > 0)
+
+      if (!issueItems.length && !manualRows.length) {
+        this.$message.warning('请至少填写一条领料明细')
+        return
+      }
+
+      this.coatingIssueSubmitting = true
+      try {
+        let autoIssuedCount = 0
+        let autoTotalOutQty = 0
+        let autoFilmIssuedCount = 0
+        if (issueItems.length) {
+          const issueRes = await confirmCoatingChemicalIssue({ issueItems, operator: this.currentOperatorName || 'production' })
+          if (!(issueRes && (issueRes.code === 200 || issueRes.code === 20000))) {
+            this.$message.error((issueRes && (issueRes.message || issueRes.msg)) || '配方领料失败')
+            return
+          }
+          const d = issueRes.data || {}
+          autoIssuedCount = Number(d.issuedCount || 0)
+          autoTotalOutQty = Number(d.totalOutQty || 0)
+        }
+
+        for (const row of filmLockRows) {
+          const stockId = Number(row.filmStockId || row.stockId || 0)
+          const needLength = Math.max(0, Math.round(Number(row.issueQty || 0)))
+          if (!stockId || needLength <= 0) continue
+
+          // eslint-disable-next-line no-await-in-loop
+          const detailRes = await getFilmStockDetails(stockId)
+          if (!(detailRes && (detailRes.code === 200 || detailRes.code === 20000))) {
+            continue
+          }
+          const details = Array.isArray(detailRes.data) ? detailRes.data : []
+          const usableDetails = details
+            .filter(d => {
+              const status = String((d && d.status) || '').toLowerCase()
+              const len = Number((d && (d.currentLengthM != null ? d.currentLengthM : d.length)) || 0)
+              return status !== 'locked' && len > 0
+            })
+            .sort((a, b) => Number((a && a.id) || 0) - Number((b && b.id) || 0))
+          if (!usableDetails.length) continue
+
+          const picked = []
+          let accLength = 0
+          for (const d of usableDetails) {
+            const oneLen = Number((d && (d.currentLengthM != null ? d.currentLengthM : d.length)) || 0)
+            if (!(oneLen > 0)) continue
+            picked.push(d)
+            accLength += oneLen
+            if (accLength >= needLength) break
+          }
+          if (!picked.length) continue
+          const pickedArea = picked
+            .reduce((sum, d) => sum + Number((d && d.area) || 0), 0)
+
+          // eslint-disable-next-line no-await-in-loop
+          const filmOutRes = await createFilmOutbound({
+            filmStockId: stockId,
+            outArea: pickedArea,
+            outRolls: picked.length,
+            detailIds: picked.map(d => d.id),
+            outboundBy: this.currentOperatorName || 'production',
+            purpose: 'COATING_MATERIAL_ISSUE',
+            remark: `涂布任务配方领料-${this.coatingIssueForm.taskNo || ''}`
+          })
+          if (filmOutRes && (filmOutRes.code === 200 || filmOutRes.code === 20000)) {
+            autoFilmIssuedCount += picked.length
+          }
+        }
+
+        await this.ensureCoatingStockCache('chemical')
+        await this.ensureCoatingStockCache('film')
+        const manualSuccessRows = []
+        for (const row of manualRows) {
+          // eslint-disable-next-line no-await-in-loop
+          await this.refreshManualStockQty(row)
+          const stockId = Number(row.stockId || 0)
+          const detailId = Number(row.detailId || 0)
+          const issueQty = Number(row.issueQty || 0)
+          if (!stockId || !detailId || !(issueQty > 0)) {
+            // eslint-disable-next-line no-continue
+            continue
+          }
+          const warehouseType = this.normalizeWarehouseType(row.warehouseType)
+          let outRes = null
+          if (warehouseType === 'film') {
+            // eslint-disable-next-line no-await-in-loop
+            outRes = await createFilmOutbound({
+              filmStockId: stockId,
+              outArea: issueQty,
+              outRolls: 1,
+              detailIds: [detailId],
+              outboundBy: this.currentOperatorName || 'production',
+              purpose: 'COATING_MATERIAL_ISSUE_MANUAL',
+              remark: `涂布任务手动领料-${this.coatingIssueForm.taskNo || ''}`
+            })
+          } else {
+            const outQuantity = Math.max(1, Math.round(issueQty))
+            // eslint-disable-next-line no-await-in-loop
+            outRes = await createChemicalOutbound({
+              chemicalStockId: stockId,
+              outQuantity,
+              outWeight: issueQty,
+              detailIds: [detailId],
+              outboundBy: this.currentOperatorName || 'production',
+              purpose: 'COATING_MATERIAL_ISSUE_MANUAL',
+              remark: `涂布任务手动领料-${this.coatingIssueForm.taskNo || ''}`
+            })
+          }
+          if (outRes && (outRes.code === 200 || outRes.code === 20000)) {
+            manualSuccessRows.push({
+              rawMaterialCode: row.rawMaterialCode,
+              rawMaterialName: row.rawMaterialName,
+              issueQty,
+              warehouseType: this.normalizeWarehouseType(row.warehouseType),
+              specDesc: row.specDesc || '',
+              unit: row.unit || (this.normalizeWarehouseType(row.warehouseType) === 'film' ? '㎡' : 'kg')
+            })
+          }
+        }
+
+        if (!autoIssuedCount && !manualSuccessRows.length) {
+          this.$message.warning('未成功提交领料，请检查库存后重试')
+          return
+        }
+
+        this.buildCoatingIssueSheet(this.coatingIssueForm.taskRow, lockRows, this.coatingIssueForm.requestNos, manualSuccessRows)
+        this.$message.success(`领料完成：化工配方出库${autoIssuedCount}条，数量${autoTotalOutQty}${autoFilmIssuedCount ? `；薄膜按卷出库${autoFilmIssuedCount}卷` : ''}${manualSuccessRows.length ? `；手动出库${manualSuccessRows.length}条` : ''}`)
+        this.coatingIssueDialogVisible = false
+        await this.loadOrderLocks()
+      } catch (e) {
+        this.$message.error('领料失败')
+      } finally {
+        this.coatingIssueSubmitting = false
+      }
     },
 
     newSlittingIssueRow(partial = {}) {
@@ -5314,95 +7212,7 @@ export default {
     },
 
     async handleCoatingTaskIssue(row) {
-      const planDate = this.lockQuery.planDate || this.todayDate()
-      const orderNo = row.orderNo || row.order_no || ''
-      const materialCode = row.materialCode || row.material_code || ''
-      const scheduleId = Number(row.id || row.scheduleId || row.schedule_id || 0)
-      const norm = v => String(v == null ? '' : v).replace(/\s+/g, '').toUpperCase()
-      const normOrderNo = norm(orderNo)
-      const normMaterialCode = norm(materialCode)
-      if (!orderNo && !materialCode) {
-        this.$message.warning('缺少订单号或料号，无法执行涂布领料')
-        return
-      }
-
-      try {
-        const res = await queryCoatingChemicalLocks({ planDate, orderNo, materialCode })
-        if (!(res && (res.code === 200 || res.code === 20000))) {
-          this.$message.error((res && (res.message || res.msg)) || '原料分解失败')
-          return
-        }
-
-        const allLocks = (res.data && res.data.locks) || []
-        const summary = (res.data && res.data.summary) || {}
-        const missingFormulaPlansAll = Array.isArray(summary.missingFormulaPlans) ? summary.missingFormulaPlans : []
-        let filteredLocks = allLocks.filter(x => {
-          const sid = Number((x && x.scheduleId) || 0)
-          if (scheduleId > 0 && sid > 0) return sid === scheduleId
-          if (materialCode && x && x.finishedMaterialCode && x.finishedMaterialCode !== materialCode) return false
-          return true
-        })
-        let missingFormulaPlans = missingFormulaPlansAll.filter(x => {
-          const sid = Number((x && x.scheduleId) || 0)
-          if (scheduleId > 0 && sid > 0) return sid === scheduleId
-          if (materialCode && x && x.materialCode && x.materialCode !== materialCode) return false
-          return true
-        })
-
-        // 回退策略：若按scheduleId筛空，则按料号+订单号匹配，避免因历史排程ID差异导致“有锁定却显示无数据”
-        if (!filteredLocks.length) {
-          filteredLocks = allLocks.filter(x => {
-            const codeOk = !normMaterialCode || norm(x && x.finishedMaterialCode) === normMaterialCode
-            const orderOk = !normOrderNo || norm(x && x.orderNo).includes(normOrderNo)
-            return codeOk && orderOk
-          })
-        }
-        if (!missingFormulaPlans.length) {
-          missingFormulaPlans = missingFormulaPlansAll.filter(x => {
-            const codeOk = !normMaterialCode || norm(x && x.materialCode) === normMaterialCode
-            const orderOk = !normOrderNo || norm(x && x.orderNo).includes(normOrderNo)
-            return codeOk && orderOk
-          })
-        }
-
-        this.coatingRequestNos = summary.requestNos || []
-        this.locks = filteredLocks
-        const missingFormulaCount = missingFormulaPlans.length
-
-        if (missingFormulaCount > 0 && !filteredLocks.length) {
-          const topReason = (missingFormulaPlans[0] && missingFormulaPlans[0].reason) || '配胶单缺失'
-          this.$message.warning(`不能领料：该料号配胶单不完整（${topReason}），请联系研发解决`)
-          return
-        }
-
-        const canIssueLocks = filteredLocks.filter(x => (x.lockStatus === 'LOCKED' || x.lockStatus === 'PARTIAL') && Number(x.lockedQty || 0) > 0)
-        const shortageCount = filteredLocks.filter(x => Number(x.shortageQty || 0) > 0).length
-        if (!canIssueLocks.length) {
-          this.$message.info('当前任务无可领用原材料（库存不足的已自动生成请购）')
-          return
-        }
-
-        const lockIds = canIssueLocks.map(x => x.id)
-        const totalQty = canIssueLocks.reduce((s, x) => s + Number(x.lockedQty || 0), 0)
-        await this.$confirm(
-          `任务【${orderNo || '-'}】可领用原材料 ${canIssueLocks.length} 条，合计数量 ${totalQty}` +
-          `${shortageCount > 0 ? `，缺口 ${shortageCount} 条已自动请购` : ''}。\n是否确认领料并同步仓库出库申请？`,
-          '涂布领料确认',
-          { type: 'warning', confirmButtonText: '确认领料', cancelButtonText: '取消' }
-        )
-
-        const issueRes = await confirmCoatingChemicalIssue({ lockIds, operator: this.currentOperatorName || 'production' })
-        if (issueRes && (issueRes.code === 200 || issueRes.code === 20000)) {
-          const d = issueRes.data || {}
-          this.buildCoatingIssueSheet(row, canIssueLocks, this.coatingRequestNos)
-          this.$message.success(`领料完成：出库${d.issuedCount || 0}条，数量${d.totalOutQty || 0}`)
-          await this.loadOrderLocks()
-        } else {
-          this.$message.error((issueRes && (issueRes.message || issueRes.msg)) || '领料失败')
-        }
-      } catch (e) {
-        if (e !== 'cancel') this.$message.error('领料失败')
-      }
+      await this.openCoatingIssueDialog(row)
     },
 
     buildIssueSheet(order) {
@@ -5418,9 +7228,23 @@ export default {
       }
       this.issueDialogVisible = true
     },
-    buildCoatingIssueSheet(row, locks, requestNos) {
+    buildCoatingIssueSheet(row, locks, requestNos, manualRows = []) {
       const list = Array.isArray(locks) ? locks : []
       const totalQty = list.reduce((sum, x) => sum + Number((x && x.lockedQty) || 0), 0)
+      const manualList = (manualRows || []).map(x => ({
+        id: null,
+        lockId: 'MANUAL',
+        orderNo: row && (row.orderNo || row.order_no),
+        finishedMaterialCode: row && (row.materialCode || row.material_code),
+        rawMaterialCode: x.rawMaterialCode,
+        rawMaterialName: x.rawMaterialName,
+        sourceType: x.warehouseType === 'film' ? '手动-薄膜仓' : '手动-化工仓',
+        specDesc: x.specDesc || '',
+        unit: x.unit || '',
+        issuedQty: Number(x.issueQty || 0),
+        createdAt: this.toDateTimeString(new Date())
+      }))
+      const manualTotalQty = manualList.reduce((sum, x) => sum + Number(x.issuedQty || 0), 0)
       const planDate = this.lockQuery.planDate || this.todayDate()
       const createdAt = this.toDateTimeString(new Date())
       const scheduleId = row && (row.id || row.scheduleId || row.schedule_id)
@@ -5437,10 +7261,13 @@ export default {
           finishedMaterialCode: x.finishedMaterialCode,
           rawMaterialCode: x.rawMaterialCode,
           rawMaterialName: x.rawMaterialName,
+          sourceType: '配方',
+          specDesc: x.specDesc || x.rawMaterialSpec || x.spec || '',
+          unit: x.unit || 'kg',
           issuedQty: Number(x.lockedQty || 0),
           createdAt
-        })),
-        totalQty: Number(totalQty || 0)
+        })).concat(manualList),
+        totalQty: Number((totalQty || 0) + manualTotalQty)
       }
     },
     printIssueSheet() {
@@ -5459,6 +7286,9 @@ export default {
             <td>${(r && r.finishedMaterialCode) || ''}</td>
             <td>${(r && r.rawMaterialCode) || ''}</td>
             <td>${(r && r.rawMaterialName) || ''}</td>
+            <td>${(r && r.sourceType) || ''}</td>
+            <td>${(r && r.specDesc) || ''}</td>
+            <td>${(r && r.unit) || ''}</td>
             <td>${Number((r && r.issuedQty) || 0)}</td>
             <td>${(r && r.createdAt) || ''}</td>
           </tr>`
@@ -5480,7 +7310,7 @@ export default {
         ? `<div class="row" style="margin-top:8px;"><strong>合计数量：</strong>${Number(sheet.totalQty || 0)}</div>`
         : `<div class="row" style="margin-top:8px;"><strong>合计面积：</strong>${sheet.totalArea || '0.00'} m²</div>`
       const header = isCoatingSheet
-        ? '<tr><th>#</th><th>锁定ID</th><th>订单号</th><th>成品料号</th><th>原材料代码</th><th>原材料名称</th><th>领料数量</th><th>时间</th></tr>'
+        ? '<tr><th>#</th><th>锁定ID</th><th>订单号</th><th>成品料号</th><th>原材料代码</th><th>原材料名称</th><th>来源</th><th>规格</th><th>单位</th><th>领料数量</th><th>时间</th></tr>'
         : `<tr><th>#</th><th>锁定ID</th><th>订单号</th><th>料号</th><th>${this.isSlitting ? '支料ID' : '母卷ID'}</th><th>领料面积(m²)</th><th>时间</th></tr>`
       const html = `
         <div class="title">领料单</div>
@@ -5685,6 +7515,25 @@ export default {
   text-align: left;
   white-space: normal;
   line-height: 1.25;
+}
+
+.task-grid-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.task-grid-sortable:hover {
+  color: #409EFF;
+}
+
+.task-grid-sortable.is-active {
+  color: #409EFF;
+}
+
+.task-grid-sort-caret {
+  margin-left: 4px;
+  font-size: 12px;
+  opacity: .9;
 }
 
 .task-grid-empty {

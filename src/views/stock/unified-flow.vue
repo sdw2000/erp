@@ -57,37 +57,42 @@
         </el-form-item>
       </el-form>
 
-      <el-table ref="unifiedFlowTable" v-loading="loading" :data="list" border stripe style="margin-top: 10px">
-        <el-table-column prop="createTime" label="时间" width="170" />
-        <el-table-column prop="stockType" label="库存类型" width="100" align="center">
+      <el-table ref="unifiedFlowTable" v-loading="loading" :data="list" border stripe style="margin-top: 10px" @sort-change="handleSortChange">
+        <el-table-column prop="createTime" label="时间" width="170" sortable="custom">
+          <template slot-scope="scope">
+            {{ formatMinute(scope.row.documentTime || scope.row.createTime) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="stockType" label="库存类型" width="100" align="center" sortable="custom">
           <template slot-scope="scope">
             <el-tag size="mini" :type="stockTypeTag(scope.row.stockType)">{{ stockTypeText(scope.row.stockType) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="type" label="操作" width="90" align="center">
+        <el-table-column prop="type" label="操作" width="90" align="center" sortable="custom">
           <template slot-scope="scope">
             <el-tag size="mini" :type="opTag(scope.row.type)">{{ opText(scope.row.type) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="materialCode" label="料号" width="170" />
-        <el-table-column prop="productName" label="产品名称" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="batchNo" label="批次号" width="140" />
-        <el-table-column label="变动量" width="170" align="right">
+        <el-table-column prop="materialCode" label="料号" width="170" sortable="custom" />
+        <el-table-column prop="productName" label="产品名称" min-width="150" show-overflow-tooltip sortable="custom" />
+        <el-table-column prop="specDesc" label="规格" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="batchNo" label="批次号" width="140" sortable="custom" />
+        <el-table-column prop="changeQuantity" label="变动量" width="170" align="right" sortable="custom">
           <template slot-scope="scope">
             <span :class="qtyClass(scope.row.changeQuantity)">{{ formatQty(scope.row.changeQuantity) }}</span>
             <span style="color:#909399; margin-left: 4px;">{{ scope.row.unit || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="标准量" width="190" align="right">
+        <el-table-column prop="stdChangeQuantity" label="标准量" width="190" align="right" sortable="custom">
           <template slot-scope="scope">
             <span>{{ formatQty(scope.row.stdChangeQuantity) }}</span>
             <span style="color:#909399; margin-left: 4px;">{{ scope.row.stdUnit || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="beforeQuantity" label="变动前" width="110" align="right" />
-        <el-table-column prop="afterQuantity" label="变动后" width="110" align="right" />
-        <el-table-column prop="refNo" label="关联单号" width="180" show-overflow-tooltip />
-        <el-table-column prop="operator" label="操作人" width="110" align="center" />
+        <el-table-column prop="beforeQuantity" label="变动前" width="110" align="right" sortable="custom" />
+        <el-table-column prop="afterQuantity" label="变动后" width="110" align="right" sortable="custom" />
+        <el-table-column prop="refNo" label="关联单号" width="180" show-overflow-tooltip sortable="custom" />
+        <el-table-column prop="operator" label="操作人" width="110" align="center" sortable="custom" />
         <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
       </el-table>
 
@@ -124,7 +129,9 @@ export default {
         batchNo: '',
         type: '',
         refNo: '',
-        timeRange: []
+        timeRange: [],
+        sortField: 'createTime',
+        sortOrder: 'descending'
       },
       pager: {
         current: 1,
@@ -146,6 +153,8 @@ export default {
         batchNo: this.query.batchNo,
         type: this.query.type,
         refNo: this.query.refNo,
+        sortField: this.query.sortField,
+        sortOrder: this.query.sortOrder,
         ...extra
       }
       if (this.query.timeRange && this.query.timeRange.length === 2) {
@@ -182,9 +191,23 @@ export default {
         batchNo: '',
         type: '',
         refNo: '',
-        timeRange: []
+        timeRange: [],
+        sortField: 'createTime',
+        sortOrder: 'descending'
       }
+      this.$nextTick(() => {
+        if (this.$refs.unifiedFlowTable && this.$refs.unifiedFlowTable.clearSort) {
+          this.$refs.unifiedFlowTable.clearSort()
+        }
+      })
       this.handleSearch()
+    },
+
+    handleSortChange({ prop, order }) {
+      this.query.sortField = prop || 'createTime'
+      this.query.sortOrder = order || 'descending'
+      this.pager.current = 1
+      this.fetchPage()
     },
 
     handlePageChange(current) {
@@ -232,6 +255,19 @@ export default {
       return n > 0 ? `+${n}` : `${n}`
     },
 
+    formatMinute(val) {
+      if (!val) return '-'
+      const s = String(val).trim()
+      const normalized = s.includes('T') ? s.replace('T', ' ') : s
+      const d = new Date(normalized)
+      if (Number.isNaN(d.getTime())) return s
+      const y = String(d.getFullYear()).slice(-2)
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      const hh = String(d.getHours()).padStart(2, '0')
+      return `${y}-${m}-${day} ${hh}`
+    },
+
     async handleExportCsv() {
       if (this.exporting) return
       this.exporting = true
@@ -258,17 +294,18 @@ export default {
         }
 
         const headers = [
-          '时间', '库存类型', '操作类型', '料号', '产品名称', '批次号',
+          '时间', '库存类型', '操作类型', '料号', '产品名称', '规格', '批次号',
           '变动数量', '单位', '标准变动数量', '标准单位', '变动前', '变动后',
           '关联单号', '操作人', '备注'
         ]
 
         const rows = all.map(r => [
-          r.createTime || '',
+          this.formatMinute(r.documentTime || r.createTime),
           this.stockTypeText(r.stockType),
           this.opText(r.type),
           r.materialCode || '',
           r.productName || '',
+          r.specDesc || '',
           r.batchNo || '',
           r.changeQuantity == null ? '' : r.changeQuantity,
           r.unit || '',

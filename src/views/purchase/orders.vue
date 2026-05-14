@@ -119,8 +119,8 @@
               <col :style="printColStyle('name')">
               <col :style="printColStyle('spec')">
               <col :style="printColStyle('unit')">
-              <col v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle()">
-              <col v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle()">
+              <col v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle('width')">
+              <col v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle('length')">
               <col v-if="shouldShowPrintRollColumn()" :style="printColStyle('roll')">
               <col v-if="shouldShowPurchasePrintQuantityColumn()" :style="printColStyle('qty')">
               <col :style="printColStyle('price')">
@@ -133,10 +133,10 @@
                 <th :style="printColStyle('name')">物料名称</th>
                 <th :style="printColStyle('spec')">{{ getPurchasePrintSpecHeaderLabel() }}</th>
                 <th :style="printColStyle('unit')">单位</th>
-                <th v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle()">宽/mm</th>
-                <th v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle()">长/m</th>
+                <th v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle('width')">宽/mm</th>
+                <th v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle('length')">长/m</th>
                 <th v-if="shouldShowPrintRollColumn()" :style="printColStyle('roll')">{{ getPurchasePrintRollHeaderLabel() }}</th>
-                <th v-if="shouldShowPurchasePrintQuantityColumn()" :style="printColStyle('qty')">数量/㎡</th>
+                <th v-if="shouldShowPurchasePrintQuantityColumn()" :style="printColStyle('qty')">数量</th>
                 <th :style="printColStyle('price')">{{ getPurchasePrintPriceHeaderLabel() }}</th>
                 <th :style="printColStyle('amount')">{{ getPurchasePrintAmountHeaderLabel() }}</th>
                 <th :style="printColStyle('date')">到货日期</th>
@@ -144,8 +144,8 @@
             </thead>
             <tbody>
               <tr v-for="(item, index) in getPurchasePrintRows()" :key="`print-${index}`">
-                <td>{{ item.materialCode || '' }}</td>
-                <td class="text-left">{{ item.materialName || '' }}</td>
+                <td>{{ getSupplierDisplayMaterialCode(item) || '' }}</td>
+                <td class="text-left">{{ getSupplierDisplayMaterialName(item) || '' }}</td>
                 <td class="text-left">{{ getPurchasePrintSpec(item) }}</td>
                 <td>{{ getPurchasePrintUnit(item) }}</td>
                 <td v-if="shouldShowFilmDimensionColumns()">{{ isPurchaseFilmItem(item) ? (item.width || '') : '' }}</td>
@@ -223,8 +223,12 @@
           <p><strong>总金额：</strong>{{ formatNumber(totalAmount(currentOrder)) }} &nbsp;&nbsp; <strong>总数量：</strong>{{ formatNumber(totalQuantity(currentOrder)) }}</p>
           <el-table :data="currentOrder.items" stripe style="width:100%; margin-top:10px;">
             <el-table-column type="index" label="序号" width="60" align="center" />
-            <el-table-column prop="materialCode" label="物料编码" width="160" />
-            <el-table-column prop="materialName" label="物料名称" width="180" />
+            <el-table-column label="物料编码" width="160">
+              <template slot-scope="scope">{{ getSupplierDisplayMaterialCode(scope.row) || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="物料名称" width="180">
+              <template slot-scope="scope">{{ getSupplierDisplayMaterialName(scope.row) || '-' }}</template>
+            </el-table-column>
             <el-table-column :label="getDetailSpecHeaderLabel()" width="180">
               <template slot-scope="scope">{{ formatSpec(scope.row) }}</template>
             </el-table-column>
@@ -252,8 +256,12 @@
             <p><strong>采购单号：</strong>{{ reconciliationSummary.orderNo }}</p>
             <p><strong>对账状态：</strong>{{ reconciliationSummary.reconciliationStatus || '-' }} &nbsp;&nbsp; <strong>数量差：</strong>{{ formatNumber(reconciliationSummary.qtyDiff) }} &nbsp;&nbsp; <strong>金额差：</strong>{{ formatNumber(reconciliationSummary.amountDiff) }}</p>
             <el-table :data="reconciliationSummary.lineItems || []" stripe style="width:100%; margin-top:10px;">
-              <el-table-column prop="materialCode" label="物料编码" width="150" />
-              <el-table-column prop="materialName" label="物料名称" width="180" />
+              <el-table-column label="物料编码" width="150">
+                <template slot-scope="scope">{{ getSupplierDisplayMaterialCode(scope.row) || '-' }}</template>
+              </el-table-column>
+              <el-table-column label="物料名称" width="180">
+                <template slot-scope="scope">{{ getSupplierDisplayMaterialName(scope.row) || '-' }}</template>
+              </el-table-column>
               <el-table-column prop="purchaseUomCode" label="采购单位" width="100" />
               <el-table-column prop="priceUomCode" label="计价单位" width="100" />
               <el-table-column prop="orderQty" label="订单数量" width="100" />
@@ -426,13 +434,14 @@
                       <span style="float:right; color:#8492a6; font-size:12px">{{ raw.materialName }}</span>
                     </el-option>
                   </el-select>
-                  <span v-else>{{ scope.row.materialCode || '-' }}</span>
+                  <span v-else>{{ getSupplierDisplayMaterialCode(scope.row) || '-' }}</span>
+                  <div v-if="getSupplierMappingHint(scope.row)" style="margin-top:2px;font-size:12px;color:#909399;line-height:1.3;">{{ getSupplierMappingHint(scope.row) }}</div>
                 </template>
               </el-table-column>
               <el-table-column label="物料名称" width="160">
                 <template slot-scope="scope">
                   <el-input v-if="isRowEditable(scope.row)" v-model="scope.row.materialName" class="small-input" placeholder="物料名称" />
-                  <span v-else>{{ scope.row.materialName || '-' }}</span>
+                  <span v-else>{{ getSupplierDisplayMaterialName(scope.row) || '-' }}</span>
                 </template>
               </el-table-column>
               <el-table-column label="颜色" width="90">
@@ -533,13 +542,14 @@
                       <span style="float:right; color:#8492a6; font-size:12px">{{ raw.materialName }}</span>
                     </el-option>
                   </el-select>
-                  <span v-else>{{ scope.row.materialCode || '-' }}</span>
+                  <span v-else>{{ getSupplierDisplayMaterialCode(scope.row) || '-' }}</span>
+                  <div v-if="getSupplierMappingHint(scope.row)" style="margin-top:2px;font-size:12px;color:#909399;line-height:1.3;">{{ getSupplierMappingHint(scope.row) }}</div>
                 </template>
               </el-table-column>
               <el-table-column label="物料名称" width="180">
                 <template slot-scope="scope">
                   <el-input v-if="isRowEditable(scope.row)" v-model="scope.row.materialName" class="small-input" placeholder="物料名称" />
-                  <span v-else>{{ scope.row.materialName || '-' }}</span>
+                  <span v-else>{{ getSupplierDisplayMaterialName(scope.row) || '-' }}</span>
                 </template>
               </el-table-column>
               <el-table-column :label="getRawSpecHeaderLabelForEdit()" width="210">
@@ -630,6 +640,7 @@
 import { getPurchaseOrders, createPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, downloadPurchaseTemplate, importPurchaseOrders, exportPurchaseOrders, getPurchaseOrderDetail, getPurchaseOrderReconciliation, getPurchaseOrderRawSpecHistory, generatePurchaseOrderNo } from '@/api/purchase'
 import { listPurchaseQuotations, getPurchaseQuotationDetail } from '@/api/purchaseQuotation'
 import { listSuppliers } from '@/api/purchaseSupplier'
+import { getAllPurchaseSupplierMaterialMappings } from '@/api/purchaseSupplierMaterialMapping'
 import { getAllEnabledSpecs } from '@/api/tapeSpec'
 import { getRawMaterialList } from '@/api/tapeRawMaterial'
 import { getPurchaseReconciliationMeta, getPurchaseReconciliationOptions } from '@/constants/purchaseReconciliation'
@@ -660,6 +671,8 @@ export default {
       rawMaterials: [],
       supplierFilteredMaterials: [],
       latestQuoteByCode: {},
+      supplierMaterialMappings: [],
+      supplierMaterialMappingMap: {},
       rawSpecOptions: ['900', '180', '175', '165', '160', '25', '20', '18', '1'],
       rawSpecHistoryCache: {},
       rawSpecHistoryLoadingMap: {},
@@ -724,7 +737,7 @@ export default {
         contactPhone: '',
         orderNo: '',
         orderDate: this.getDateOffset(0),
-        deliveryDate: this.getDateOffset(3),
+        deliveryDate: this.getDateOffset(1),
         deliveryAddress: '',
         status: 'pending',
         remark: '',
@@ -864,10 +877,13 @@ export default {
         this.editForm.supplierId = supplier.id
         this.editForm.supplier = supplier.supplierName || supplier.shortName || supplier.supplierCode
         await this.reloadSupplierMaterialContext(supplier)
+        await this.loadSupplierMaterialMappings(supplier.supplierCode)
         await this.loadSupplierRemarkOptions(supplier)
       } else {
         this.supplierFilteredMaterials = this.rawMaterials || []
         this.latestQuoteByCode = {}
+        this.supplierMaterialMappings = []
+        this.supplierMaterialMappingMap = {}
         this.supplierRemarkOptions = []
         this.selectedRemarkTemplate = ''
       }
@@ -996,9 +1012,55 @@ export default {
         this.rawSpecHistoryCache = {}
         this.rawSpecHistoryLoadingMap = {}
         await this.reloadSupplierMaterialContext(supplier)
+        await this.loadSupplierMaterialMappings(supplier.supplierCode)
         this.syncDetailRowsBySupplier(supplier)
         await this.loadSupplierRemarkOptions(supplier)
       }
+    },
+    async loadSupplierMaterialMappings(supplierCode) {
+      const code = String(supplierCode || '').trim()
+      if (!code) {
+        this.supplierMaterialMappings = []
+        this.supplierMaterialMappingMap = {}
+        return
+      }
+      try {
+        const res = await getAllPurchaseSupplierMaterialMappings({ supplierCode: code, isActive: 1 })
+        const list = (res && (res.code === 200 || res.code === 20000) && Array.isArray(res.data)) ? res.data : []
+        this.supplierMaterialMappings = list
+        const map = {}
+        list.forEach(item => {
+          const materialCode = String((item && item.materialCode) || '').trim()
+          if (!materialCode || map[materialCode]) return
+          map[materialCode] = item
+        })
+        this.supplierMaterialMappingMap = map
+      } catch (e) {
+        console.error('加载供应商物料映射失败', e)
+        this.supplierMaterialMappings = []
+        this.supplierMaterialMappingMap = {}
+      }
+    },
+    findSupplierMaterialMapping(materialCode) {
+      const code = String(materialCode || '').trim()
+      if (!code) return null
+      return this.supplierMaterialMappingMap[code] || null
+    },
+    getSupplierDisplayMaterialCode(row) {
+      const mapping = this.findSupplierMaterialMapping(row && row.materialCode)
+      return (mapping && String(mapping.supplierMaterialCode || '').trim()) || (row && row.materialCode) || ''
+    },
+    getSupplierDisplayMaterialName(row) {
+      const mapping = this.findSupplierMaterialMapping(row && row.materialCode)
+      return (mapping && String(mapping.supplierMaterialName || '').trim()) || (row && row.materialName) || ''
+    },
+    getSupplierMappingHint(row) {
+      const mapping = this.findSupplierMaterialMapping(row && row.materialCode)
+      if (!mapping) return ''
+      const code = String(mapping.supplierMaterialCode || '').trim()
+      const name = String(mapping.supplierMaterialName || '').trim()
+      if (!code && !name) return ''
+      return `供方: ${code || '-'} / ${name || '-'}`
     },
     onSelectRemarkTemplate(value) {
       if (!value) return
@@ -1103,7 +1165,7 @@ export default {
         if (!row || this.isCountPricedRow(row)) return
         row.pricingMode = this.resolveFilmPricingMode(row)
         const code = String(row.materialCode || '').trim()
-        const latestQuote = code ? this.latestQuoteByCode[code] : null
+        const latestQuote = this.getLatestQuoteByCode(code)
         if (latestQuote && latestQuote.unitPrice !== null && latestQuote.unitPrice !== undefined) {
           row.unitPrice = latestQuote.unitPrice
           row.unitPriceLocked = true
@@ -1194,7 +1256,7 @@ export default {
         }
 
         try {
-          const quote = this.latestQuoteByCode[code]
+          const quote = this.getLatestQuoteByCode(code)
           if (quote && quote.specifications) {
             appendSpec(quote.specifications)
           }
@@ -1443,7 +1505,7 @@ export default {
     resolveFilmPricingMode(row) {
       if (!row) return 'kg'
       const code = String(row.materialCode || '').trim()
-      const latestQuote = code ? this.latestQuoteByCode[code] : null
+      const latestQuote = this.getLatestQuoteByCode(code)
       const fromQuote = this.normalizeFilmPricingMode(latestQuote && (latestQuote.pricingMode || latestQuote.priceUomCode || latestQuote.purchaseUomCode))
       if (fromQuote) return fromQuote
       const raw = code ? (this.rawMaterials || []).find(r => r.materialCode === code) : null
@@ -1733,6 +1795,14 @@ export default {
       })
       return Array.from(set).filter(v => v && v.length >= 2)
     },
+    normalizeQuoteMaterialCode(code) {
+      return String(code || '').trim().toUpperCase()
+    },
+    getLatestQuoteByCode(code) {
+      const key = this.normalizeQuoteMaterialCode(code)
+      if (!key) return null
+      return this.latestQuoteByCode[key] || null
+    },
     async fetchLatestQuotationMapBySupplier(supplier) {
       try {
         const tokens = this.buildSupplierMatchTokens(supplier)
@@ -1755,24 +1825,13 @@ export default {
 
         const uniqMap = new Map()
         for (const keyword of tokens) {
-          const accepted = await fetchBySupplierKeyword(keyword, 'accepted')
-          accepted.forEach(q => {
+          const allStatus = await fetchBySupplierKeyword(keyword, '')
+          allStatus.forEach(q => {
             const key = q && (q.id || q.quotationNo)
             if (key !== undefined && key !== null && !uniqMap.has(String(key))) {
               uniqMap.set(String(key), q)
             }
           })
-        }
-        if (!uniqMap.size) {
-          for (const keyword of tokens) {
-            const allStatus = await fetchBySupplierKeyword(keyword, '')
-            allStatus.forEach(q => {
-              const key = q && (q.id || q.quotationNo)
-              if (key !== undefined && key !== null && !uniqMap.has(String(key))) {
-                uniqMap.set(String(key), q)
-              }
-            })
-          }
         }
 
         const matched = Array.from(uniqMap.values()).filter(q => {
@@ -1785,13 +1844,22 @@ export default {
         })
         if (!matched.length) return {}
 
+        const pickTime = (...vals) => {
+          for (const v of vals) {
+            if (!v) continue
+            const t = new Date(v).getTime()
+            if (Number.isFinite(t) && t > 0) return t
+          }
+          return 0
+        }
+
         const sorted = matched.sort((a, b) => {
           const ta = new Date(a.quotationDate || a.createdAt || 0).getTime()
           const tb = new Date(b.quotationDate || b.createdAt || 0).getTime()
           return tb - ta
         })
 
-        const detailTargets = sorted.slice(0, 80)
+        const detailTargets = sorted.slice(0, 160)
         const detailList = await Promise.all(detailTargets.map(async q => {
           const detailRes = await getPurchaseQuotationDetail(q.id)
           return detailRes && (detailRes.code === 200 || detailRes.code === 20000) ? detailRes.data : null
@@ -1801,17 +1869,35 @@ export default {
         detailList.forEach(detail => {
           const items = (detail && detail.items) || []
           items.forEach(item => {
-            const code = String(item.materialCode || '').trim()
-            if (!code || latestMap[code]) return
+            const code = this.normalizeQuoteMaterialCode(item.materialCode)
+            if (!code) return
+            const quoteTime = pickTime(
+              item && item.updatedAt,
+              item && item.createdAt,
+              detail && detail.updatedAt,
+              detail && detail.createdAt,
+              detail && detail.quotationDate
+            )
+            const itemId = Number((item && item.id) || 0)
+            const existing = latestMap[code]
+            const shouldReplace = !existing || quoteTime > Number(existing.__quoteTime || 0) ||
+              (quoteTime === Number(existing.__quoteTime || 0) && itemId > Number(existing.__itemId || 0))
+            if (!shouldReplace) return
             latestMap[code] = {
               unitPrice: item.unitPrice,
               specifications: item.specifications,
               materialName: item.materialName,
               pricingMode: item.pricingMode,
               priceUomCode: item.priceUomCode,
-              purchaseUomCode: item.purchaseUomCode
+              purchaseUomCode: item.purchaseUomCode,
+              __quoteTime: quoteTime,
+              __itemId: itemId
             }
           })
+        })
+        Object.keys(latestMap).forEach(code => {
+          delete latestMap[code].__quoteTime
+          delete latestMap[code].__itemId
         })
         return latestMap
       } catch (e) {
@@ -1838,7 +1924,7 @@ export default {
       }
 
       const raw = this.rawMaterials.find(r => r.materialCode === code)
-      const latestQuote = this.latestQuoteByCode[code]
+      const latestQuote = this.getLatestQuoteByCode(code)
       if (raw) {
         row.materialName = raw.materialName
       }
@@ -2212,15 +2298,14 @@ export default {
       }, 0).toFixed(2)
     },
     formatSpec(item) {
-      if (item && item.filmSpecRaw) return item.filmSpecRaw
+      if (!item) return ''
+      if (item.filmSpecRaw) return item.filmSpecRaw
       const t = item.thicknessDisplay || item.thickness || ''
       const w = item.width || ''
       const l = item.lengthDisplay || item.length || ''
       const filmSpec = [t, w, l].filter(Boolean).join('*')
       if (filmSpec) return filmSpec
-      if (item && item.rawSpec) return item.rawSpec
-      const raw = this.rawMaterials.find(r => r.materialCode === item.materialCode)
-      return (raw && raw.spec) || ''
+      return item.rawSpec || item.specifications || ''
     },
     formatNumber(val) {
       return val === undefined || val === null ? '-' : Number(val).toFixed(2)
@@ -2342,6 +2427,7 @@ export default {
     async viewDetail(row) {
       const detail = await this.loadOrderDetail(row.orderNo)
       this.currentOrder = detail || row
+      await this.loadSupplierMaterialMappings(this.resolveSupplierCodeFromOrder(this.currentOrder || row))
       this.detailVisible = true
     },
     async openReconciliation(row) {
@@ -2349,6 +2435,7 @@ export default {
       this.reconciliationLoading = true
       this.reconciliationSummary = null
       try {
+        await this.loadSupplierMaterialMappings(this.resolveSupplierCodeFromOrder(row))
         const res = await getPurchaseOrderReconciliation(row.orderNo)
         if (res && (res.code === 200 || res.code === 20000)) {
           this.reconciliationSummary = res.data || null
@@ -2370,9 +2457,19 @@ export default {
           return
         }
         const order = res.data || {}
+        const supplierHit = this.suppliers.find(s => {
+          const code = String((s && s.supplierCode) || '').trim()
+          const name = String((s && s.supplierName) || '').trim()
+          const shortName = String((s && s.shortName) || '').trim()
+          const supplierText = String(order.supplier || '').trim()
+          if (!supplierText) return false
+          return [code, name, shortName].some(v => v && (v === supplierText || supplierText.includes(v) || v.includes(supplierText)))
+        })
+        await this.loadSupplierMaterialMappings((supplierHit && supplierHit.supplierCode) || '')
         const fullSupplierName = this.resolveSupplierFullName(order.supplier, order.supplierId)
         this.currentPrint = {
           ...order,
+          supplierCode: (supplierHit && supplierHit.supplierCode) || '',
           supplierFullName: fullSupplierName,
           items: (order.items || []).map(item => ({
             ...item,
@@ -2385,6 +2482,28 @@ export default {
         console.error('打印失败', e)
         this.$message.error('打印失败')
       }
+    },
+    resolveSupplierCodeFromOrder(order) {
+      if (!order) return ''
+      const directCode = String(order.supplierCode || '').trim()
+      if (directCode) return directCode
+
+      const supplierId = order.supplierId
+      if (supplierId) {
+        const byId = (this.suppliers || []).find(s => String(s.id) === String(supplierId))
+        const codeById = String((byId && byId.supplierCode) || '').trim()
+        if (codeById) return codeById
+      }
+
+      const supplierText = String(order.supplier || '').trim()
+      if (!supplierText) return ''
+      const hit = (this.suppliers || []).find(s => {
+        const code = String((s && s.supplierCode) || '').trim()
+        const name = String((s && s.supplierName) || '').trim()
+        const shortName = String((s && s.shortName) || '').trim()
+        return [code, name, shortName].some(v => v && (v === supplierText || supplierText.includes(v) || v.includes(supplierText)))
+      })
+      return String((hit && hit.supplierCode) || '').trim()
     },
     formatPurchasePrintDate(value) {
       if (!value) return ''
@@ -2515,7 +2634,10 @@ export default {
     getPurchasePrintAmountHeaderLabel() {
       return '金额/元'
     },
-    printFilmDimensionColStyle() {
+    printFilmDimensionColStyle(type = 'width') {
+      if (this.shouldShowFilmDimensionColumns() && type === 'length') {
+        return 'width: 67px;'
+      }
       return 'width: 52px;'
     },
     printColStyle(col) {
@@ -2543,6 +2665,15 @@ export default {
         price: 'width: 68px;',
         amount: 'width: 96px;',
         date: 'width: 98px;'
+      }
+      if (this.shouldShowFilmDimensionColumns()) {
+        const filmLengthTemplateMap = {
+          ...map,
+          code: 'width: 113px;',
+          name: 'width: 131px;',
+          spec: 'width: 147px;'
+        }
+        return filmLengthTemplateMap[col] || ''
       }
       return map[col] || ''
     },
@@ -2622,18 +2753,25 @@ export default {
       const p2 = this.ensurePurchaseFilmDimUnit(parts[2], 'm')
       return `${p0}*${p1}*${p2}`
     },
+    buildPurchasePrintFilmSpecFromItem(item) {
+      if (!item) return ''
+      const thickness = this.ensurePurchaseFilmDimUnit(item.thicknessDisplay || item.thickness || '', 'μm')
+      const width = this.ensurePurchaseFilmDimUnit(item.width || '', 'mm')
+      const length = this.ensurePurchaseFilmDimUnit(item.lengthDisplay || item.length || '', 'm')
+      return [thickness, width, length].filter(v => String(v || '').trim() !== '').join('*')
+    },
     getPurchasePrintSpec(item) {
       if (!item) return ''
-      const raw = this.rawMaterials.find(r => r.materialCode === item.materialCode)
       if (this.isCountPricedRow(item)) {
-        return item.rawSpec || (raw && raw.spec) || ''
+        return item.rawSpec || item.specifications || ''
       }
-      if (item.filmSpecRaw) return this.normalizePurchaseFilmSpecWithUnit(item.filmSpecRaw)
-      const filmSpec = [item.thicknessDisplay || item.thickness || '', item.width || '', item.lengthDisplay || item.length || '']
-        .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
-        .join('*')
-      if (filmSpec) return this.normalizePurchaseFilmSpecWithUnit(filmSpec)
-      const baseSpec = item.rawSpec || (raw && raw.spec) || ''
+      const filmSpecByRow = this.buildPurchasePrintFilmSpecFromItem(item)
+      if (filmSpecByRow) return filmSpecByRow
+
+      const orderSpec = String(item.filmSpecRaw || item.rawSpec || item.specifications || '').trim()
+      if (orderSpec) return this.normalizePurchaseFilmSpecWithUnit(orderSpec)
+
+      const baseSpec = String(item.rawSpec || item.specifications || '').trim()
       if (this.isPurchasePrintChemicalItem(item) || this.isPurchasePrintKgPricedItem(item)) {
         const kg = this.parseSpecKg(baseSpec)
         if (kg && kg > 0) {

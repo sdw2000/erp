@@ -1,0 +1,63 @@
+<view class="container">
+  <view class="card">
+    <view class="title">{{pageTitle}}</view>
+    <view class="muted">{{pageDesc}}</view>
+
+    <view class="label">料号 materialCode</view>
+    <input class="input" value="{{materialCode}}" placeholder="例如 FT-001" bindinput="onMaterialCodeInput" />
+
+    <view class="label">二维码编码（扫码或手输）</view>
+    <input class="input" value="{{qrCode}}" placeholder="优先按二维码快速定位库存" bindinput="onQrCodeInput" />
+
+    <view class="row mt8">
+      <button class="btn-secondary" bindtap="onScanQrCode">扫码二维码</button>
+      <button class="btn-secondary" loading="{{loadingStock}}" bindtap="loadByQrCode">按二维码查库存</button>
+    </view>
+
+    <button class="btn-secondary" loading="{{loadingStock}}" bindtap="loadStock">查询可用库存</button>
+
+    <view class="label">选择库存批次</view>
+    <picker mode="selector" range="{{stockPicker}}" value="{{stockIndex}}" bindchange="onStockChange">
+      <view class="input" wx:if="{{stockIndex >= 0}}">{{stockPicker[stockIndex]}}</view>
+      <view class="input muted" wx:else>请先查询库存</view>
+    </picker>
+
+    <view class="row">
+      <view>
+        <view class="label">出库卷数 rolls</view>
+        <input class="input" value="{{rolls}}" type="number" bindinput="onRollsInput" />
+      </view>
+      <view>
+        <view class="label">申请人 applicant</view>
+        <input class="input" value="{{applicant}}" bindinput="onApplicantInput" />
+      </view>
+    </view>
+
+    <view class="label">申请部门 applyDept</view>
+    <input class="input" value="{{applyDept}}" bindinput="onApplyDeptInput" />
+
+    <view class="label">备注 remark</view>
+    <input class="input" value="{{remark}}" bindinput="onRemarkInput" />
+
+    <button class="btn-primary" loading="{{submitting}}" bindtap="submitOutbound">提交出库申请</button>
+  </view>
+
+  <view class="card">
+    <view class="row row-middle">
+      <view class="title">最近出库申请</view>
+      <button class="btn-secondary small" loading="{{queryLoading}}" bindtap="queryOutboundList">刷新</button>
+    </view>
+
+    <view wx:if="{{outboundList.length === 0}}" class="muted">暂无记录</view>
+    <block wx:for="{{outboundList}}" wx:key="id">
+      <view class="item">
+        <view class="tag">{{item.requestNo}}</view>
+        <view class="muted">料号: {{item.materialCode}}</view>
+        <view class="muted">批次: {{item.batchNo}}</view>
+        <view class="muted">卷数: {{item.rolls}}</view>
+        <view class="muted">申请人: {{item.applicant}}</view>
+        <view class="muted">状态: {{item.status === 0 ? '待审批' : (item.status === 1 ? '已通过' : (item.status === 2 ? '已拒绝' : '已取消'))}}</view>
+      </view>
+    </block>
+  </view>
+</view>

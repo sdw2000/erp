@@ -107,7 +107,7 @@
     </el-card>
 
     <!-- Create/Edit Dialog -->
-    <el-dialog :title="dialogTitle" :visible.sync="dialogVisible" width="1000px" @close="handleDialogClose">
+    <el-dialog :title="dialogTitle" :visible.sync="dialogVisible" :width="noticeDialogWidth" @close="handleDialogClose">
       <el-form ref="noticeForm" :model="currentNotice" label-width="120px" :rules="rules">
         <el-row :gutter="20">
           <el-col :span="12">
@@ -250,6 +250,27 @@
           <el-button size="small" @click="resetDetailFilter">清空筛选</el-button>
           <span style="color: #909399; font-size: 12px;">显示 {{ filteredCurrentNoticeItems.length }} / {{ (currentNotice.items || []).length }} 条</span>
         </div>
+        <div style="margin-bottom: 10px; display: flex; gap: 8px; align-items: center;">
+          <span style="color: #909399; font-size: 12px;">列显示：</span>
+          <el-button
+            size="mini"
+            :type="detailColumnVisible.batchNo ? 'primary' : 'default'"
+            plain
+            @click="toggleDetailColumn('batchNo')"
+          >{{ detailColumnVisible.batchNo ? '隐藏批次号' : '显示批次号' }}</el-button>
+          <el-button
+            size="mini"
+            :type="detailColumnVisible.grossWeight ? 'primary' : 'default'"
+            plain
+            @click="toggleDetailColumn('grossWeight')"
+          >{{ detailColumnVisible.grossWeight ? '隐藏每箱毛重' : '显示每箱毛重' }}</el-button>
+          <el-button
+            size="mini"
+            :type="detailColumnVisible.totalWeight ? 'primary' : 'default'"
+            plain
+            @click="toggleDetailColumn('totalWeight')"
+          >{{ detailColumnVisible.totalWeight ? '隐藏总毛重' : '显示总毛重' }}</el-button>
+        </div>
         <el-table :data="filteredCurrentNoticeItems" border style="width: 100%">
           <el-table-column prop="materialCode" label="物料代码" width="180">
             <template slot-scope="scope">
@@ -269,7 +290,7 @@
               <span v-else>{{ formatSpecDisplay(scope.row) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="批次号" width="180">
+          <el-table-column v-if="detailColumnVisible.batchNo" label="批次号" width="180">
             <template slot-scope="scope">
               <el-input v-model="scope.row.batchNo" size="small" placeholder="输入批次号" />
             </template>
@@ -289,12 +310,12 @@
               <el-input v-model="scope.row.boxCount" size="small" />
             </template>
           </el-table-column>
-          <el-table-column label="每箱毛重" width="100">
+          <el-table-column v-if="detailColumnVisible.grossWeight" label="每箱毛重" width="100">
             <template slot-scope="scope">
               <el-input v-model="scope.row.grossWeight" size="small" />
             </template>
           </el-table-column>
-          <el-table-column label="总毛重" width="100">
+          <el-table-column v-if="detailColumnVisible.totalWeight" label="总毛重" width="100">
             <template slot-scope="scope">
               <el-input v-model="scope.row.totalWeight" size="small" />
             </template>
@@ -719,6 +740,7 @@ export default {
 
       // Create/Edit
       dialogVisible: false,
+      noticeDialogWidth: '80vw',
       dialogTitle: '新增发货通知',
       isEdit: false,
       submitting: false,
@@ -769,6 +791,11 @@ export default {
       detailFilter: {
         materialCode: '',
         spec: ''
+      },
+      detailColumnVisible: {
+        batchNo: false,
+        grossWeight: false,
+        totalWeight: false
       },
 
       rules: {
@@ -2043,6 +2070,13 @@ export default {
       this.detailFilter.spec = ''
     },
 
+    toggleDetailColumn(key) {
+      if (!this.detailColumnVisible || !Object.prototype.hasOwnProperty.call(this.detailColumnVisible, key)) {
+        return
+      }
+      this.$set(this.detailColumnVisible, key, !this.detailColumnVisible[key])
+    },
+
     onQuantityChange(rowIdx, itemIdx, val) {
       // 确保更新为数字并保持响应式
       const v = Number(val || 0)
@@ -2534,24 +2568,15 @@ export default {
       this.receiveSubmitting = true
       try {
         const payload = {
-          ...this.receiveConfirmNotice,
           carrierName: this.receiveConfirmForm.carrierName.trim(),
           carrierNo: this.receiveConfirmForm.carrierNo.trim(),
           carrierPhone: (this.receiveConfirmForm.carrierPhone || '').trim()
         }
 
-        const updateRes = await request({
-          url: '/delivery/update',
-          method: 'post',
-          data: payload
-        })
-        if (!updateRes || (updateRes.code !== 200 && updateRes.code !== 20000)) {
-          return this.$message.error((updateRes && updateRes.msg) || '保存物流信息失败')
-        }
-
         const receiveRes = await request({
           url: `/delivery/receive/${this.receiveConfirmNotice.id}`,
-          method: 'post'
+          method: 'post',
+          data: payload
         })
         if (receiveRes && (receiveRes.code === 200 || receiveRes.code === 20000)) {
           const idx = (this.tableData || []).findIndex(r => Number(r.id) === Number(this.receiveConfirmNotice.id))

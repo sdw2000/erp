@@ -1,21 +1,52 @@
 <view class="container">
-  <view class="card">
+  <view class="card" wx:if="{{canReport}}">
     <view class="title">提交报工</view>
-    <view class="muted">支持按 scheduleId 或 orderDetailId 报工</view>
+    <view class="muted">按排程列表选中后报工（支持扫码定位）</view>
 
     <view class="label">工序</view>
     <picker mode="selector" range="{{processTypeOptions}}" range-key="label" value="{{processTypeIndex}}" bindchange="onProcessTypeChange">
       <view class="input">{{processTypeOptions[processTypeIndex].label}}</view>
     </picker>
 
+    <view>
+      <view class="row row-middle">
+        <view class="label">排程列表（先选条目）</view>
+        <button class="btn-secondary small" loading="{{scheduleLoading}}" bindtap="loadSchedules">刷新</button>
+      </view>
+      <view class="row">
+        <view>
+          <view class="label">线别</view>
+          <picker mode="selector" range="{{lineOptions}}" value="{{selectedLineIndex}}" bindchange="onLineChange">
+            <view class="input">{{lineOptions[selectedLineIndex]}}</view>
+          </picker>
+        </view>
+      </view>
+      <view class="row row-middle">
+        <input class="input" value="{{scanCode}}" placeholder="扫码内容/排程ID/明细ID/订单号/料号" bindinput="onScanCodeInput" />
+        <button class="btn-secondary small" bindtap="onScanCodeTap">扫码</button>
+      </view>
+      <button class="btn-secondary small" bindtap="onScanSelectSchedule">按输入内容选中排程</button>
+      <input class="input" value="{{scheduleKeyword}}" placeholder="输入订单号/料号/排程ID筛选" bindinput="onScheduleKeywordInput" />
+      <view wx:if="{{scheduleDisplayList.length === 0}}" class="muted">暂无可报工排程</view>
+      <block wx:for="{{scheduleDisplayList}}" wx:key="index">
+        <view class="schedule-item {{item.scheduleId == selectedScheduleId ? 'schedule-item-active' : ''}}" data-index="{{index}}" bindtap="onSelectSchedule">
+          <view class="tag">排程ID: {{item.scheduleId || '-'}}</view>
+          <view class="muted">线别: {{item.line || '-'}}</view>
+          <view class="muted">订单: {{item.orderNo || '-'}}</view>
+          <view class="muted">料号: {{item.materialCode || '-'}}</view>
+          <view class="muted">计划面积: {{item.plannedArea || '-'}}</view>
+        </view>
+      </block>
+    </view>
+
     <view class="row">
       <view>
         <view class="label">排程ID scheduleId</view>
-        <input class="input" value="{{scheduleId}}" type="number" placeholder="可空" bindinput="onScheduleIdInput" />
+        <input class="input" value="{{scheduleId}}" type="number" placeholder="请从上方列表选择" bindinput="onScheduleIdInput" disabled="{{true}}" />
       </view>
       <view>
         <view class="label">订单明细ID orderDetailId</view>
-        <input class="input" value="{{orderDetailId}}" type="number" placeholder="可空" bindinput="onOrderDetailIdInput" />
+        <input class="input" value="{{orderDetailId}}" type="number" placeholder="请从上方列表选择" bindinput="onOrderDetailIdInput" disabled="{{true}}" />
       </view>
     </view>
 
@@ -45,7 +76,13 @@
     </label>
 
     <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">提交报工</button>
+    <button class="btn-secondary" bindtap="goIssue">去领料登记（出库）</button>
     <button class="btn-secondary" bindtap="goHistory">查看报工记录</button>
+  </view>
+
+  <view class="card" wx:if="{{!canReport}}">
+    <view class="title">生产报工</view>
+    <view class="muted">当前账号无生产报工权限</view>
   </view>
 
   <view class="card" wx:if="{{lastResult}}">

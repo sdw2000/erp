@@ -74,6 +74,10 @@
                       "ruipu_putong_xiaoguanxin":  {
                                                        "formatPath":  "D:\\MES\\BarTender\\Templates\\ruipu_putong_xiaoguanxin.btw",
                                                        "printer":  "Gprinter GP-1324D"
-                                                   }
+                                                   },
+                      "jianghai_waibiao":  {
+                                               "formatPath":  "D:\\MES\\BarTender\\Templates\\jianghai_waibiao.btw",
+                                               "printer":  "Gprinter GP-1324D"
+                                           }
                   }
 }

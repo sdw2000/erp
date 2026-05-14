@@ -512,13 +512,37 @@ export async function syncGatewayTemplates(config = {}, options = {}) {
 }
 
 export async function printByTemplate(template, data, options = {}, config = {}, trace = {}) {
+  const normalizedData = normalizePrintDataKeys(data || {})
   const payload = {
     template,
     jobName: options.jobName || `${template}_${Date.now()}`,
     copies: Number(options.copies || 1),
-    data: data || {}
+    data: normalizedData
   }
   return sendBarTenderPrint(payload, config, trace)
+}
+
+function normalizePrintDataKeys(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return raw || {}
+  }
+  const src = { ...raw }
+
+  // 优先保留 QRCode，移除大小写冲突的 qrCode
+  if (Object.prototype.hasOwnProperty.call(src, 'QRCode') && Object.prototype.hasOwnProperty.call(src, 'qrCode')) {
+    delete src.qrCode
+  }
+
+  const result = {}
+  const seen = new Set()
+  Object.keys(src).forEach((key) => {
+    const lower = String(key || '').toLowerCase()
+    if (!lower) return
+    if (seen.has(lower)) return
+    seen.add(lower)
+    result[key] = src[key]
+  })
+  return result
 }
 
 export async function printByRule({ bizType = '', customerCode = '', defaultTemplate = '', data = {}, options = {}, config = {}, rules = {}, trace = {}} = {}) {

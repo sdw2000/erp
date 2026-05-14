@@ -1,0 +1,146 @@
+<view class="container">
+  <view class="card">
+    <view class="title">销售下单</view>
+    <view class="muted">客户/料号支持模糊搜索，支持多明细与历史规格</view>
+
+    <view class="row row-middle">
+      <view>
+        <view class="label">订单号（可自动）</view>
+        <input class="input" value="{{orderNo}}" placeholder="可空，系统可自动生成" data-key="orderNo" bindinput="onInput" />
+      </view>
+      <button class="btn-secondary small" bindtap="onGenerateOrderNo">自动生成</button>
+    </view>
+
+    <view class="row">
+      <view>
+        <view class="label">客户搜索（代码/简称/名称）</view>
+        <input class="input" value="{{customerKeyword}}" placeholder="输入关键字筛选客户" bindinput="onCustomerKeywordInput" />
+        <picker mode="selector" range="{{customerOptionLabels}}" value="{{customerOptionIndex}}" bindchange="onCustomerPick">
+          <view class="input picker-input" wx:if="{{customerOptionLabels.length}}">{{customerOptionLabels[customerOptionIndex]}}</view>
+          <view class="input muted picker-input" wx:else>暂无匹配客户</view>
+        </picker>
+      </view>
+      <view>
+        <view class="label">客户代码</view>
+        <input class="input" value="{{customerCode}}" placeholder="选择客户后自动填充" disabled />
+      </view>
+    </view>
+
+    <view class="label">客户名称</view>
+    <input class="input" value="{{customerName}}" placeholder="根据客户代码自动填充" disabled />
+
+    <view class="row">
+      <view>
+        <view class="label">客户订单号</view>
+        <input class="input" value="{{customerOrderNo}}" placeholder="可空" data-key="customerOrderNo" bindinput="onInput" />
+      </view>
+      <view>
+        <view class="label">交货日期</view>
+        <input class="input" value="{{deliveryDate}}" placeholder="yyyy-MM-dd" data-key="deliveryDate" bindinput="onInput" />
+      </view>
+    </view>
+
+    <view class="row">
+      <view>
+        <view class="label">总金额</view>
+        <input class="input" value="{{totalAmount}}" disabled />
+      </view>
+      <view>
+        <view class="label">总面积(㎡)</view>
+        <input class="input" value="{{totalArea}}" disabled />
+      </view>
+    </view>
+
+    <view class="label">订单备注</view>
+    <input class="input" value="{{remark}}" placeholder="可输入订单备注" data-key="remark" bindinput="onInput" />
+    <view wx:if="{{orderRemarkOptions.length}}" class="remark-tags">
+      <view class="muted">历史备注：</view>
+      <view class="tag-list">
+        <text
+          wx:for="{{orderRemarkOptions}}"
+          wx:key="index"
+          class="tag"
+          data-index="{{index}}"
+          bindtap="onOrderRemarkPick"
+        >{{item}}</text>
+      </view>
+    </view>
+
+    <view class="row row-middle" style="margin-top: 12rpx;">
+      <view class="label" style="margin: 0;">订单明细</view>
+      <button class="btn-secondary small" bindtap="addItem">新增明细</button>
+    </view>
+
+    <block wx:for="{{items}}" wx:key="index">
+      <view class="item-card">
+        <view class="row row-middle">
+          <view class="muted">明细 #{{index + 1}}</view>
+          <button class="btn-danger mini" data-index="{{index}}" bindtap="removeItem">删除</button>
+        </view>
+
+        <view class="label">料号搜索（编码/名称）</view>
+        <input class="input" value="{{item.materialKeyword}}" data-index="{{index}}" bindinput="onMaterialKeywordInput" placeholder="输入关键字筛选料号" />
+        <picker mode="selector" range="{{item.materialOptionLabels}}" value="{{item.materialOptionIndex}}" data-index="{{index}}" bindchange="onMaterialPick">
+          <view class="input picker-input" wx:if="{{item.materialOptionLabels.length}}">{{item.materialOptionLabels[item.materialOptionIndex]}}</view>
+          <view class="input muted picker-input" wx:else>暂无匹配料号</view>
+        </picker>
+
+        <view class="row">
+          <view>
+            <view class="label">料号</view>
+            <input class="input" value="{{item.materialCode}}" data-index="{{index}}" data-key="materialCode" bindinput="onItemFieldInput" bindblur="onMaterialCodeBlur" />
+          </view>
+          <view>
+            <view class="label">品名</view>
+            <input class="input" value="{{item.materialName}}" data-index="{{index}}" data-key="materialName" bindinput="onItemFieldInput" />
+          </view>
+        </view>
+
+        <view class="label">历史规格</view>
+        <picker mode="selector" range="{{item.historySpecLabels}}" value="{{item.historySpecIndex}}" data-index="{{index}}" bindchange="onHistorySpecPick">
+          <view class="input picker-input" wx:if="{{item.historySpecLabels.length}}">{{item.historySpecLabels[item.historySpecIndex]}}</view>
+          <view class="input muted picker-input" wx:else>暂无历史规格（请先选客户与料号）</view>
+        </picker>
+
+        <view class="row">
+          <view>
+            <view class="label">厚度(μm)</view>
+            <input class="input" value="{{item.thickness}}" type="digit" placeholder="可空" data-index="{{index}}" data-key="thickness" bindinput="onItemFieldInput" />
+          </view>
+          <view>
+            <view class="label">宽度(mm)</view>
+            <input class="input" value="{{item.width}}" type="digit" placeholder="可空" data-index="{{index}}" data-key="width" bindinput="onItemFieldInput" />
+          </view>
+        </view>
+
+        <view class="row">
+          <view>
+            <view class="label">长度(m)</view>
+            <input class="input" value="{{item.length}}" type="digit" placeholder="可空" data-index="{{index}}" data-key="length" bindinput="onItemFieldInput" />
+          </view>
+          <view>
+            <view class="label">卷数</view>
+            <input class="input" value="{{item.rolls}}" type="number" placeholder="必填" data-index="{{index}}" data-key="rolls" bindinput="onItemFieldInput" />
+          </view>
+        </view>
+
+        <view class="row">
+          <view>
+            <view class="label">单价(元/{{item.unit || '㎡'}})</view>
+            <input class="input" value="{{item.unitPrice}}" type="digit" placeholder="可空" data-index="{{index}}" data-key="unitPrice" bindinput="onItemFieldInput" />
+            <view wx:if="{{item.unitPriceLocked}}" class="muted">已按最新已接受报价自动带出</view>
+            <view wx:if="{{!item.unitPriceLocked && item.priceMatchReason}}" class="match-reason">未带出原因：{{item.priceMatchReason}}</view>
+          </view>
+          <view>
+            <view class="label">明细备注</view>
+            <input class="input" value="{{item.remark}}" placeholder="可空" data-index="{{index}}" data-key="remark" bindinput="onItemFieldInput" />
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">提交订单</button>
+
+    <view wx:if="{{lastOrderNo}}" class="muted">最近创建订单号：{{lastOrderNo}}</view>
+  </view>
+</view>

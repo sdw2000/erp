@@ -31,6 +31,13 @@ export function updatePurchaseQuotation(data) {
   })
 }
 
+export function requotePurchaseQuotation(id) {
+  return request({
+    url: `/purchase/quotations/${id}/requote`,
+    method: 'post'
+  })
+}
+
 export function deletePurchaseQuotation(id) {
   return request({
     url: `/purchase/quotations/${id}`,

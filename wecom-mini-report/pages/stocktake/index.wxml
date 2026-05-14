@@ -1,0 +1,42 @@
+<view class="container">
+  <view class="card">
+    <view class="title">扫码盘点</view>
+    <view class="muted">支持扫码或手输二维码编码，快速定位库存并盘点</view>
+
+    <view class="label">二维码编码</view>
+    <input class="input" value="{{qrCode}}" placeholder="扫码或手工输入" bindinput="onQrCodeInput" />
+
+    <view class="row mt8">
+      <button class="btn-secondary" bindtap="onScanQrCode">扫码二维码</button>
+      <button class="btn-secondary" loading="{{loading}}" bindtap="queryByQrCode">查询库存</button>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{stock}}">
+    <view class="title">库存信息</view>
+    <view class="muted">料号: {{stock.materialCode || stock.material_code || '-'}}</view>
+    <view class="muted">批次: {{stock.batchNo || stock.batch_no || '-'}}</view>
+    <view class="muted">库位: {{stock.location || '-'}}</view>
+    <view class="muted">系统卷数: {{stock.totalRolls || stock.total_rolls || '-'}}</view>
+    <view class="muted">系统面积: {{stock.totalArea || stock.total_area || '-'}}</view>
+
+    <view class="row">
+      <view>
+        <view class="label">实际卷数 actualRolls</view>
+        <input class="input" value="{{actualRolls}}" type="digit" bindinput="onActualRollsInput" />
+      </view>
+      <view>
+        <view class="label">实际面积 actualSqm</view>
+        <input class="input" value="{{actualSqm}}" type="digit" bindinput="onActualSqmInput" />
+      </view>
+    </view>
+
+    <view class="label">盘点人 operator</view>
+    <input class="input" value="{{operator}}" bindinput="onOperatorInput" />
+
+    <view class="label">原因 reason</view>
+    <input class="input" value="{{reason}}" bindinput="onReasonInput" />
+
+    <button class="btn-primary" loading="{{submitting}}" bindtap="submitStocktake">提交盘点</button>
+  </view>
+</view>

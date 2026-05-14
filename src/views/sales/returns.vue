@@ -50,11 +50,11 @@
           <template slot-scope="scope">{{ formatNumber(scope.row.totalArea) }}</template>
         </el-table-column>
         <el-table-column label="总金额" width="108" class-name="amount-col" align="right">
-          <template slot-scope="scope">{{ formatNumber(scope.row.totalAmount) }}</template>
+          <template slot-scope="scope">{{ formatAmount(scope.row.totalAmount) }}</template>
         </el-table-column>
         <el-table-column label="对账金额" width="120" align="right">
           <template slot-scope="scope">
-            <span :class="{ 'negative-amount': Number(scope.row.statementAmount) < 0 }">{{ formatNumber(scope.row.statementAmount) }}</span>
+            <span :class="{ 'negative-amount': Number(scope.row.statementAmount) < 0 }">{{ formatAmount(scope.row.statementAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="56">
@@ -118,11 +118,11 @@
           </div>
           <div class="summary-card">
             <div class="summary-label">总金额</div>
-            <div class="summary-value">{{ formatNumber(current.totalAmount) }}</div>
+            <div class="summary-value">{{ formatAmount(current.totalAmount) }}</div>
           </div>
           <div class="summary-card negative-card">
             <div class="summary-label">对账金额</div>
-            <div class="summary-value">{{ formatNumber(current.statementAmount) }}</div>
+            <div class="summary-value">{{ formatAmount(current.statementAmount) }}</div>
           </div>
         </div>
         <el-table class="returns-table" :data="current.items || []" stripe style="width:100%">
@@ -135,11 +135,11 @@
           <el-table-column label="退货数量/m²" min-width="90" align="right">
             <template slot-scope="scope">{{ formatNumber(scope.row.sqm) }}</template>
           </el-table-column>
-          <el-table-column label="单价/元/m²" min-width="95" align="right">
-            <template slot-scope="scope">{{ formatNumber(scope.row.unitPrice) }}</template>
+          <el-table-column label="单价" min-width="120" align="right">
+            <template slot-scope="scope">{{ formatPriceWithUnit(scope.row) }}</template>
           </el-table-column>
           <el-table-column label="金额/元" min-width="88" align="right">
-            <template slot-scope="scope">{{ formatNumber(scope.row.amount) }}</template>
+            <template slot-scope="scope">{{ formatAmount(scope.row.amount) }}</template>
           </el-table-column>
         </el-table>
       </div>
@@ -175,6 +175,8 @@
         </el-table>
         <div class="return-print-total">
           退货总面积：{{ formatNumber(printCurrent.totalArea) }}㎡
+          &nbsp;&nbsp;&nbsp;退货总金额：{{ formatAmount(printCurrent.totalAmount) }}
+          &nbsp;&nbsp;&nbsp;对账金额：{{ formatAmount(printCurrent.statementAmount) }}
         </div>
         <div class="return-print-signature">
           <span>制单：________________</span>
@@ -304,11 +306,28 @@
             <el-button size="small" type="primary" :disabled="!form.customer" @click="appendItemsFromOrder">按订单带入明细</el-button>
             <el-button size="small" :disabled="!form.items.length" @click="copyLastRow">复制上一行</el-button>
             <el-button size="small" @click="addRow">新增行</el-button>
+            <el-button size="small" type="warning" @click="addFreightRow">新增运费行</el-button>
           </div>
 
           <el-table class="returns-table returns-edit-table" :data="form.items" border stripe style="width:100%">
             <el-table-column label="料号" min-width="170">
-              <template slot-scope="scope"><el-input v-model="scope.row.materialCode" size="mini" /></template>
+              <template slot-scope="scope">
+                <el-autocomplete
+                  v-model="scope.row.materialCode"
+                  size="mini"
+                  :fetch-suggestions="queryMaterialSuggestions"
+                  placeholder="请输入料号，如 yunfei001"
+                  @select="(item) => handleMaterialCodeSelect(scope.row, item)"
+                  @input="() => handleMaterialCodeInput(scope.row)"
+                >
+                  <template slot-scope="{ item }">
+                    <div class="material-suggestion-item">
+                      <span class="suggestion-code">{{ item.materialCode || item.value }}</span>
+                      <span class="suggestion-name">{{ item.productName || item.materialName || '-' }}</span>
+                    </div>
+                  </template>
+                </el-autocomplete>
+              </template>
             </el-table-column>
             <el-table-column label="规格（厚度*宽度*长度）" min-width="240" show-overflow-tooltip>
               <template slot-scope="scope">
@@ -319,6 +338,7 @@
                       size="mini"
                       class="spec-input"
                       placeholder="厚度"
+                      :disabled="isFreightItem(scope.row)"
                       @input="val => { scope.row.thickness = val }"
                     />
                     <span class="spec-unit">μm *</span>
@@ -327,6 +347,7 @@
                       size="mini"
                       class="spec-input"
                       placeholder="宽度"
+                      :disabled="isFreightItem(scope.row)"
                       @input="val => { scope.row.width = val }"
                     />
                     <span class="spec-unit">mm *</span>
@@ -335,6 +356,7 @@
                       size="mini"
                       class="spec-input"
                       placeholder="长度"
+                      :disabled="isFreightItem(scope.row)"
                       @input="val => { scope.row.length = val }"
                     />
                     <span class="spec-unit">m</span>
@@ -354,7 +376,16 @@
             <el-table-column label="退货数量/m²" min-width="90">
               <template slot-scope="scope">{{ calcSqm(scope.row) }}</template>
             </el-table-column>
-            <el-table-column label="单价/元/m²" min-width="95">
+            <el-table-column label="计价单位" min-width="90">
+              <template slot-scope="scope">
+                <el-select v-model="scope.row.priceUnit" size="mini" style="width:100%">
+                  <el-option label="㎡" value="㎡" />
+                  <el-option label="卷" value="卷" />
+                  <el-option label="m" value="m" />
+                </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column label="单价" min-width="110">
               <template slot-scope="scope"><el-input v-model="scope.row.unitPrice" size="mini" /></template>
             </el-table-column>
             <el-table-column label="金额/元" min-width="88">
@@ -409,7 +440,12 @@
             <el-input-number v-model="scope.row.selectedRolls" :min="0" :max="scope.row.availableReturnRolls || 0" size="mini" controls-position="right" @change="handleSelectableRollsChange(scope.row)" />
           </template>
         </el-table-column>
-        <el-table-column prop="unitPrice" label="单价/元/m²" width="110" />
+        <el-table-column label="计价单位" width="88" align="center">
+          <template slot-scope="scope">{{ normalizePriceUnit(scope.row.priceUnit) }}</template>
+        </el-table-column>
+        <el-table-column label="单价" width="130" align="right">
+          <template slot-scope="scope">{{ formatPriceWithUnit(scope.row) }}</template>
+        </el-table-column>
       </el-table>
       <span slot="footer" class="dialog-footer-actions">
         <el-button @click="selectItemsVisible = false">取消</el-button>
@@ -423,7 +459,7 @@
 import { getSalesReturns, createSalesReturn, updateSalesReturn, deleteSalesReturn, getSalesReturnDetail, generateSalesReturnNo, getReturnableOrderItems, getSalesReturnAuditLogs, createInboundRequestsFromReturn } from '@/api/salesReturn'
 import { getCustomerList } from '@/api/customer'
 import { searchSalesOrders } from '@/api/sales'
-import { getSpecByMaterialCode } from '@/api/tapeSpec'
+import { getSpecByMaterialCode, getSpecSuggestions } from '@/api/tapeSpec'
 import { mapGetters } from 'vuex'
 import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
@@ -568,6 +604,32 @@ export default {
       const n = Number(value)
       return Number.isFinite(n) ? n.toFixed(2) : '0.00'
     },
+    formatAmount(value) {
+      if (value === null || value === undefined || value === '') return '0.0000'
+      const n = Number(value)
+      return Number.isFinite(n) ? n.toFixed(4) : '0.0000'
+    },
+    formatPrice(value) {
+      if (value === null || value === undefined || value === '') return '0.0000'
+      const n = Number(value)
+      return Number.isFinite(n) ? n.toFixed(4) : '0.0000'
+    },
+    toPriceNumber(value) {
+      const n = Number(value)
+      if (!Number.isFinite(n)) return 0
+      return Number(n.toFixed(4))
+    },
+    normalizePriceUnit(unit) {
+      const v = String(unit || '').trim()
+      if (v === '卷') return '卷'
+      if (v.toLowerCase() === 'm' || v === '米') return 'm'
+      return '㎡'
+    },
+    formatPriceWithUnit(row) {
+      const unit = this.normalizePriceUnit(row && row.priceUnit)
+      const price = this.formatPrice(row && row.unitPrice)
+      return `${price} / ${unit}`
+    },
     formatReturnDateShort(dateText) {
       if (!dateText) return '-'
       const d = new Date(dateText)
@@ -600,10 +662,17 @@ export default {
     },
     formatSpecWithUnit(row) {
       if (!row) return '-'
+      if (this.isFreightItem(row)) return '-'
       const t = row.thickness === null || row.thickness === undefined || row.thickness === '' ? '0' : String(row.thickness).trim()
       const w = row.width === null || row.width === undefined || row.width === '' ? '0' : String(row.width).trim()
       const l = row.length === null || row.length === undefined || row.length === '' ? '0' : String(row.length).trim()
       return `${t}μm*${w}mm*${l}m`
+    },
+    isFreightMaterialCode(materialCode) {
+      return String(materialCode || '').trim().toLowerCase() === 'yunfei001'
+    },
+    isFreightItem(item) {
+      return this.isFreightMaterialCode(item && item.materialCode)
     },
     getDraftTotalArea() {
       const total = (this.form.items || []).reduce((sum, item) => {
@@ -615,7 +684,7 @@ export default {
       const total = (this.form.items || []).reduce((sum, item) => {
         return sum + Number(this.calcAmount(item) || 0)
       }, 0)
-      return this.formatNumber(total)
+      return this.formatAmount(total)
     },
     async openCreate() {
       if (this.isWarehouseReadonly) {
@@ -855,7 +924,23 @@ export default {
       }
     },
     addRow() {
-      this.form.items.push({ orderNo: '', materialCode: '', thickness: '', width: '', length: '', rolls: '', unitPrice: '', remark: '', returnedRolls: 0, availableReturnRolls: null })
+      this.form.items.push({ orderNo: '', materialCode: '', thickness: '', width: '', length: '', rolls: '', priceUnit: '㎡', unitPrice: '', remark: '', returnedRolls: 0, availableReturnRolls: null })
+    },
+    addFreightRow() {
+      this.form.items.push({
+        orderNo: '',
+        sourceOrderItemId: null,
+        materialCode: 'yunfei001',
+        thickness: null,
+        width: null,
+        length: null,
+        rolls: '',
+        priceUnit: '卷',
+        unitPrice: '',
+        remark: '退货运费',
+        returnedRolls: 0,
+        availableReturnRolls: null
+      })
     },
     copyLastRow() {
       const items = this.form.items || []
@@ -870,6 +955,7 @@ export default {
         width: last.width || '',
         length: last.length || '',
         rolls: '',
+        priceUnit: this.normalizePriceUnit(last.priceUnit),
         unitPrice: last.unitPrice || '',
         remark: last.remark || '',
         returnedRolls: 0,
@@ -935,6 +1021,7 @@ export default {
           width: item.width || item.specWidth || item.widthMm || '',
           length: item.length || item.specLength || item.lengthM || '',
           rolls: Number(item.selectedRolls) || 0,
+          priceUnit: this.normalizePriceUnit(item.priceUnit),
           unitPrice: item.unitPrice || '',
           remark: '',
           returnedRolls: item.returnedRolls || 0,
@@ -956,7 +1043,8 @@ export default {
       const query = (keyword || '').trim()
       this.orderSearchLoading = true
       try {
-        const res = await searchSalesOrders({ keyword: query || undefined, customer: this.form.customer, status: 'completed' })
+        // 退货支持“部分发货/部分收货”订单，不能只查 completed（已发完）
+        const res = await searchSalesOrders({ keyword: query || undefined, customer: this.form.customer, status: 'all' })
         const data = (res && (res.data || [])) || []
         const list = Array.isArray(data) ? data : (Array.isArray(data.list) ? data.list : [])
         this.orderOptions = list.map(item => ({
@@ -967,6 +1055,80 @@ export default {
         this.orderOptions = []
       } finally {
         this.orderSearchLoading = false
+      }
+    },
+    async queryMaterialSuggestions(queryString, cb) {
+      const keyword = String(queryString || '').trim()
+      const result = []
+      try {
+        const res = await getSpecSuggestions(keyword, 20)
+        const rows = (res && (res.code === 200 || res.code === 20000)) ? (res.data || []) : []
+        const list = Array.isArray(rows) ? rows : []
+        list.forEach(item => {
+          const code = String(item.materialCode || item.value || '').trim()
+          if (!code) return
+          if (result.some(x => String(x.materialCode || x.value || '').trim() === code)) return
+          result.push({
+            value: code,
+            materialCode: code,
+            productName: item.productName || item.materialName || ''
+          })
+        })
+      } catch (e) {
+      }
+      const hasYunfei001 = result.some(x => String(x.materialCode || x.value || '').trim().toLowerCase() === 'yunfei001')
+      if (!hasYunfei001 && (!keyword || 'yunfei001'.includes(keyword.toLowerCase()))) {
+        result.unshift({ value: 'yunfei001', materialCode: 'yunfei001', productName: '' })
+      }
+      cb(result)
+    },
+    async handleMaterialCodeSelect(row, selected) {
+      if (!row) return
+      const code = String((selected && (selected.materialCode || selected.value)) || row.materialCode || '').trim()
+      row.materialCode = code
+      if (selected && (selected.productName || selected.materialName)) {
+        row.materialName = selected.productName || selected.materialName
+      }
+      if (this.isFreightMaterialCode(code)) {
+        row.priceUnit = '卷'
+        row.thickness = null
+        row.width = null
+        row.length = null
+        if (!row.remark) row.remark = '退货运费'
+        return
+      }
+      try {
+        const res = await getSpecByMaterialCode(code)
+        if (!res || (res.code !== 200 && res.code !== 20000) || !res.data) return
+        const spec = res.data || {}
+        if (spec.materialCode) {
+          row.materialCode = spec.materialCode
+        }
+        if (spec.productName || spec.materialName) {
+          row.materialName = spec.productName || spec.materialName
+        }
+        if (row.thickness === null || row.thickness === undefined || String(row.thickness).trim() === '') {
+          const t = Number(spec.totalThickness || spec.baseThickness || spec.thickness)
+          row.thickness = Number.isFinite(t) ? t : null
+        }
+        if (row.width === null || row.width === undefined || String(row.width).trim() === '') {
+          const w = Number(spec.width || spec.specWidth)
+          row.width = Number.isFinite(w) ? w : null
+        }
+        if (row.length === null || row.length === undefined || String(row.length).trim() === '') {
+          const l = Number(spec.length || spec.specLength)
+          row.length = Number.isFinite(l) ? l : null
+        }
+      } catch (e) {
+      }
+    },
+    handleMaterialCodeInput(row) {
+      if (!row) return
+      if (this.isFreightItem(row)) {
+        row.priceUnit = '卷'
+        row.thickness = null
+        row.width = null
+        row.length = null
       }
     },
     async handleRowOrderChange(row) {
@@ -992,6 +1154,7 @@ export default {
           thickness: current.thickness || first.thickness || first.totalThickness || first.baseThickness || '',
           width: current.width || first.width || first.specWidth || first.widthMm || '',
           length: current.length || first.length || first.specLength || first.lengthM || '',
+          priceUnit: this.normalizePriceUnit(current.priceUnit || first.priceUnit),
           unitPrice: current.unitPrice || first.unitPrice || '',
           returnedRolls: first.returnedRolls || 0,
           availableReturnRolls: first.availableReturnRolls == null ? null : first.availableReturnRolls
@@ -1017,6 +1180,7 @@ export default {
       }
       return {
         ...item,
+        priceUnit: this.normalizePriceUnit(item.priceUnit),
         thickness: numOrNull(pick(item.thickness, item.totalThickness, item.baseThickness)),
         width: numOrNull(pick(item.width, item.specWidth, item.widthMm)),
         length: numOrNull(pick(item.length, item.specLength, item.lengthM))
@@ -1131,6 +1295,7 @@ export default {
       }
     },
     calcSqm(row) {
+      if (this.isFreightItem(row)) return '0.00'
       const len = Number(row.length) || 0
       const wid = Number(row.width) || 0
       const rolls = Number(row.rolls) || 0
@@ -1138,8 +1303,14 @@ export default {
     },
     calcAmount(row) {
       const sqm = Number(this.calcSqm(row))
+      const rolls = Number(row.rolls) || 0
+      const len = Number(row.length) || 0
+      if (this.isFreightItem(row)) return (rolls * (Number(row.unitPrice) || 0)).toFixed(4)
+      const unitType = this.normalizePriceUnit(row && row.priceUnit)
       const unit = Number(row.unitPrice) || 0
-      return (sqm * unit).toFixed(2)
+      if (unitType === '卷') return (rolls * unit).toFixed(4)
+      if (unitType === 'm') return (rolls * len * unit).toFixed(4)
+      return (sqm * unit).toFixed(4)
     },
     async save() {
       if (this.isWarehouseReadonly) {
@@ -1154,11 +1325,12 @@ export default {
       payload.items = payload.items.map(x => ({
         ...x,
         materialName: null,
-        length: Number(x.length) || 0,
-        width: Number(x.width) || 0,
-        thickness: Number(x.thickness) || 0,
+        length: this.isFreightItem(x) ? null : (String(x.length || '').trim() === '' ? null : (Number(x.length) || 0)),
+        width: this.isFreightItem(x) ? null : (String(x.width || '').trim() === '' ? null : (Number(x.width) || 0)),
+        thickness: this.isFreightItem(x) ? null : (String(x.thickness || '').trim() === '' ? null : (Number(x.thickness) || 0)),
         rolls: Number(x.rolls) || 0,
-        unitPrice: Number(x.unitPrice) || 0,
+        priceUnit: this.isFreightItem(x) ? '卷' : this.normalizePriceUnit(x.priceUnit),
+        unitPrice: this.toPriceNumber(x.unitPrice),
         sqm: Number(this.calcSqm(x)),
         amount: Number(this.calcAmount(x))
       }))
@@ -1230,6 +1402,9 @@ export default {
 .spec-cell-scroll::-webkit-scrollbar { height: 6px; }
 .spec-edit-row { display:inline-flex; align-items:center; gap:4px; min-width:250px; white-space:nowrap; }
 .spec-input { width: 58px; min-width: 58px; }
+.material-suggestion-item { display:flex; justify-content:space-between; gap:10px; }
+.suggestion-code { color:#303133; font-weight:600; }
+.suggestion-name { color:#909399; }
 .returns-edit-table /deep/ .spec-input .el-input__inner {
   text-align: center;
   padding: 0 4px;

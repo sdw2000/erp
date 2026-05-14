@@ -57,6 +57,15 @@ export function getStockById(id) {
   })
 }
 
+// 库存盘点
+export function stocktakeTapeStock(id, data) {
+  return request({
+    url: `/api/tape-stock/${id}/stocktake`,
+    method: 'post',
+    data
+  })
+}
+
 // 导入Excel库存数据
 export function importStock(file) {
   const formData = new FormData()
@@ -170,6 +179,15 @@ export function cancelInbound(id) {
   })
 }
 
+// 采购收货标签打印前置（生成二维码与标签数据）
+export function preparePurchaseInboundLabel(id, data) {
+  return request({
+    url: `/api/tape-stock/inbound/${id}/purchase-label/prepare`,
+    method: 'post',
+    data
+  })
+}
+
 // 待审批入库数量
 export function countPendingInbound() {
   return request({
@@ -197,11 +215,29 @@ export function getOutboundList(params) {
   })
 }
 
+// 统一分页查询出库列表（胶带产品 + 原材料）
+export function getUnifiedOutboundList(params) {
+  return request({
+    url: '/api/tape-stock/outbound/unified-list',
+    method: 'get',
+    params
+  })
+}
+
 // 创建出库申请（手动选择批次）
 export function createOutboundRequest(data) {
   return request({
     url: '/api/tape-stock/outbound',
     method: 'post',
+    data
+  })
+}
+
+// 修改出库申请（仅待审批）
+export function updateOutboundRequest(id, data) {
+  return request({
+    url: `/api/tape-stock/outbound/${id}`,
+    method: 'put',
     data
   })
 }
@@ -255,6 +291,15 @@ export function countPendingOutbound() {
 export function getStockLogList(params) {
   return request({
     url: '/api/tape-stock/log/list',
+    method: 'get',
+    params
+  })
+}
+
+// 分页查询出库流水汇总（按关联单号+料号+批次聚合）
+export function getOutboundSummaryLogList(params) {
+  return request({
+    url: '/api/tape-stock/log/outbound-summary/list',
     method: 'get',
     params
   })

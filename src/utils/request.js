@@ -113,8 +113,11 @@ service.interceptors.response.use(
    * You can also judge the status by HTTP Status Code
    */
   response => {
-    // 如果是blob类型响应（文件下载），直接返回data
+    // 如果是blob类型响应（文件下载），默认返回data；可通过 returnRawResponse 获取完整响应(含headers)
     if (response.config.responseType === 'blob') {
+      if (response.config.returnRawResponse) {
+        return response
+      }
       return response.data
     }
 

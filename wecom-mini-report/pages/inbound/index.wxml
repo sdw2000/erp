@@ -1,0 +1,268 @@
+<view class="container">
+  <view wx:if="{{scene === 'purchaseInbound'}}" class="card">
+    <view class="title">{{scanCardTitle}}</view>
+    <view class="muted">数据来源：{{scanSourceText}}</view>
+    <view class="muted">扫码后自动带出入库详情，填写卡板位后确认入库</view>
+
+    <view class="label">扫码编码</view>
+    <view class="row row-middle">
+      <input class="input" value="{{scanCode}}" placeholder="请扫码或输入入库码/批次码" bindinput="onScanCodeInput" />
+      <button class="btn-secondary small" bindtap="onScanInboundCode">扫码</button>
+    </view>
+    <button class="btn-secondary" loading="{{scanLoading}}" bindtap="fetchInboundDetailByScanCode">获取详情</button>
+
+    <view wx:if="{{scanDetail}}" class="scan-detail">
+      <view class="detail-row"><text class="k">物料代码</text><text class="v">{{scanDetail.materialCode}}</text></view>
+      <view class="detail-row"><text class="k">物料名称</text><text class="v">{{scanDetail.materialName}}</text></view>
+      <view class="detail-row"><text class="k">物料规格</text><text class="v">{{scanDetail.specification}}</text></view>
+      <view class="detail-row"><text class="k">物料数量</text><text class="v">{{scanDetail.materialQty}}</text></view>
+      <view class="detail-row"><text class="k">供商代码</text><text class="v">{{scanDetail.supplierCode}}</text></view>
+      <view class="detail-row"><text class="k">生产日期</text><text class="v">{{scanDetail.productionDate}}</text></view>
+      <view class="detail-row"><text class="k">批次号</text><text class="v">{{scanDetail.batchNo}}</text></view>
+
+      <view class="label">卡板位</view>
+      <input class="input" value="{{palletLocation}}" placeholder="请输入卡板位" bindinput="onPalletLocationInput" />
+
+      <button class="btn-primary" loading="{{inboundSubmitting}}" bindtap="confirmScannedInbound">确定入库</button>
+    </view>
+  </view>
+
+  <block wx:elif="{{scene === 'coatingInbound'}}">
+    <view class="card">
+      <view class="title">步骤1：选择申请（或扫码入库码/批次码）</view>
+      <view class="row">
+        <input class="input" value="{{coatingKeyword}}" placeholder="输入/扫码入库码或批次码" bindinput="onCoatingKeywordInput" />
+        <button class="btn-secondary small" bindtap="onScanCoatingKeyword">扫码</button>
+      </view>
+      <button class="btn-secondary" loading="{{queryLoading}}" bindtap="queryCoatingInboundListByKeyword">查询申请</button>
+
+      <view class="row row-middle">
+        <view class="muted">数据来源：涂布入库申请（待审批）</view>
+        <button class="btn-secondary small" loading="{{queryLoading}}" bindtap="queryInboundList">刷新</button>
+      </view>
+
+      <view wx:if="{{inboundList.length === 0}}" class="muted mt8">暂无待入库涂布申请</view>
+      <block wx:for="{{inboundList}}" wx:key="id">
+        <view class="doc-row">
+          <view class="doc-main">
+            <view class="doc-no">{{item.requestNo}}</view>
+            <view class="muted">订单号：{{item.orderNo || '-'}}</view>
+            <view class="muted">料号：{{item.materialCode || '-'}}</view>
+            <view class="muted">品名：{{item.productName || '-'}}</view>
+            <view class="muted">批次：{{item.batchNo || '-'}}</view>
+            <view class="muted">数量：{{item.qtyText || '-'}}</view>
+            <view class="muted">状态：待审批</view>
+          </view>
+          <button
+            class="btn-secondary small"
+            data-id="{{item.id}}"
+            bindtap="onSelectCoatingRequest"
+          >{{selectedCoatingId === item.id ? '已选择' : '选择'}}</button>
+        </view>
+      </block>
+      <view wx:if="{{coatingLoadingMore}}" class="muted mt8">正在加载更多...</view>
+      <view wx:elif="{{!coatingHasMore && inboundList.length > 0}}" class="muted mt8">已加载全部</view>
+    </view>
+
+    <view class="card">
+      <view class="title">步骤2：扫码并保留列表</view>
+      <view class="muted">支持连续扫码/手输，多条保留后一次完成入库</view>
+      <view class="muted" wx:if="{{selectedCoatingRow}}">当前限定申请：{{selectedCoatingRow.requestNo}}</view>
+
+      <view class="grid">
+        <view class="cell">计划数量：{{coatingSummary.planQty || 0}}</view>
+        <view class="cell">已打印数量：{{coatingSummary.printedQty || 0}}</view>
+        <view class="cell">累计已入库：{{coatingSummary.scannedQty || 0}}</view>
+        <view class="cell">本次已扫码：{{coatingSummary.currentScanQty || 0}}</view>
+      </view>
+
+      <view class="label">扫码编码</view>
+      <view class="row row-middle">
+        <input class="input" value="{{coatingScanCode}}" placeholder="请扫码或输入入库码/批次码" bindinput="onCoatingScanCodeInput" />
+        <button class="btn-secondary small" bindtap="onAddCoatingManualCode">添加</button>
+      </view>
+
+      <view class="actions">
+        <button class="btn-primary big scan-inbound-btn" wx:if="{{!coatingScanMode}}" bindtap="onStartCoatingScan">扫码入库</button>
+        <button class="btn-danger big" wx:if="{{coatingScanMode}}" bindtap="onStopCoatingScan">停止扫码</button>
+      </view>
+
+      <view class="label">卡板位</view>
+      <view class="row row-middle">
+        <input class="input" value="{{coatingScanLocation}}" placeholder="请扫码或输入卡板位" bindinput="onCoatingScanLocationInput" />
+        <button class="btn-secondary small" bindtap="onScanCoatingLocation">扫码</button>
+      </view>
+
+      <view class="row row-actions-right">
+        <button class="btn-secondary small" bindtap="clearCoatingScanItems">清空</button>
+      </view>
+
+      <view wx:if="{{coatingScannedGrouped.length === 0}}" class="muted mt8">暂无扫码明细</view>
+      <block wx:for="{{coatingScannedGrouped}}" wx:key="id">
+        <view class="scan-item">
+          <view class="detail-row"><text class="k">申请单号</text><text class="v">{{item.requestNo || '-'}}</text></view>
+          <view class="detail-row"><text class="k">订单号</text><text class="v">{{item.orderInfo || '-'}}</text></view>
+          <view class="detail-row"><text class="k">料号</text><text class="v">{{item.materialCode || '-'}}</text></view>
+          <view class="detail-row"><text class="k">品名</text><text class="v">{{item.productName || '-'}}</text></view>
+          <view class="detail-row"><text class="k">批次</text><text class="v">{{item.batchNo || '-'}}</text></view>
+          <view class="detail-row"><text class="k">数量</text><text class="v">{{item.qtyText || '-'}}</text></view>
+          <view class="detail-row"><text class="k">扫码次数</text><text class="v">{{item.count || 0}}</text></view>
+          <view class="detail-row"><text class="k">最近扫码</text><text class="v">{{item.lastScanCode || '-'}}</text></view>
+          <button class="btn-danger mini" data-id="{{item.id}}" bindtap="removeCoatingScanItem">移除该申请（清空该申请全部扫码）</button>
+        </view>
+      </block>
+
+      <view class="items" wx:if="{{coatingScannedItems.length > 0}}">
+        <view class="label">已扫码编码明细（{{coatingScannedItems.length}}）</view>
+        <view class="code-list">
+          <block wx:for="{{coatingScannedItems}}" wx:key="scanCode">
+            <view class="tag">{{item.scanCode || '-'}}</view>
+          </block>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="title">步骤3：提交入库</view>
+      <button class="btn-primary" loading="{{coatingSubmitting}}" bindtap="submitCoatingScannedInbound">一键完成入库</button>
+    </view>
+  </block>
+
+  <block wx:else>
+    <view class="card">
+      <view class="row row-middle">
+        <view class="title">最近入库申请</view>
+        <view class="row row-actions">
+          <button class="btn-secondary small" loading="{{queryLoading}}" bindtap="queryInboundList">刷新</button>
+        </view>
+      </view>
+      <view class="muted">先选择历史记录复用，减少重复录入</view>
+
+      <button class="btn-primary" bindtap="openCreateForm">新建入库申请</button>
+
+      <view wx:if="{{inboundList.length === 0}}" class="muted">暂无记录</view>
+      <block wx:for="{{inboundList}}" wx:key="id">
+        <view class="item">
+          <view class="tag">{{item.requestNo}}</view>
+          <view class="muted">料号: {{item.materialCode}}</view>
+          <view class="muted">名称: {{item.productName}}</view>
+          <view class="muted">批次: {{item.batchNo}}</view>
+          <view class="muted">客户批次: {{item.customerBatchNo}}</view>
+          <view class="muted">规格: {{item.specDesc}}</view>
+          <view class="muted">数量: {{item.qtyText}}</view>
+          <view class="muted">库位: {{item.location}}</view>
+          <view class="muted">申请人: {{item.applicant}}</view>
+          <view class="muted">状态: {{item.status === 0 ? '待审批' : (item.status === 1 ? '已通过' : (item.status === 2 ? '已拒绝' : '已取消'))}}</view>
+          <button class="btn-secondary small" data-index="{{index}}" bindtap="useRecordAsTemplate">复制为新申请</button>
+
+          <view wx:if="{{item.status === 0}}" class="audit-box">
+            <view wx:if="{{item.needLocation}}">
+              <view class="label">卡板位（必填）</view>
+              <view class="row row-middle">
+                <input class="input" value="{{auditLocationMap[item.id] || ''}}" data-id="{{item.id}}" placeholder="请扫码或输入卡板位" bindinput="onAuditLocationInput" />
+                <button class="btn-secondary small" data-id="{{item.id}}" bindtap="onScanAuditLocation">扫码</button>
+              </view>
+            </view>
+            <view class="label">母卷号（可选校验）</view>
+            <view class="row row-middle">
+              <input class="input" value="{{auditRollCodeMap[item.id] || ''}}" data-id="{{item.id}}" placeholder="请扫码母卷号（可选）" bindinput="onAuditRollCodeInput" />
+              <button class="btn-secondary small" data-id="{{item.id}}" bindtap="onScanAuditRollCode">扫码</button>
+            </view>
+            <view class="row" wx:if="{{canWarehouse}}">
+              <button class="btn-primary small" data-id="{{item.id}}" bindtap="approveRecord">通过</button>
+              <button class="btn-secondary small" data-id="{{item.id}}" bindtap="rejectRecord">拒绝</button>
+              <button class="btn-danger mini" data-id="{{item.id}}" bindtap="cancelRecord">取消</button>
+            </view>
+            <view wx:else class="muted">待仓库或管理员审批</view>
+          </view>
+        </view>
+      </block>
+    </view>
+
+    <view class="card" wx:if="{{showForm}}">
+      <view class="row row-middle">
+        <view class="title">{{pageTitle}}</view>
+        <button class="btn-secondary small" bindtap="closeCreateForm">收起表单</button>
+      </view>
+      <view class="muted">用于提交入库申请（支持扫码带出基础信息）</view>
+
+      <view class="label">二维码编码（扫码或手输）</view>
+      <input class="input" value="{{qrCode}}" placeholder="用于快速带出料号/批次" bindinput="onQrCodeInput" />
+
+      <view class="row mt8">
+        <button class="btn-secondary" bindtap="onScanQrCode">扫码二维码</button>
+        <button class="btn-secondary" loading="{{queryLoading}}" bindtap="fillByQrCode">按二维码带出</button>
+      </view>
+
+      <view class="row">
+        <view>
+          <view class="label">料号 materialCode</view>
+          <input class="input" value="{{materialCode}}" bindinput="onMaterialCodeInput" />
+        </view>
+        <view>
+          <view class="label">品名 productName</view>
+          <input class="input" value="{{productName}}" bindinput="onProductNameInput" />
+        </view>
+      </view>
+
+      <view class="row">
+        <view>
+          <view class="label">批次号 batchNo</view>
+          <input class="input" value="{{batchNo}}" bindinput="onBatchNoInput" />
+        </view>
+        <view>
+          <view class="label">客户批次号 customerBatchNo</view>
+          <input class="input" value="{{customerBatchNo}}" bindinput="onCustomerBatchNoInput" />
+        </view>
+      </view>
+
+      <view class="row">
+        <view>
+          <view class="label">数量 rolls</view>
+          <input class="input" value="{{rolls}}" type="number" bindinput="onRollsInput" />
+        </view>
+      </view>
+
+      <view class="row">
+        <view>
+          <view class="label">单位 qtyUnit</view>
+          <input class="input" value="{{qtyUnit}}" bindinput="onQtyUnitInput" />
+        </view>
+        <view>
+          <view class="label">库位 location</view>
+          <input class="input" value="{{location}}" bindinput="onLocationInput" />
+        </view>
+      </view>
+
+      <view class="row">
+        <view>
+          <view class="label">厚度 thickness(μm)</view>
+          <input class="input" value="{{thickness}}" type="number" bindinput="onThicknessInput" />
+        </view>
+        <view>
+          <view class="label">宽度 width(mm)</view>
+          <input class="input" value="{{width}}" type="number" bindinput="onWidthInput" />
+        </view>
+      </view>
+
+      <view class="label">长度 length(m)</view>
+      <input class="input" value="{{length}}" type="number" bindinput="onLengthInput" />
+
+      <view class="row">
+        <view>
+          <view class="label">申请人 applicant</view>
+          <input class="input" value="{{applicant}}" bindinput="onApplicantInput" />
+        </view>
+        <view>
+          <view class="label">申请部门 applyDept</view>
+          <input class="input" value="{{applyDept}}" bindinput="onApplyDeptInput" />
+        </view>
+      </view>
+
+      <view class="label">备注 remark</view>
+      <input class="input" value="{{remark}}" bindinput="onRemarkInput" />
+
+      <button class="btn-primary" loading="{{submitting}}" bindtap="submitInbound">提交入库申请</button>
+    </view>
+  </block>
+</view>

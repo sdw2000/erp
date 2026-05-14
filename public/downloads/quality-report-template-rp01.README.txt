@@ -1,0 +1,96 @@
+RP01 出货检测 Excel 模板说明
+
+当前推荐文件（按项目命名占位符）：quality-report-template-rp01.full.xlsx
+
+模板文件名（固定）：quality-report-template-rp01.xlsx
+推荐模板文件名：quality-report-template-rp01.full.xlsx
+放置目录：ERP/public/downloads/
+访问路径：/downloads/quality-report-template-rp01.xlsx
+推荐访问路径：/downloads/quality-report-template-rp01.full.xlsx
+
+系统会在打印时读取模板，并替换占位符 ${...}。
+建议：仅在“值单元格”放占位符，版式不要改。
+
+一、基础字段占位符
+${templateCode}
+${formNo}
+${customerCode}
+${customerName}
+${inspectionNo}
+${sourceOrderNo}
+${batchNo}
+${rollCode}
+${materialCode}
+${materialName}
+${specification}
+${inspectionEnvironment}
+${netWeight}
+${sampleQty}
+${inspectorName}
+${reviewerName}
+${signDate}
+${inspectionTime}
+${overallResult}
+${passCount}
+${failCount}
+${pendingCount}
+${totalCount}
+${printDate}
+
+常用语义别名（与上面字段等价）：
+${productName} = ${materialName}
+${productCode} = ${materialCode}
+${orderNo} = ${sourceOrderNo}
+${lotNo} = ${batchNo}
+${qtyRoll} = ${sampleQty}
+${resultText} = ${overallResult}
+
+公司信息占位符：
+${companyName}
+${companyAddress}
+${companyPhone}
+${companyFax}
+${companyWebsite}
+
+二、检测明细占位符（按行）
+第1行项目：
+${item1_label} ${item1_rule} ${item1_actual1} ${item1_actual2} ${item1_actual3} ${item1_actual4} ${item1_actual5} ${item1_status} ${item1_message}
+
+第2行项目：
+${item2_label} ${item2_rule} ... ${item2_message}
+
+依此类推：item3、item4 ...
+
+每行语义别名（以第1行为例）：
+${item1_name} = ${item1_label}
+${item1_standard} = ${item1_rule}
+${item1_result} = ${item1_status}
+${item1_remark} = ${item1_message}
+${item1_actual_all} = 实测值拼接文本
+
+按“检测项目命名”的占位符（推荐，降低模板填错概率）：
+格式：${项目key_字段名}
+示例（系统内置项目key）：
+${totalThickness_actual1} ${totalThickness_actual2} ... ${totalThickness_result}
+${initialTack_actual1} ... ${initialTack_result}
+${peelStrength_actual1} ... ${peelStrength_result}
+${unwindForce_actual1} ... ${unwindForce_result}
+${heatResistance_actual1} ... ${heatResistance_result}
+${extraQcItem1_actual1} ... ${extraQcItem1_result}
+
+可用字段名：
+label / rule / standard / actual1..actual6 / status / result / message / remark / actual_all
+
+当前 full 模板已完成对应（含A区+签名区+B区项目行）：
+- A区：${formNo} ${materialName} ${materialCode} ${specification} ${netWeight} ${inspectionEnvironment} ${batchNo} ${sampleQty}
+- 签名区：${inspectorName} ${reviewerName} ${signDate}
+- B区：按项目名占位符（如 ${color_actual1}、${totalThickness_actual1}、${peelStrength_result} 等）
+
+三、绑定规则（已支持）
+customerCode=RP01
+inspectionType=outbound
+templateCode=OUTBOUND_RP01
+
+四、行为
+- 若模板文件存在且可读取：优先生成 Excel 报告下载。
+- 若模板不存在或读取失败：自动回退到原网页打印，不影响业务。

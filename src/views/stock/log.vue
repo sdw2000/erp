@@ -16,6 +16,9 @@
         <el-form-item label="批次号">
           <el-input v-model="searchForm.batchNo" placeholder="请输入批次号" clearable />
         </el-form-item>
+        <el-form-item label="出库汇总">
+          <el-switch v-model="outboundSummary" active-text="开启" inactive-text="关闭" />
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="el-icon-search" @click="handleSearch">查询</el-button>
           <el-button icon="el-icon-refresh" @click="handleReset">重置</el-button>
@@ -66,7 +69,7 @@
 </template>
 
 <script>
-import { getStockLogList, getExportLogUrl } from '@/api/tapeStock'
+import { getStockLogList, getOutboundSummaryLogList, getExportLogUrl } from '@/api/tapeStock'
 import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
 export default {
@@ -82,7 +85,8 @@ export default {
       },
       list: [],
       loading: false,
-      pagination: { page: 1, size: 20, total: 0 }
+      pagination: { page: 1, size: 20, total: 0 },
+      outboundSummary: true
     }
   },
   created() {
@@ -92,7 +96,9 @@ export default {
       this.loading = true
       try {
         const params = { page: this.pagination.page, size: this.pagination.size, ...this.searchForm }
-        const res = await getStockLogList(params)
+        const useOutboundSummary = this.outboundSummary && String(this.searchForm.type || '').toUpperCase() === 'OUT'
+        const requestFn = useOutboundSummary ? getOutboundSummaryLogList : getStockLogList
+        const res = await requestFn(params)
         if (res.code === 20000) {
           this.list = res.data.records
           this.pagination.total = Number(res.data.total) || 0
@@ -110,6 +116,7 @@ export default {
     },
     handleReset() {
       this.searchForm = { type: '', materialCode: '', batchNo: '' }
+      this.outboundSummary = true
       this.handleSearch()
     },
     handleSizeChange(size) {

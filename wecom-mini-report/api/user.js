@@ -4,7 +4,8 @@ function login(data) {
   return request({
     url: '/user/login',
     method: 'POST',
-    data
+    data,
+    withToken: false
   })
 }
 

@@ -38,6 +38,9 @@
         <el-form-item label="客户宽度(mm)">
           <el-input-number v-model="query.customerWidth" :min="0" :precision="2" :controls="false" style="width: 140px" />
         </el-form-item>
+        <el-form-item label="宽度公差(mm)">
+          <el-input-number v-model="query.widthTolerance" :min="0" :precision="3" :controls="false" style="width: 140px" />
+        </el-form-item>
         <el-form-item label="客户长度(m)">
           <el-input-number v-model="query.customerLength" :min="0" :precision="2" :controls="false" style="width: 140px" />
         </el-form-item>
@@ -61,6 +64,7 @@
         <el-table-column prop="length" label="长度(m)" width="100" align="right" />
         <el-table-column prop="customerThickness" label="客户厚度(μm)" width="130" align="right" />
         <el-table-column prop="customerWidth" label="客户宽度(mm)" width="130" align="right" />
+        <el-table-column prop="widthTolerance" label="宽度公差(mm)" width="130" align="right" />
         <el-table-column prop="customerLength" label="客户长度(m)" width="130" align="right" />
         <el-table-column prop="customerMaterialCode" label="客户料号" min-width="170" />
         <el-table-column prop="customerMaterialName" label="客户物料名称" min-width="180" show-overflow-tooltip />
@@ -151,17 +155,22 @@
           </el-col>
         </el-row>
         <el-row :gutter="12">
-          <el-col :span="8">
+          <el-col :span="6">
             <el-form-item label="客户厚度(μm)">
               <el-input-number v-model="form.customerThickness" :min="0" :precision="3" :controls="false" style="width:100%" @change="onCustomerSpecChange('customerThickness')" />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="6">
             <el-form-item label="客户宽度(mm)">
               <el-input-number v-model="form.customerWidth" :min="0" :precision="2" :controls="false" style="width:100%" @change="onCustomerSpecChange('customerWidth')" />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="6">
+            <el-form-item label="宽度公差(mm)">
+              <el-input-number v-model="form.widthTolerance" :min="0" :precision="3" :controls="false" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
             <el-form-item label="客户长度(m)">
               <el-input-number v-model="form.customerLength" :min="0" :precision="2" :controls="false" style="width:100%" @change="onCustomerSpecChange('customerLength')" />
             </el-form-item>
@@ -214,6 +223,7 @@ function defaultForm() {
     length: null,
     customerThickness: null,
     customerWidth: null,
+    widthTolerance: null,
     customerLength: null,
     customerMaterialCode: '',
     customerMaterialName: '',
@@ -248,6 +258,7 @@ export default {
         length: null,
         customerThickness: null,
         customerWidth: null,
+        widthTolerance: null,
         customerLength: null,
         isActive: null
       },
@@ -455,6 +466,7 @@ export default {
           length: this.query.length || undefined,
           customerThickness: this.query.customerThickness || undefined,
           customerWidth: this.query.customerWidth || undefined,
+          widthTolerance: this.query.widthTolerance || undefined,
           customerLength: this.query.customerLength || undefined,
           isActive: this.query.isActive == null ? undefined : this.query.isActive
         }
@@ -484,6 +496,7 @@ export default {
         length: null,
         customerThickness: null,
         customerWidth: null,
+        widthTolerance: null,
         customerLength: null,
         isActive: null
       }
@@ -529,6 +542,7 @@ export default {
             materialCode: String(this.form.materialCode || '').trim(),
             customerThickness: Number.isFinite(customerThicknessNum) && customerThicknessNum > 0 ? customerThicknessNum : null,
             customerWidth: Number.isFinite(customerWidthNum) && customerWidthNum > 0 ? customerWidthNum : null,
+            widthTolerance: Number.isFinite(Number(this.form.widthTolerance)) && Number(this.form.widthTolerance) >= 0 ? Number(this.form.widthTolerance) : null,
             customerLength: Number.isFinite(customerLengthNum) && customerLengthNum > 0 ? customerLengthNum : null,
             customerMaterialCode: String(this.form.customerMaterialCode || '').trim() || null,
             customerMaterialName: String(this.form.customerMaterialName || '').trim() || null,
@@ -661,7 +675,7 @@ export default {
         return
       }
       const list = Array.isArray(res.data) ? res.data : []
-      const lines = ['customerCode,materialCode,thickness,width,length,customerThickness,customerWidth,customerLength,customerMaterialCode,customerMaterialName,customerSpec,isActive,remark']
+      const lines = ['customerCode,materialCode,thickness,width,length,customerThickness,customerWidth,widthTolerance,customerLength,customerMaterialCode,customerMaterialName,customerSpec,isActive,remark']
       list.forEach(item => {
         lines.push([
           this.escapeCsvCell(item.customerCode),
@@ -671,6 +685,7 @@ export default {
           this.escapeCsvCell(item.length),
           this.escapeCsvCell(item.customerThickness),
           this.escapeCsvCell(item.customerWidth),
+          this.escapeCsvCell(item.widthTolerance),
           this.escapeCsvCell(item.customerLength),
           this.escapeCsvCell(item.customerMaterialCode),
           this.escapeCsvCell(item.customerMaterialName),

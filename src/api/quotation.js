@@ -55,6 +55,16 @@ export function updateQuotation(data) {
   })
 }
 
+/**
+ * 重报报价单（复制为新报价）
+ */
+export function requoteQuotation(quotationId) {
+  return request({
+    url: `/quotation/requote/${quotationId}`,
+    method: 'post'
+  })
+}
+
 export function getQuotationVersionHistory(data) {
   return request({
     url: '/quotation/item-versions',

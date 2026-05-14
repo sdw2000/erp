@@ -4,6 +4,8 @@
       <div slot="header" class="card-header">
         <span>日排程看板</span>
         <div class="header-actions">
+          <el-tag size="small" type="info">选中卷数：{{ selectedTotalRolls }}</el-tag>
+          <el-tag size="small" type="warning">选中平米：{{ formatArea(selectedTotalArea) }}㎡</el-tag>
           <el-date-picker
             v-model="selectedDate"
             type="date"
@@ -20,77 +22,95 @@
 
       <el-tabs v-model="activeStage" type="border-card" class="print-section">
         <el-tab-pane label="涂布" name="COATING">
-          <el-table :data="planByStage.COATING" border stripe>
-            <el-table-column prop="plan_date" label="计划时间" width="160">
+          <el-table class="plan-stage-table" :data="planByStage.COATING" border stripe size="small" @selection-change="handleStageSelectionChange('COATING', $event)">
+            <el-table-column type="selection" width="44" align="center" />
+            <el-table-column prop="plan_date" label="计划时间" width="116" class-name="col-plan-time" header-class-name="col-plan-time">
               <template slot-scope="scope">
                 {{ formatDateTime(scope.row.plan_date) }}
               </template>
             </el-table-column>
             <el-table-column prop="equipment" label="机台" width="120" />
-            <el-table-column prop="order_no" label="订单号" width="140" />
-            <el-table-column prop="material_code" label="产品编码" width="160" />
-            <el-table-column label="规格" width="160">
+            <el-table-column prop="order_no" label="订单号" width="76" class-name="col-order-no" header-class-name="col-order-no" show-overflow-tooltip />
+            <el-table-column prop="material_code" label="产品编码" width="150" show-overflow-tooltip />
+            <el-table-column label="规格" width="150" show-overflow-tooltip>
               <template slot-scope="scope">
                 {{ formatSpec(scope.row) }}
               </template>
             </el-table-column>
-            <el-table-column prop="material_name" label="产品名称" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="plan_area" label="计划面积(㎡)" width="120" align="right">
+            <el-table-column prop="material_name" label="产品名称" min-width="130" show-overflow-tooltip />
+            <el-table-column prop="plan_area" label="计划面积(㎡)" width="106" align="right">
               <template slot-scope="scope">
                 {{ formatArea(scope.row.plan_area) }}
               </template>
             </el-table-column>
-            <el-table-column prop="status" label="状态" width="100" />
+            <el-table-column prop="remark" label="备注" min-width="170" class-name="col-remark" header-class-name="col-remark">
+              <template slot-scope="scope">
+                <div class="remark-text">{{ scope.row.remark || '-' }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="90" />
           </el-table>
         </el-tab-pane>
 
         <el-tab-pane label="复卷" name="REWINDING">
-          <el-table :data="planByStage.REWINDING" border stripe>
-            <el-table-column prop="plan_date" label="计划时间" width="160">
+          <el-table class="plan-stage-table" :data="planByStage.REWINDING" border stripe size="small" @selection-change="handleStageSelectionChange('REWINDING', $event)">
+            <el-table-column type="selection" width="44" align="center" />
+            <el-table-column prop="plan_date" label="计划时间" width="116" class-name="col-plan-time" header-class-name="col-plan-time">
               <template slot-scope="scope">
                 {{ formatDateTime(scope.row.plan_date) }}
               </template>
             </el-table-column>
             <el-table-column prop="equipment" label="机台" width="120" />
-            <el-table-column prop="order_no" label="订单号" width="140" />
-            <el-table-column prop="material_code" label="产品编码" width="160" />
-            <el-table-column label="规格" width="160">
+            <el-table-column prop="order_no" label="订单号" width="76" class-name="col-order-no" header-class-name="col-order-no" show-overflow-tooltip />
+            <el-table-column prop="material_code" label="产品编码" width="150" show-overflow-tooltip />
+            <el-table-column label="规格" width="150" show-overflow-tooltip>
               <template slot-scope="scope">
                 {{ formatSpec(scope.row) }}
               </template>
             </el-table-column>
-            <el-table-column prop="material_name" label="产品名称" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="plan_area" label="计划面积(㎡)" width="120" align="right">
+            <el-table-column prop="material_name" label="产品名称" min-width="130" show-overflow-tooltip />
+            <el-table-column prop="plan_area" label="计划面积(㎡)" width="106" align="right">
               <template slot-scope="scope">
                 {{ formatArea(scope.row.plan_area) }}
               </template>
             </el-table-column>
-            <el-table-column prop="status" label="状态" width="100" />
+            <el-table-column prop="remark" label="备注" min-width="170" class-name="col-remark" header-class-name="col-remark">
+              <template slot-scope="scope">
+                <div class="remark-text">{{ scope.row.remark || '-' }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="90" />
           </el-table>
         </el-tab-pane>
 
         <el-tab-pane label="分切" name="SLITTING">
-          <el-table :data="planByStage.SLITTING" border stripe>
-            <el-table-column prop="plan_date" label="计划时间" width="160">
+          <el-table class="plan-stage-table" :data="planByStage.SLITTING" border stripe size="small" @selection-change="handleStageSelectionChange('SLITTING', $event)">
+            <el-table-column type="selection" width="44" align="center" />
+            <el-table-column prop="plan_date" label="计划时间" width="116" class-name="col-plan-time" header-class-name="col-plan-time">
               <template slot-scope="scope">
                 {{ formatDateTime(scope.row.plan_date) }}
               </template>
             </el-table-column>
             <el-table-column prop="equipment" label="机台" width="120" />
-            <el-table-column prop="order_no" label="订单号" width="140" />
-            <el-table-column prop="material_code" label="产品编码" width="160" />
-            <el-table-column label="规格" width="160">
+            <el-table-column prop="order_no" label="订单号" width="76" class-name="col-order-no" header-class-name="col-order-no" show-overflow-tooltip />
+            <el-table-column prop="material_code" label="产品编码" width="150" show-overflow-tooltip />
+            <el-table-column label="规格" width="150" show-overflow-tooltip>
               <template slot-scope="scope">
                 {{ formatSpec(scope.row) }}
               </template>
             </el-table-column>
-            <el-table-column prop="material_name" label="产品名称" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="plan_area" label="计划面积(㎡)" width="120" align="right">
+            <el-table-column prop="material_name" label="产品名称" min-width="130" show-overflow-tooltip />
+            <el-table-column prop="plan_area" label="计划面积(㎡)" width="106" align="right">
               <template slot-scope="scope">
                 {{ formatArea(scope.row.plan_area) }}
               </template>
             </el-table-column>
-            <el-table-column prop="status" label="状态" width="100" />
+            <el-table-column prop="remark" label="备注" min-width="170" class-name="col-remark" header-class-name="col-remark">
+              <template slot-scope="scope">
+                <div class="remark-text">{{ scope.row.remark || '-' }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="90" />
           </el-table>
         </el-tab-pane>
       </el-tabs>
@@ -207,6 +227,18 @@ import { getSpecByMaterialCode } from '@/api/tapeSpec'
 
 export default {
   name: 'SchedulePlanBoard',
+  computed: {
+    selectedRows() {
+      const map = this.selectedRowsByStage || {}
+      return map[this.activeStage] || []
+    },
+    selectedTotalRolls() {
+      return this.selectedRows.reduce((sum, row) => sum + this.getRowRolls(row), 0)
+    },
+    selectedTotalArea() {
+      return this.selectedRows.reduce((sum, row) => sum + this.getRowArea(row), 0)
+    }
+  },
   data() {
     return {
       selectedDate: '',
@@ -214,6 +246,11 @@ export default {
       planList: [],
       materialNameByCodeCache: {},
       planByStage: {
+        COATING: [],
+        REWINDING: [],
+        SLITTING: []
+      },
+      selectedRowsByStage: {
         COATING: [],
         REWINDING: [],
         SLITTING: []
@@ -249,6 +286,28 @@ export default {
     this.loadRelationList()
   },
   methods: {
+    handleStageSelectionChange(stage, rows) {
+      this.$set(this.selectedRowsByStage, stage, Array.isArray(rows) ? rows : [])
+    },
+    getRowRolls(row) {
+      const value = Number(
+        (row && (row.plan_rolls || row.planned_rolls || row.schedule_qty || row.rolls || row.quantity)) || 0
+      )
+      return Number.isFinite(value) ? value : 0
+    },
+    getRowArea(row) {
+      const area = Number((row && (row.plan_area || row.planned_area || row.area)) || 0)
+      if (Number.isFinite(area) && area > 0) {
+        return area
+      }
+      const width = Number(row && row.width)
+      const length = Number(row && row.length)
+      const rolls = this.getRowRolls(row)
+      if (width > 0 && length > 0 && rolls > 0) {
+        return (width / 1000) * length * rolls
+      }
+      return 0
+    },
     normalizeMaterialCode(code) {
       return String(code || '').replace(/\s+/g, '').trim().toUpperCase()
     },
@@ -413,6 +472,19 @@ export default {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
+}
+
+.plan-stage-table /deep/ .el-table__cell {
+  padding: 6px 0;
+}
+
+.remark-text {
+  white-space: normal;
+  line-height: 1.35;
+  max-height: 38px;
+  overflow: hidden;
+  word-break: break-all;
 }
 
 @media print {
@@ -421,6 +493,46 @@ export default {
   .el-tabs__header {
     display: none !important;
   }
+
+  .app-container /deep/ .el-card {
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .plan-stage-table /deep/ .el-table__header-wrapper th:first-child,
+  .plan-stage-table /deep/ .el-table__body-wrapper td:first-child {
+    display: none !important;
+  }
+
+  .plan-stage-table /deep/ .el-table__cell {
+    font-size: 11px !important;
+    padding: 3px 0 !important;
+  }
+
+  .plan-stage-table /deep/ .col-plan-time,
+  .plan-stage-table /deep/ .col-plan-time .cell {
+    width: 92px !important;
+    min-width: 92px !important;
+  }
+
+  .plan-stage-table /deep/ .col-order-no,
+  .plan-stage-table /deep/ .col-order-no .cell {
+    width: 64px !important;
+    min-width: 64px !important;
+  }
+
+  .plan-stage-table /deep/ .col-remark .cell {
+    white-space: normal !important;
+    line-height: 1.25 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .remark-text {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
   .print-section {
     margin-top: 0 !important;
   }

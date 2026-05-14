@@ -19,6 +19,7 @@ import router from './router'
 import './icons' // icon
 import './permission' // permission control
 import './utils/error-log' // error log
+import * as shanghaiTime from '@/utils/time'
 
 import * as filters from './filters' // global filters
 import permissionMixin from './mixins/permission' // 权限检查混入
@@ -56,6 +57,9 @@ Object.keys(filters).forEach(key => {
   Vue.filter(key, filters[key])
 })
 
+// 全局时间工具（强制上海时区）
+Vue.prototype.$time = shanghaiTime
+
 // 全局注册权限检查混入
 Vue.mixin(permissionMixin)
 // 全局注册 el-table 自动重排（统一修复表头/表体错位）
@@ -79,12 +83,14 @@ window.addEventListener('unhandledrejection', ignoreResizeObserverErr)
 
 // 全局搜索体验：表头搜索框支持回车触发搜索（等效点击搜索按钮）
 const SEARCH_CONTAINER_SELECTORS = [
+  '.search-form',
   '.search-area',
   '.filter-container',
   '.query-bar',
   '.search-bar',
   '.table-search',
-  '.toolbar'
+  '.toolbar',
+  '.header-left'
 ]
 
 const SEARCH_BUTTON_TEXT_REGEXP = /(搜索|查询|筛选)/

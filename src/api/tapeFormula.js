@@ -55,6 +55,14 @@ export function deleteFormula(id) {
   })
 }
 
+// 一次性重编历史流水号
+export function resequenceFormula() {
+  return request({
+    url: '/api/tape-formula/resequence',
+    method: 'post'
+  })
+}
+
 // 导出配方Excel
 export function exportFormula(id) {
   return request({

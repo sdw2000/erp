@@ -67,12 +67,13 @@
         <el-table-column label="修改时间" width="136">
           <template slot-scope="scope">{{ formatDateTimeShort(scope.row.updatedAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="210">
+        <el-table-column label="操作" width="260">
           <template slot-scope="scope">
             <div class="quotation-op-btns">
               <el-button size="mini" @click="viewDetail(scope.row)">详情</el-button>
               <el-button size="mini" type="success" @click="printQuotation(scope.row)">打印</el-button>
               <el-button size="mini" type="primary" @click="openEdit(scope.row)">编辑</el-button>
+              <el-button size="mini" type="warning" @click="handleReQuote(scope.row)">重报</el-button>
               <el-button size="mini" type="danger" @click="confirmDelete(scope.row)">删除</el-button>
             </div>
           </template>
@@ -544,7 +545,7 @@
 
 <script>
 import request from '@/utils/request'
-import { createQuotation, deleteQuotation, getQuotationDetail, getQuotationPage, getQuotationVersionHistory, importQuotation, updateQuotation } from '@/api/quotation'
+import { createQuotation, deleteQuotation, getQuotationDetail, getQuotationPage, getQuotationVersionHistory, importQuotation, requoteQuotation, updateQuotation } from '@/api/quotation'
 import { getSampleDetail, getSampleList } from '@/api/sample'
 import { getAllEnabledSpecs, getSpecByMaterialCode } from '@/api/tapeSpec'
 import { getCustomerList, getContactsByCustomerId } from '@/api/customer'
@@ -1777,6 +1778,31 @@ export default {
         })
       }).catch(() => {
         this.$message.info('已取消删除')
+      })
+    },
+    handleReQuote(row) {
+      if (!row || !row.id) return
+      this.$confirm(`确认基于【${row.quotationNo || row.id}】创建新报价吗？系统将复制明细并生成新单号。`, '重报确认', {
+        confirmButtonText: '确认重报',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(async() => {
+        const res = await requoteQuotation(row.id)
+        if (res && res.code === 200) {
+          const newQuotation = res.data || {}
+          this.$message.success('重报成功，已生成新报价单')
+          await this.fetchQuotations()
+          if (newQuotation.id) {
+            const target = (this.quotations || []).find(item => item.id === newQuotation.id)
+            if (target) {
+              this.openEdit(target)
+            }
+          }
+        } else {
+          this.$message.error((res && res.msg) || '重报失败')
+        }
+      }).catch(() => {
+        this.$message.info('已取消重报')
       })
     },
     getStatusType(status) {

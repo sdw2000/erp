@@ -194,15 +194,16 @@ export default {
     async handleSave() {
       this.saving = true
       try {
+        const config = this.globalConfig || {}
         const payload = (this.tableData || []).map(row => ({
           id: row.id || null,
           equipmentId: row.equipmentId,
           equipmentCode: row.equipmentCode,
-          initialScheduleTime: row.initialScheduleTime || null,
-          cycleEndTime: row.cycleEndTime || null,
-          nextWeekStartTime: row.nextWeekStartTime || '08:00:00',
+          initialScheduleTime: config.initialScheduleTime || null,
+          cycleEndTime: config.cycleEndTime || null,
+          nextWeekStartTime: config.nextWeekStartTime || '08:00:00',
           weekendRest: 0,
-          sundayDisabled: Number(row.sundayDisabled == null ? 1 : row.sundayDisabled),
+          sundayDisabled: Number(config.sundayDisabled == null ? 1 : config.sundayDisabled),
           enabled: Number(row.enabled == null ? 1 : row.enabled),
           minStaffRequired: Number(row.minStaffRequired == null ? 1 : row.minStaffRequired),
           requiredSkillLevel: row.requiredSkillLevel || null,

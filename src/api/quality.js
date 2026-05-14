@@ -68,6 +68,15 @@ export function listOutboundInspections(params) {
   return request({ url: '/api/quality/outbound', method: 'get', params })
 }
 
+// 按料号获取QC检测项目（material_qc_rule）
+export function getQcItemsByMaterialCode(materialCode) {
+  return request({
+    url: '/api/quality/qc-items',
+    method: 'get',
+    params: { materialCode }
+  })
+}
+
 export function createIncomingInspection(data) {
   return request({ url: '/api/quality/incoming', method: 'post', data })
 }
@@ -134,6 +143,24 @@ export function approveDisposition(id, status, remark) {
 
 export function getQualitySummary() {
   return request({ url: '/api/quality/report/summary', method: 'get' })
+}
+
+// ========== 检测报告模板规则（按客户） ==========
+
+export function getQualityReportTemplateRule(params) {
+  return request({ url: '/api/quality/report-template/get', method: 'get', params })
+}
+
+export function saveQualityReportTemplateRule(data) {
+  return request({ url: '/api/quality/report-template/save', method: 'post', data })
+}
+
+export function pageQualityReportTemplateRule(params) {
+  return request({ url: '/api/quality/report-template/page', method: 'get', params })
+}
+
+export function deleteQualityReportTemplateRule(params) {
+  return request({ url: '/api/quality/report-template/delete', method: 'delete', params })
 }
 
 // ========== 检验统计接口 ==========

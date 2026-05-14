@@ -265,6 +265,17 @@ export function getReportWorkList(params) {
 }
 
 /**
+ * 查询单条工序报工完整详情
+ */
+export function getReportWorkDetail(params) {
+  return request({
+    url: '/schedule/manual/report-work/detail',
+    method: 'get',
+    params
+  })
+}
+
+/**
  * 更新工序报工记录
  */
 export function updateReportWork(data) {
@@ -316,6 +327,17 @@ export function issueProcessMaterial(data) {
     url: '/schedule/manual/report-work/material-issue',
     method: 'post',
     data
+  })
+}
+
+/**
+ * 查询工序领料BOM模板（自动带出）
+ */
+export function getProcessMaterialIssueTemplate(params) {
+  return request({
+    url: '/schedule/manual/report-work/material-issue-template',
+    method: 'get',
+    params
   })
 }
 

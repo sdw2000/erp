@@ -1,0 +1,22 @@
+<view class="container">
+  <view class="card" wx:if="{{canWarehouse}}">
+    <view class="title">仓库模块</view>
+    <view class="muted">按原有接口提供不同业务入口</view>
+    <button class="btn-primary" bindtap="goPurchaseScanInbound">采购扫码入库</button>
+    <button class="btn-secondary" bindtap="goCoatingInbound">涂布入库</button>
+    <button class="btn-secondary" bindtap="goPackagingReturnInbound">包装车间退仓</button>
+    <button class="btn-secondary" bindtap="goCoatingIssue">涂布领料</button>
+    <button class="btn-secondary" bindtap="goPackagingIssue">包装领料</button>
+    <button class="btn-secondary" bindtap="goSalesOutbound">销售出库</button>
+
+    <view class="muted" style="margin-top: 16rpx;">通用入口</view>
+    <button class="btn-secondary" bindtap="goOutbound">成品出库（通用）</button>
+    <button class="btn-secondary" bindtap="goInbound">完工入库（通用）</button>
+    <button class="btn-secondary" bindtap="goStocktake">扫码盘点</button>
+  </view>
+
+  <view class="card" wx:else>
+    <view class="title">仓库模块</view>
+    <view class="muted">当前账号无仓库权限</view>
+  </view>
+</view>

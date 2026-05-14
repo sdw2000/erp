@@ -1,0 +1,263 @@
+<view class="container home-bg">
+  <view class="hero">
+    <view class="hero-title">胶带工具箱</view>
+    <view class="hero-sub">MES 快捷计算 · 现场即算即用</view>
+    <view class="hero-user" wx:if="{{userName}}">当前用户：{{userName}}</view>
+    <view class="quick-nav">
+      <button class="btn-ghost" bindtap="goReport">生产报工</button>
+      <button class="btn-ghost" bindtap="goWarehouse">仓库</button>
+      <button class="btn-ghost" bindtap="goSales">销售</button>
+    </view>
+    <button class="btn-danger" bindtap="logout">退出登录</button>
+  </view>
+
+  <view class="card tool-card">
+    <view class="tool-head">
+      <view class="tool-title">工具1：直径/长度换算</view>
+      <view class="tool-tip">均匀卷绕模型</view>
+    </view>
+    <view class="field-grid two">
+      <view class="field-item">
+        <view class="label">厚度(μm)</view>
+        <input class="input" value="{{t1ThicknessUm}}" data-key="t1ThicknessUm" bindinput="onInput" type="digit" placeholder="例如 48" />
+      </view>
+      <view class="field-item">
+        <view class="label">纸管径(mm)</view>
+        <input class="input" value="{{t1CoreMm}}" data-key="t1CoreMm" bindinput="onInput" type="digit" placeholder="例如 76.2" />
+      </view>
+      <view class="field-item">
+        <view class="label">外径(mm)</view>
+        <input class="input" value="{{t1OuterMm}}" data-key="t1OuterMm" bindinput="onInput" type="digit" placeholder="用于反算长度" />
+      </view>
+      <view class="field-item">
+        <view class="label">长度(m)</view>
+        <input class="input" value="{{t1LengthM}}" data-key="t1LengthM" bindinput="onInput" type="digit" placeholder="用于反算外径" />
+      </view>
+    </view>
+    <view class="row actions-row">
+      <button class="btn-primary" bindtap="calcLengthFromDiameter">按直径算长度</button>
+      <button class="btn-secondary" bindtap="calcDiameterFromLength">按长度算直径</button>
+    </view>
+    <view class="result" wx:if="{{t1Result}}">{{t1Result}}</view>
+  </view>
+
+  <view class="card tool-card">
+    <view class="tool-head">
+      <view class="tool-title">工具2：装箱数量/重量/排布</view>
+      <view class="tool-tip">立放 + 方阵排布</view>
+    </view>
+
+    <view class="label">纸箱内径(mm)</view>
+    <view class="field-grid three compact">
+      <input class="input" value="{{t2CartonL}}" data-key="t2CartonL" bindinput="onInput" placeholder="长" type="digit" />
+      <input class="input" value="{{t2CartonW}}" data-key="t2CartonW" bindinput="onInput" placeholder="宽" type="digit" />
+      <input class="input" value="{{t2CartonH}}" data-key="t2CartonH" bindinput="onInput" placeholder="高" type="digit" />
+    </view>
+
+    <view class="label">胶带参数</view>
+    <view class="field-grid three compact">
+      <view class="field-item">
+        <view class="label">厚度(μm，自动)</view>
+        <input class="input input-readonly" value="{{t2TapeThicknessUm}}" disabled placeholder="基材厚度+胶厚" />
+      </view>
+      <view class="field-item">
+        <view class="label">宽度(mm)</view>
+        <input class="input" value="{{t2TapeWidthMm}}" data-key="t2TapeWidthMm" bindinput="onInput" type="digit" />
+      </view>
+      <view class="field-item">
+        <view class="label">长度(m)</view>
+        <input class="input" value="{{t2TapeLengthM}}" data-key="t2TapeLengthM" bindinput="onInput" type="digit" />
+      </view>
+    </view>
+
+    <view class="field-grid two">
+      <view class="field-item">
+        <view class="label">胶带外径(mm，自动)</view>
+        <input class="input input-readonly" value="{{t2OuterMm}}" disabled placeholder="由厚度+长度+纸管径自动计算" />
+      </view>
+      <view class="field-item">
+        <view class="label">每卷重量(kg，可选覆盖)</view>
+        <input class="input" value="{{t2PerRollKg}}" data-key="t2PerRollKg" bindinput="onInput" type="digit" placeholder="留空按参数自动计算" />
+      </view>
+    </view>
+
+    <view class="label">基材与胶层参数</view>
+    <view class="field-grid four compact">
+      <view class="field-item">
+        <view class="label">基材厚度(μm)</view>
+        <input class="input" value="{{t2BaseThicknessUm}}" data-key="t2BaseThicknessUm" bindinput="onInput" type="digit" />
+      </view>
+      <view class="field-item">
+        <view class="label">基材材质</view>
+        <picker mode="selector" range="{{materialPickerRange}}" bindchange="onMaterialPick" data-key="t2BaseMaterialId">
+          <view class="input picker-like">{{t2BaseMaterialText || '请选择基材材质'}}</view>
+        </picker>
+      </view>
+      <view class="field-item">
+        <view class="label">胶厚(μm)</view>
+        <input class="input" value="{{t2AdhesiveThicknessUm}}" data-key="t2AdhesiveThicknessUm" bindinput="onInput" type="digit" />
+      </view>
+      <view class="field-item">
+        <view class="label">胶层材质</view>
+        <picker mode="selector" range="{{materialPickerRange}}" bindchange="onMaterialPick" data-key="t2AdhesiveMaterialId">
+          <view class="input picker-like">{{t2AdhesiveMaterialText || '请选择胶层材质'}}</view>
+        </picker>
+      </view>
+    </view>
+
+    <view class="label">管芯参数</view>
+    <view class="field-grid three compact">
+      <view class="field-item">
+        <view class="label">管芯外径(mm)</view>
+        <input class="input" value="{{t2CoreOuterMm}}" data-key="t2CoreOuterMm" bindinput="onInput" type="digit" />
+      </view>
+      <view class="field-item">
+        <view class="label">壁厚(mm)</view>
+        <input class="input" value="{{t2CoreWallMm}}" data-key="t2CoreWallMm" bindinput="onInput" type="digit" />
+      </view>
+      <view class="field-item">
+        <view class="label">管芯材质</view>
+        <picker mode="selector" range="{{materialPickerRange}}" bindchange="onMaterialPick" data-key="t2CoreMaterialId">
+          <view class="input picker-like">{{t2CoreMaterialText || '请选择管芯材质'}}</view>
+        </picker>
+      </view>
+    </view>
+
+    <button class="btn-primary" bindtap="calcPacking">计算装箱与简图</button>
+
+    <view class="pack-summary" wx:if="{{t2Result}}">
+      <view class="summary-main">
+        <view class="summary-label">每箱可装</view>
+        <view class="summary-value">{{t2Result.total}}</view>
+        <view class="summary-unit">卷</view>
+      </view>
+      <view class="summary-formula">计算式：{{t2Result.formula}}</view>
+
+      <view class="summary-metrics">
+        <view class="metric-item">
+          <view class="metric-k">自动外径</view>
+          <view class="metric-v">{{t2Result.outerMm}} mm</view>
+        </view>
+        <view class="metric-item">
+          <view class="metric-k">胶带总厚</view>
+          <view class="metric-v">{{t2Result.tapeThicknessUm}} μm</view>
+        </view>
+        <view class="metric-item">
+          <view class="metric-k">单层排布</view>
+          <view class="metric-v">{{t2Result.xCount}} × {{t2Result.yCount}} = {{t2Result.perLayer}}</view>
+        </view>
+        <view class="metric-item">
+          <view class="metric-k">可叠层数</view>
+          <view class="metric-v">{{t2Result.layers}} 层</view>
+        </view>
+        <view class="metric-item">
+          <view class="metric-k">底面利用率</view>
+          <view class="metric-v">{{t2Result.baseUtilizationPct}}%</view>
+        </view>
+        <view class="metric-item">
+          <view class="metric-k">高度利用率</view>
+          <view class="metric-v">{{t2Result.heightUtilizationPct}}%</view>
+        </view>
+        <view class="metric-item">
+          <view class="metric-k">每箱重量</view>
+          <view class="metric-v">{{t2Result.cartonWeightKg}} kg</view>
+        </view>
+        <view class="metric-item">
+          <view class="metric-k">基材/胶层/管芯材质</view>
+          <view class="metric-v">{{t2Result.baseMaterial}}；{{t2Result.adhesiveMaterial}}；{{t2Result.coreMaterial}}</view>
+        </view>
+        <view class="metric-item">
+          <view class="metric-k">每卷分项重量</view>
+          <view class="metric-v">基材{{t2Result.baseWeightKg}} + 胶层{{t2Result.adhesiveWeightKg}} + 管芯{{t2Result.coreWeightKg}} kg</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="canvas-wrap">
+      <view class="canvas-title">纸箱底面排布简图</view>
+      <canvas id="packCanvas2d" type="2d" canvas-id="packCanvas" class="sketch-canvas" style="width:640rpx;height:{{canvasHeightRpx}}rpx;" width="{{canvasWidthPx}}" height="{{canvasHeightPx}}"></canvas>
+      <view class="canvas-debug" wx:if="{{t2CanvasDebug}}">{{t2CanvasDebug}}</view>
+    </view>
+
+    <view class="canvas-wrap" wx:if="{{t2Result && t2Result.layers > 0}}">
+      <view class="canvas-title">纸箱高度堆叠模拟（侧视）</view>
+      <canvas id="heightCanvas2d" type="2d" canvas-id="heightCanvas" class="height-canvas" style="width:640rpx;height:{{canvasHeightSimRpx}}rpx;" width="{{canvasWidthPx}}" height="{{canvasHeightSimPx}}"></canvas>
+    </view>
+
+    <view class="material-lib card-inner">
+      <view class="tool-head">
+        <view class="tool-title small-title">研发：常用材质密度库</view>
+        <view class="tool-tip">字段：英文名 / 中文名 / 密度 / 备注（支持增删改）</view>
+      </view>
+      <button class="btn-secondary small" bindtap="startAddMaterial">新增材质</button>
+
+      <view class="mat-list" wx:if="{{materialLibrary.length}}">
+        <view class="mat-item" wx:for="{{materialLibrary}}" wx:key="id">
+          <view class="mat-main">{{item.enName}} / {{item.cnName}} · {{item.density}} g/cm³</view>
+          <view class="mat-remark" wx:if="{{item.remark}}">{{item.remark}}</view>
+          <view class="mat-actions">
+            <button class="btn-secondary tiny" data-id="{{item.id}}" bindtap="startEditMaterial">编辑</button>
+            <button class="btn-danger tiny" data-id="{{item.id}}" bindtap="removeMaterial">删除</button>
+          </view>
+        </view>
+      </view>
+
+      <view class="mat-form" wx:if="{{matFormVisible}}">
+        <view class="field-grid two compact">
+          <input class="input" placeholder="材质英文名，如 BOPP" value="{{matFormEnName}}" data-key="matFormEnName" bindinput="onMaterialFormInput" />
+          <input class="input" placeholder="材质中文名，如 双向拉伸聚丙烯" value="{{matFormCnName}}" data-key="matFormCnName" bindinput="onMaterialFormInput" />
+          <input class="input" placeholder="密度 g/cm³" type="digit" value="{{matFormDensity}}" data-key="matFormDensity" bindinput="onMaterialFormInput" />
+          <input class="input" placeholder="备注" value="{{matFormRemark}}" data-key="matFormRemark" bindinput="onMaterialFormInput" />
+        </view>
+        <view class="row actions-row">
+          <button class="btn-primary small" bindtap="saveMaterialForm">保存</button>
+          <button class="btn-secondary small" bindtap="cancelMaterialForm">取消</button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card tool-card">
+    <view class="tool-head">
+      <view class="tool-title">工具3：每卷/每箱重量估算</view>
+      <view class="tool-tip">支持按卷数或体积估算</view>
+    </view>
+    <view class="field-grid two">
+      <view class="field-item">
+        <view class="label">厚度(μm)</view>
+        <input class="input" value="{{t3ThicknessUm}}" data-key="t3ThicknessUm" bindinput="onInput" type="digit" />
+      </view>
+      <view class="field-item">
+        <view class="label">宽度(mm)</view>
+        <input class="input" value="{{t3WidthMm}}" data-key="t3WidthMm" bindinput="onInput" type="digit" />
+      </view>
+      <view class="field-item">
+        <view class="label">长度(m)</view>
+        <input class="input" value="{{t3LengthM}}" data-key="t3LengthM" bindinput="onInput" type="digit" />
+      </view>
+      <view class="field-item">
+        <view class="label">密度(g/cm³)</view>
+        <input class="input" value="{{t3Density}}" data-key="t3Density" bindinput="onInput" type="digit" />
+      </view>
+    </view>
+
+    <view class="label">指定每箱卷数(可选)</view>
+    <input class="input" value="{{t3QtyPerBox}}" data-key="t3QtyPerBox" bindinput="onInput" type="digit" placeholder="例如 72" />
+
+    <view class="label">按体积估算(可选)</view>
+    <view class="field-grid two compact">
+      <input class="input" value="{{t3CartonVolumeL}}" data-key="t3CartonVolumeL" bindinput="onInput" placeholder="体积(L)" type="digit" />
+      <input class="input" value="{{t3PackEfficiency}}" data-key="t3PackEfficiency" bindinput="onInput" placeholder="装填系数(0-1)" type="digit" />
+      <input class="input" value="{{t3OuterMm}}" data-key="t3OuterMm" bindinput="onInput" placeholder="外径(mm)" type="digit" />
+      <input class="input" value="{{t3RollWidthMm}}" data-key="t3RollWidthMm" bindinput="onInput" placeholder="卷宽(mm)" type="digit" />
+    </view>
+
+    <button class="btn-primary" bindtap="calcRollAndBoxWeight">计算重量</button>
+    <view class="result" wx:if="{{t3Result}}">
+      <view>每卷重量：{{t3Result.perRollKg}} kg</view>
+      <view>按指定卷数每箱重量：{{t3Result.boxWeightByQty}} kg</view>
+      <view>按体积估算每箱卷数：{{t3Result.estQtyByVolume}}</view>
+      <view>按体积估算每箱重量：{{t3Result.boxWeightByVol}} kg</view>
+    </view>
+  </view>
+</view>

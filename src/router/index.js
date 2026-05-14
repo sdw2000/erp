@@ -151,6 +151,12 @@ export const asyncRoutes = [
         meta: { title: '成本核算', icon: 'el-icon-data-analysis', roles: ['finance', 'admin'] }
       },
       {
+        path: 'inventory-price',
+        component: () => import('@/views/finance/inventoryPrice'),
+        name: 'FinanceInventoryPrice',
+        meta: { title: '库存加权价格', icon: 'el-icon-s-marketing', roles: ['finance', 'admin'] }
+      },
+      {
         path: 'basic-config',
         component: () => import('@/views/finance/basicConfig'),
         name: 'FinanceBasicConfig',
@@ -167,6 +173,37 @@ export const asyncRoutes = [
         component: () => import('@/views/finance/bankLedger'),
         name: 'FinanceBankLedger',
         meta: { title: '银行账目流水', icon: 'el-icon-bank-card', roles: ['finance', 'admin'] }
+      }
+      ,
+      {
+        path: 'ar',
+        component: () => import('@/views/finance/ar'),
+        name: 'FinanceAR',
+        meta: { title: '应收(AR)', icon: 'money', roles: ['finance', 'admin'] }
+      },
+      {
+        path: 'ap',
+        component: () => import('@/views/finance/ap'),
+        name: 'FinanceAP',
+        meta: { title: '应付(AP)', icon: 'el-icon-s-finance', roles: ['finance', 'admin'] }
+      },
+      {
+        path: 'gl',
+        component: () => import('@/views/finance/gl'),
+        name: 'FinanceGL',
+        meta: { title: '总账(GL)', icon: 'el-icon-notebook-1', roles: ['finance', 'admin'] }
+      },
+      {
+        path: 'fixed-assets',
+        component: () => import('@/views/finance/fixedAssets'),
+        name: 'FinanceFixedAssets',
+        meta: { title: '固定资产', icon: 'el-icon-s-marketing', roles: ['finance', 'admin'] }
+      },
+      {
+        path: 'reconciliation-admin',
+        component: () => import('@/views/finance/reconciliationAdmin'),
+        name: 'FinanceReconciliationAdmin',
+        meta: { title: '对账管理', icon: 'el-icon-document', roles: ['finance', 'admin'] }
       }
     ]
   },
@@ -211,6 +248,12 @@ export const asyncRoutes = [
         component: () => import('@/views/purchase/receipts'),
         name: 'PurchaseReceipts',
         meta: { title: '收货通知', icon: 'el-icon-s-claim', roles: ['admin', 'purchase'] }
+      },
+      {
+        path: 'supplier-material-mapping',
+        component: () => import('@/views/purchase/supplierMaterialMapping'),
+        name: 'PurchaseSupplierMaterialMapping',
+        meta: { title: '供应商物料映射', icon: 'el-icon-connection', roles: ['admin', 'purchase'] }
       }
     ]
   },
@@ -218,14 +261,14 @@ export const asyncRoutes = [
     path: '/stock',
     component: Layout,
     name: 'Stock',
-    redirect: '/stock/raw-material-hub',
+    redirect: '/stock/index',
     meta: { title: '库存管理', icon: 'component', roles: ['warehouse', 'admin', 'sales', 'production', 'finance', 'quality'] },
     children: [
       {
         path: 'raw-material-hub',
         component: () => import('@/views/stock/raw-material-hub'),
         name: 'RawMaterialHub',
-        meta: { title: '原材料总仓', icon: 'el-icon-box', roles: ['warehouse', 'admin', 'production', 'finance', 'quality'] }
+        meta: { title: '原材料总仓', icon: 'el-icon-box', roles: ['admin'] }
       },
       {
         path: 'index',
@@ -267,13 +310,19 @@ export const asyncRoutes = [
         path: 'film-stock',
         component: () => import('@/views/stock/film-stock'),
         name: 'FilmStock',
-        meta: { title: '薄膜仓库', icon: 'el-icon-files', roles: ['admin'] }
+        meta: { title: '薄膜仓库', icon: 'el-icon-files', roles: ['warehouse', 'admin'] }
       },
       {
         path: 'chemical-stock',
         component: () => import('@/views/stock/chemical-stock'),
         name: 'ChemicalStock',
-        meta: { title: '化工仓库', icon: 'el-icon-goods', roles: ['admin'] }
+        meta: { title: '化工仓库', icon: 'el-icon-goods', roles: ['warehouse', 'admin'] }
+      },
+      {
+        path: 'package-stock',
+        component: () => import('@/views/stock/package-stock'),
+        name: 'PackageStock',
+        meta: { title: '包材仓库', icon: 'el-icon-box', roles: ['warehouse', 'admin'] }
       },
       {
         path: 'chemical-requisition',
@@ -312,6 +361,12 @@ export const asyncRoutes = [
         component: () => import('@/views/rd/rawMaterial'),
         name: 'TapeRawMaterial',
         meta: { title: '原材料表', icon: 'table', roles: ['rd', 'admin'] }
+      },
+      {
+        path: 'material-density',
+        component: () => import('@/views/rd/materialDensity'),
+        name: 'MaterialDensityLibrary',
+        meta: { title: '材质密度表', icon: 'el-icon-notebook-2', roles: ['rd', 'admin'] }
       },
       {
         path: 'carton-spec',
@@ -577,6 +632,12 @@ export const asyncRoutes = [
         component: () => import('@/views/quality/report'),
         name: 'QualityReport',
         meta: { title: '报表统计', icon: 'el-icon-data-analysis', roles: ['quality', 'admin', 'production'] }
+      },
+      {
+        path: 'report-template-rule',
+        component: () => import('@/views/quality/reportTemplateRule'),
+        name: 'QualityReportTemplateRule',
+        meta: { title: '报告模板配置', icon: 'el-icon-setting', roles: ['quality', 'admin', 'production', 'sales'] }
       },
       {
         path: 'inspection',

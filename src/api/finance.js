@@ -16,6 +16,30 @@ export function getCoatingCostSummary(params) {
   })
 }
 
+export function getFormulaTheoreticalCost(params) {
+  return request({
+    url: '/finance/cost-accounting/formula-theoretical',
+    method: 'get',
+    params
+  })
+}
+
+export function getFormulaCostFactor(params) {
+  return request({
+    url: '/finance/cost-accounting/formula-factor',
+    method: 'get',
+    params
+  })
+}
+
+export function saveFormulaCostFactor(data) {
+  return request({
+    url: '/finance/cost-accounting/formula-factor',
+    method: 'post',
+    data
+  })
+}
+
 export function getMaterialCostConfigPage(params) {
   return request({
     url: '/finance/cost-accounting/material-config',
@@ -98,5 +122,81 @@ export function getKingdeeTemplate() {
   return request({
     url: '/finance/bank-ledger/kingdee/template',
     method: 'get'
+  })
+}
+
+export function recalcInventoryPrice(params) {
+  return request({
+    url: '/finance/cost-accounting/inventory-price/recalc',
+    method: 'post',
+    params
+  })
+}
+
+export function initInventoryPriceSync(params) {
+  return request({
+    url: '/finance/cost-accounting/inventory-price/init-sync',
+    method: 'post',
+    params
+  })
+}
+
+export function getInventoryPriceLatest(params) {
+  return request({
+    url: '/finance/cost-accounting/inventory-price/latest',
+    method: 'get',
+    params
+  })
+}
+
+export function getInventoryPriceChange(params) {
+  return request({
+    url: '/finance/cost-accounting/inventory-price/change',
+    method: 'get',
+    params
+  })
+}
+
+export function exportInventoryPriceLatest(params) {
+  return request({
+    url: '/finance/cost-accounting/inventory-price/latest/export',
+    method: 'get',
+    params,
+    responseType: 'blob'
+  })
+}
+
+export function exportInventoryPriceChange(params) {
+  return request({
+    url: '/finance/cost-accounting/inventory-price/change/export',
+    method: 'get',
+    params,
+    responseType: 'blob'
+  })
+}
+
+export function importInventoryPriceLatest(fileOrFormData) {
+  const formData = fileOrFormData instanceof FormData ? fileOrFormData : new FormData()
+  if (!(fileOrFormData instanceof FormData)) {
+    formData.append('file', fileOrFormData)
+  }
+  return request({
+    url: '/finance/cost-accounting/inventory-price/latest/import',
+    method: 'post',
+    data: formData,
+    timeout: 600000
+  })
+}
+
+export function importInventoryPriceChange(fileOrFormData) {
+  const formData = fileOrFormData instanceof FormData ? fileOrFormData : new FormData()
+  if (!(fileOrFormData instanceof FormData)) {
+    formData.append('file', fileOrFormData)
+  }
+  return request({
+    url: '/finance/cost-accounting/inventory-price/change/import',
+    method: 'post',
+    data: formData,
+    timeout: 600000
   })
 }

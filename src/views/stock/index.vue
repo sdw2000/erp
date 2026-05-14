@@ -6,10 +6,9 @@
         <div style="float: right">
           <span class="header-summary">库存总卷数：{{ headerTotalRolls }}</span>
           <span class="header-summary" style="margin-left: 16px;">库存总平米数：{{ headerTotalSqm }}</span>
-          <!-- 只有 admin 和 warehouse 有权进行导入导出 -->
-          <el-button v-if="$canImportExport()" type="success" icon="el-icon-download" size="small" @click="handleDownloadTemplate">下载模板</el-button>
-          <el-button v-if="$canImportExport()" type="warning" icon="el-icon-upload2" size="small" @click="handleImport">导入</el-button>
-          <el-button v-if="$canImportExport()" type="info" icon="el-icon-download" size="small" @click="handleExport">导出</el-button>
+          <el-button v-if="$hasRole('admin')" type="success" icon="el-icon-download" size="small" @click="handleDownloadTemplate">下载模板</el-button>
+          <el-button v-if="$hasRole('admin')" type="warning" icon="el-icon-upload2" size="small" @click="handleImport">导入</el-button>
+          <el-button v-if="$hasRole('admin')" type="info" icon="el-icon-download" size="small" @click="handleExport">导出</el-button>
         </div>
       </div>
 
@@ -56,6 +55,11 @@
             >
               <el-table-column prop="qrCode" label="二维码" min-width="150" />
               <el-table-column prop="batchNo" label="批次号" min-width="140" />
+              <el-table-column label="数字号" min-width="90" align="center">
+                <template slot-scope="detailScope">
+                  {{ getDigitalNumberText(detailScope.row) }}
+                </template>
+              </el-table-column>
               <el-table-column prop="rollType" label="卷类型" min-width="90" />
               <el-table-column prop="thickness" label="厚度(μm)" min-width="90" align="center" />
               <el-table-column prop="width" label="宽度(mm)" min-width="90" align="center" />
@@ -73,6 +77,15 @@
               <el-table-column prop="consumedArea" label="已消耗平米" min-width="110" align="right" />
               <el-table-column prop="prodDate" label="生产日期" min-width="120" />
               <el-table-column prop="location" label="卡板位" min-width="90" />
+              <el-table-column prop="remark" label="备注信息" min-width="220" show-overflow-tooltip />
+              <el-table-column v-if="$hasRole('admin')" label="操作" min-width="120" align="center" fixed="right">
+                <template slot-scope="detailScope">
+                  <template v-if="!detailScope.row.isAggregated">
+                    <el-button type="text" size="mini" @click="openStocktakeDialog(detailScope.row)">盘点</el-button>
+                  </template>
+                  <span v-else class="text-muted">-</span>
+                </template>
+              </el-table-column>
             </el-table>
             <el-pagination
               v-if="detailTotalMap[scope.row.materialCode] > 0"
@@ -139,11 +152,42 @@
         <el-button type="primary" @click="importResultVisible = false">确定</el-button>
       </div>
     </el-dialog>
+
+    <el-dialog title="库存盘点" :visible.sync="stocktakeVisible" width="520px">
+      <el-form :model="stocktakeForm" label-width="110px" size="small">
+        <el-form-item label="料号">
+          <el-input :value="stocktakeForm.materialCode" disabled />
+        </el-form-item>
+        <el-form-item label="批次号">
+          <el-input :value="stocktakeForm.batchNo" disabled />
+        </el-form-item>
+        <el-form-item label="当前卷数">
+          <el-input :value="stocktakeForm.beforeRolls" disabled />
+        </el-form-item>
+        <el-form-item label="当前总平米">
+          <el-input :value="stocktakeForm.beforeSqm" disabled />
+        </el-form-item>
+        <el-form-item label="盘点后卷数" required>
+          <el-input-number v-model="stocktakeForm.actualRolls" :min="0" :controls="true" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="盘点后总平米">
+          <el-input-number v-model="stocktakeForm.actualSqm" :min="0" :precision="2" :controls="true" style="width: 100%" />
+          <div style="font-size:12px;color:#909399;">可留空：系统将按卷数比例估算总平米</div>
+        </el-form-item>
+        <el-form-item label="盘点原因">
+          <el-input v-model="stocktakeForm.reason" maxlength="200" placeholder="如：实物复盘、报废、盘盈" />
+        </el-form-item>
+      </el-form>
+      <span slot="footer">
+        <el-button @click="stocktakeVisible = false">取消</el-button>
+        <el-button type="primary" :loading="stocktakeSubmitting" @click="submitStocktake">确认盘点</el-button>
+      </span>
+    </el-dialog>
   </div>
 </template>
 
 <script>
-import { getStockSummary, getStockSummaryPage, getStockByMaterialPage, importStockAsync, getImportTaskStatus, downloadImportFailedFile, exportStock, downloadTemplate } from '@/api/tapeStock'
+import { getStockSummary, getStockSummaryPage, getStockByMaterialPage, importStockAsync, getImportTaskStatus, downloadImportFailedFile, exportStock, downloadTemplate, stocktakeTapeStock } from '@/api/tapeStock'
 import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
 export default {
@@ -172,13 +216,39 @@ export default {
       importTaskId: '',
       importPollingTimer: null,
       headerTotalRolls: 0,
-      headerTotalSqm: 0
+      headerTotalSqm: 0,
+      stocktakeVisible: false,
+      stocktakeSubmitting: false,
+      stocktakeForm: {
+        stockId: null,
+        materialCode: '',
+        batchNo: '',
+        beforeRolls: 0,
+        beforeSqm: 0,
+        actualRolls: 0,
+        actualSqm: null,
+        reason: '月度盘点'
+      }
     }
   }, created() {
     this.fetchData()
     this.fetchHeaderTotals()
   },
   methods: {
+    getDigitalNumberText(row) {
+      if (!row) return '-'
+      const direct = row.sequenceNo ?? row.sequence_no ?? row.digitalNo ?? row.numberNo ?? row.printNumber ?? row.printNo
+      if (direct !== null && direct !== undefined && String(direct).trim() !== '') {
+        return String(direct).trim()
+      }
+      const text = String((row && row.remark) || '')
+      const m = text.match(/数字号\s*[:：=]\s*([^；;,\s|]+)/)
+      if (m && m[1]) return String(m[1]).trim()
+      const qr = String((row && row.qrCode) || '')
+      const q = qr.match(/-(\d{1,3})$/)
+      if (q && q[1]) return String(Number(q[1]))
+      return '-'
+    },
     async fetchHeaderTotals() {
       try {
         const res = await getStockSummary()
@@ -380,10 +450,12 @@ export default {
     async fetchDetailPage(code) {
       this.$set(this.detailLoading, code, true)
       try {
+        const current = this.detailPageMap[code] || 1
+        const size = this.detailPageSizeMap[code] || 20
         const res = await getStockByMaterialPage({
           materialCode: code,
-          current: this.detailPageMap[code] || 1,
-          size: this.detailPageSizeMap[code] || 20,
+          current,
+          size,
           includeReturnWarehouse: this.searchForm.includeReturnWarehouse
         })
         if (res.code === 20000 || res.code === 200) {
@@ -394,11 +466,59 @@ export default {
             consumedArea: Number(x.consumedArea || 0)
           }))
           this.$set(this.detailMap, code, details)
-          this.$set(this.detailTotalMap, code, Number((res.data && res.data.total) || 0))
+          this.$set(this.detailTotalMap, code, Number((res.data && res.data.total) || details.length || 0))
         }
       } finally {
         this.$set(this.detailLoading, code, false)
       }
+    },
+    aggregateDetailRowsBySpec(rows) {
+      const src = Array.isArray(rows) ? rows : []
+      const groupMap = new Map()
+      src.forEach(row => {
+        const key = [
+          row.materialCode || '',
+          row.rollType || '',
+          row.thickness || '',
+          row.width || '',
+          row.currentLength || row.length || ''
+        ].join('|')
+        if (!groupMap.has(key)) {
+          groupMap.set(key, {
+            ...row,
+            isAggregated: false,
+            sourceRows: [row]
+          })
+          return
+        }
+        const agg = groupMap.get(key)
+        agg.sourceRows.push(row)
+        agg.totalRolls = Number(agg.totalRolls || 0) + Number(row.totalRolls || 0)
+        agg.totalSqm = Number(agg.totalSqm || 0) + Number(row.totalSqm || 0)
+        agg.availableArea = Number(agg.availableArea || 0) + Number(row.availableArea || 0)
+        agg.reservedArea = Number(agg.reservedArea || 0) + Number(row.reservedArea || 0)
+        agg.consumedArea = Number(agg.consumedArea || 0) + Number(row.consumedArea || 0)
+      })
+
+      return Array.from(groupMap.values()).map(item => {
+        if (!item.sourceRows || item.sourceRows.length <= 1) {
+          item.isAggregated = false
+          return item
+        }
+        const size = item.sourceRows.length
+        const batchSet = new Set(item.sourceRows.map(x => x.batchNo).filter(Boolean))
+        const qrSet = new Set(item.sourceRows.map(x => x.qrCode).filter(Boolean))
+        const locSet = new Set(item.sourceRows.map(x => x.location).filter(Boolean))
+        return {
+          ...item,
+          isAggregated: true,
+          id: `STOCK-AGG-${item.materialCode || ''}-${item.rollType || ''}-${item.thickness || ''}-${item.width || ''}-${item.currentLength || item.length || ''}`,
+          batchNo: batchSet.size <= 1 ? (item.batchNo || '-') : `多批次(${batchSet.size})`,
+          qrCode: qrSet.size <= 1 ? (item.qrCode || '-') : `多卷(${size})`,
+          location: locSet.size <= 1 ? (item.location || '-') : `多库位(${locSet.size})`,
+          sequenceNo: '-'
+        }
+      })
     },
     handleDetailPageChange(code, page) {
       this.$set(this.detailPageMap, code, page)
@@ -422,6 +542,57 @@ export default {
     },
     detailRowClassName({ row }) {
       return this.isAvailableZero(row) ? 'row-zero' : ''
+    },
+    openStocktakeDialog(row) {
+      if (!row || !row.id) {
+        this.$message.warning('库存记录异常，无法盘点')
+        return
+      }
+      this.stocktakeForm = {
+        stockId: row.id,
+        materialCode: row.materialCode || '',
+        batchNo: row.batchNo || '',
+        beforeRolls: Number(row.totalRolls || 0),
+        beforeSqm: Number(row.totalSqm || 0),
+        actualRolls: Number(row.totalRolls || 0),
+        actualSqm: Number(row.totalSqm || 0),
+        reason: '月度盘点'
+      }
+      this.stocktakeVisible = true
+    },
+    async submitStocktake() {
+      if (!this.stocktakeForm.stockId) return
+      if (this.stocktakeForm.actualRolls === null || this.stocktakeForm.actualRolls < 0) {
+        this.$message.warning('请填写有效的盘点后卷数')
+        return
+      }
+      this.stocktakeSubmitting = true
+      try {
+        const payload = {
+          actualRolls: Number(this.stocktakeForm.actualRolls),
+          actualSqm: this.stocktakeForm.actualSqm === null || this.stocktakeForm.actualSqm === ''
+            ? null
+            : Number(this.stocktakeForm.actualSqm),
+          operator: (this.$store && this.$store.getters && (this.$store.getters.name || this.$store.getters.username)) || '',
+          reason: this.stocktakeForm.reason || ''
+        }
+        const res = await stocktakeTapeStock(this.stocktakeForm.stockId, payload)
+        if (res.code !== 200 && res.code !== 20000) {
+          return this.$message.error((res && (res.msg || res.message)) || '盘点失败')
+        }
+        this.$message.success('盘点成功')
+        this.stocktakeVisible = false
+        await this.fetchData()
+        await this.fetchHeaderTotals()
+        const expandedCode = this.expandedRowKeys && this.expandedRowKeys[0]
+        if (expandedCode) {
+          await this.fetchDetailPage(expandedCode)
+        }
+      } catch (e) {
+        this.$message.error((e && e.message) || '盘点失败')
+      } finally {
+        this.stocktakeSubmitting = false
+      }
     }
   },
   beforeDestroy() {

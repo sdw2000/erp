@@ -8,6 +8,14 @@ export function getSalesReconciliationStatement(params) {
   })
 }
 
+export function getSalesReconciliationOverview(params) {
+  return request({
+    url: '/sales/reconciliation/overview',
+    method: 'get',
+    params
+  })
+}
+
 export function getSalesReconciliationHistory(params) {
   return request({
     url: '/sales/reconciliation/history',
@@ -39,6 +47,35 @@ export function confirmSalesReconciliationDetails(data) {
   })
 }
 
+export function appendUnreconciledSalesReconciliation(params) {
+  return request({
+    url: '/sales/reconciliation/append-unreconciled',
+    method: 'post',
+    params
+  })
+}
+
+export function queryUnreconciledSalesReconciliationCandidates(params) {
+  return request({
+    url: '/sales/reconciliation/unreconciled-candidates',
+    method: 'get',
+    params
+  })
+}
+
+export function removeSalesReconciliationDetail(params) {
+  const detailId = params.detailId || params.noticeItemId || params.returnItemId
+  return request({
+    url: `/sales/reconciliation/statement/detail/${detailId}`,
+    method: 'delete',
+    params: {
+      customerCode: params.customerCode,
+      month: params.month,
+      bizType: params.bizType
+    }
+  })
+}
+
 export function exportSalesReconciliationStatement(params) {
   return request({
     url: '/sales/reconciliation/export',
@@ -53,10 +90,14 @@ export function importSalesReconciliationHistory(customerCode, fileOrFormData) {
   if (!(fileOrFormData instanceof FormData)) {
     formData.append('file', fileOrFormData)
   }
+  const params = {}
+  if (customerCode) {
+    params.customerCode = customerCode
+  }
   return request({
     url: '/sales/reconciliation/history/import',
     method: 'post',
-    params: { customerCode },
+    params,
     data: formData,
     timeout: 600000
   })

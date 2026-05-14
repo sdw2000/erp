@@ -28,10 +28,7 @@
         </el-form-item>
         <el-form-item label="物料类型">
           <el-select v-model="searchForm.materialType" clearable placeholder="全部" style="width:130px">
-            <el-option label="树脂" value="resin"/>
-            <el-option label="溶剂" value="solvent"/>
-            <el-option label="助剂" value="additive"/>
-            <el-option label="固化剂" value="curing"/>
+            <el-option v-for="item in materialTypeSearchOptions()" :key="item.value" :label="item.label" :value="item.value"/>
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
@@ -39,6 +36,12 @@
             <el-option label="启用" :value="1"/>
             <el-option label="禁用" :value="0"/>
           </el-select>
+        </el-form-item>
+        <el-form-item label="离型力A">
+          <el-input v-model="searchForm.releaseForceA" clearable placeholder="请输入离型力A" style="width:150px"/>
+        </el-form-item>
+        <el-form-item label="离型力B">
+          <el-input v-model="searchForm.releaseForceB" clearable placeholder="请输入离型力B" style="width:150px"/>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="el-icon-search" @click="handleSearch">搜 索</el-button>
@@ -63,13 +66,40 @@
           </template>
         </el-table-column>
         <el-table-column prop="unit" label="单位" width="80" align="center"/>
-        <el-table-column prop="spec" label="规格说明" min-width="200" show-overflow-tooltip/>
-        <el-table-column prop="performanceParams" label="性能参数" min-width="260" show-overflow-tooltip>
-          <template slot-scope="scope">
-            <span>{{ formatPerformanceSummary(scope.row) }}</span>
-          </template>
+        <el-table-column prop="spec" label="规格说明" min-width="180" show-overflow-tooltip/>
+        <el-table-column label="厚度" min-width="110" show-overflow-tooltip>
+          <template slot-scope="scope">{{ getPerfCell(scope.row, 'thickness') }}</template>
         </el-table-column>
-        <el-table-column prop="sortOrder" label="排序" width="70" align="center"/>
+        <el-table-column label="电晕值" min-width="110" show-overflow-tooltip>
+          <template slot-scope="scope">{{ getPerfCell(scope.row, 'coronaValue') }}</template>
+        </el-table-column>
+        <el-table-column label="抗拉强度" min-width="120" show-overflow-tooltip>
+          <template slot-scope="scope">{{ getPerfCell(scope.row, 'tensileStrength') }}</template>
+        </el-table-column>
+        <el-table-column label="伸长率" min-width="100" show-overflow-tooltip>
+          <template slot-scope="scope">{{ getPerfCell(scope.row, 'elongation') }}</template>
+        </el-table-column>
+        <el-table-column label="颜色" min-width="100" show-overflow-tooltip>
+          <template slot-scope="scope">{{ getPerfCell(scope.row, 'color') }}</template>
+        </el-table-column>
+        <el-table-column label="外观" min-width="120" show-overflow-tooltip>
+          <template slot-scope="scope">{{ getPerfCell(scope.row, 'appearance') }}</template>
+        </el-table-column>
+        <el-table-column label="固含量" min-width="110" show-overflow-tooltip>
+          <template slot-scope="scope">{{ getPerfCell(scope.row, 'solidContent') }}</template>
+        </el-table-column>
+        <el-table-column label="粘度" min-width="110" show-overflow-tooltip>
+          <template slot-scope="scope">{{ getPerfCell(scope.row, 'viscosity') }}</template>
+        </el-table-column>
+        <el-table-column label="剥离强度" min-width="120" show-overflow-tooltip>
+          <template slot-scope="scope">{{ getPerfCell(scope.row, 'peelStrength') }}</template>
+        </el-table-column>
+        <el-table-column label="离型力A" min-width="120" show-overflow-tooltip>
+          <template slot-scope="scope">{{ getPerfCell(scope.row, 'releaseForceA') }}</template>
+        </el-table-column>
+        <el-table-column label="离型力B" min-width="120" show-overflow-tooltip>
+          <template slot-scope="scope">{{ getPerfCell(scope.row, 'releaseForceB') }}</template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="80" align="center">
           <template slot-scope="scope">
             <el-tag :type="scope.row.status === 1 ? 'success' : 'info'" size="small">
@@ -124,15 +154,7 @@
           <el-col :span="12">
             <el-form-item label="物料类型" prop="materialType">
               <el-select v-model="form.materialType" style="width:100%" placeholder="请选择/可输入" filterable allow-create default-first-option>
-                <el-option label="PET膜" value="PET膜"/>
-                <el-option label="BOPP膜" value="BOPP膜"/>
-                <el-option label="离型纸" value="离型纸"/>
-                <el-option label="离型膜" value="离型膜"/>
-                <el-option label="纸管" value="纸管"/>
-                <el-option label="树脂" value="resin"/>
-                <el-option label="溶剂" value="solvent"/>
-                <el-option label="助剂" value="additive"/>
-                <el-option label="固化剂" value="curing"/>
+                <el-option v-for="item in materialTypeOptionsForCategory()" :key="item.value" :label="item.label" :value="item.value"/>
               </el-select>
             </el-form-item>
           </el-col>
@@ -152,61 +174,25 @@
           </el-col>
         </el-row>
 
-        <el-divider content-position="left">性能参数</el-divider>
+        <el-divider content-position="left">性能参数（分列维护）</el-divider>
         <el-alert
           type="info"
           :closable="false"
           show-icon
           style="margin-bottom: 12px;"
-          title="支持按最小值/最大值/单位维护性能参数，例如：1200~1203mm、≥0、0~0、15±2。保存后会以 JSON 存储，便于后续品质控制。"
+          title="按字段分别维护：厚度、电晕值、抗拉强度、伸长率、颜色、外观、固含量、粘度、剥离强度、离型力A、离型力B（后台仍以JSON兼容存储）。"
         />
-        <template v-for="item in getCurrentInspectionFields()">
-          <el-row :key="item.key + '-value'" :gutter="20">
-            <el-col :span="8">
-              <el-form-item :label="item.label + '标准值'">
-                <el-input v-model="performanceForm[item.key].standardValue" placeholder="标准值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item :label="item.label + '下限'">
-                <el-input v-model="performanceForm[item.key].min" placeholder="最小值" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item :label="item.label + '上限'">
-                <el-input v-model="performanceForm[item.key].max" placeholder="最大值" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :key="item.key + '-meta'" :gutter="20">
-            <el-col :span="8">
-              <el-form-item label="单位">
-                <el-input v-model="performanceForm[item.key].unit" :placeholder="item.unit || '可选'" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="判定方式">
-                <el-select v-model="performanceForm[item.key].judgeMode" style="width:100%">
-                  <el-option label="区间" value="range" />
-                  <el-option label="≥下限" value="min" />
-                  <el-option label="≤上限" value="max" />
-                  <el-option label="标准值" value="value" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="说明">
-                <el-input v-model="performanceForm[item.key].remark" placeholder="可选" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </template>
         <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="排序">
-              <el-input-number v-model="form.sortOrder" :min="0" :precision="0" style="width:100%" />
+          <el-col :span="8" v-for="item in getCurrentInspectionFields()" :key="item.key">
+            <el-form-item :label="item.label">
+              <el-input
+                v-model="performanceForm[item.key]"
+                :placeholder="item.unit ? `示例：${item.unit}` : '请输入'"
+              />
             </el-form-item>
           </el-col>
+        </el-row>
+        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="状态">
               <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="禁用"/>
@@ -260,7 +246,9 @@ export default {
         materialName: '',
         materialCategory: '',
         materialType: '',
-        status: null
+        status: null,
+        releaseForceA: '',
+        releaseForceB: ''
       },
       list: [],
       pagination: { page: 1, size: 20, total: 0 },
@@ -268,7 +256,7 @@ export default {
       dialogTitle: '新增原材料',
       submitting: false,
       form: this.getEmptyForm(),
-      performanceForm: this.getDefaultPerformanceForm('chemical'),
+      performanceForm: this.getDefaultPerformanceForm(),
       rules: {
         materialCode: [{ required: true, message: '请输入物料编码', trigger: 'blur' }],
         materialName: [{ required: true, message: '请输入物料名称', trigger: 'blur' }],
@@ -291,17 +279,17 @@ export default {
       return code === 200 || code === 20000
     },
     getEmptyForm() {
+      const defaultCategory = '化工料'
       return {
         id: null,
         materialCode: '',
         materialName: '',
-        materialCategory: '化工料',
-        materialCategoryRaw: '化工料',
-        materialType: 'resin',
+        materialCategory: defaultCategory,
+        materialCategoryRaw: defaultCategory,
+        materialType: this.defaultMaterialTypeByCategory(defaultCategory),
         unit: 'kg',
         spec: '',
         performanceParams: '',
-        sortOrder: 0,
         status: 1
       }
     },
@@ -322,51 +310,34 @@ export default {
       }
       return 'chemical'
     },
-    getInspectionSchema(category) {
-      const mode = this.getCategoryMode(category)
-      if (mode === 'baseFilm') {
-        return [
-          { key: 'thickness', label: '厚度', unit: 'μm' },
-          { key: 'coronaValue', label: '电晕值', unit: 'dyne' },
-          { key: 'width', label: '宽度', unit: 'mm' },
-          { key: 'tensileStrength', label: '抗拉强度', unit: 'N/15mm' },
-          { key: 'elongation', label: '伸长率', unit: '%' }
-        ]
-      }
-      if (mode === 'release') {
-        return [
-          { key: 'releaseForceA', label: '离型力A面', unit: 'gf/in' },
-          { key: 'releaseForceB', label: '离型力B面', unit: 'gf/in' },
-          { key: 'thickness', label: '厚度', unit: 'μm' },
-          { key: 'color', label: '颜色', unit: '' }
-        ]
-      }
-      if (mode === 'core') {
-        return [
-          { key: 'innerDiameter', label: '内径', unit: 'mm' },
-          { key: 'outerDiameter', label: '外径', unit: 'mm' },
-          { key: 'wallThickness', label: '壁厚', unit: 'mm' },
-          { key: 'length', label: '长度', unit: 'mm' }
-        ]
-      }
+    getInspectionSchema() {
       return [
+        { key: 'thickness', label: '厚度', unit: 'μm' },
+        { key: 'coronaValue', label: '电晕值', unit: 'dyne' },
+        { key: 'tensileStrength', label: '抗拉强度', unit: 'N/15mm' },
+        { key: 'elongation', label: '伸长率', unit: '%' },
+        { key: 'color', label: '颜色', unit: '' },
+        { key: 'appearance', label: '外观', unit: '' },
         { key: 'solidContent', label: '固含量', unit: '%' },
-        { key: 'peelStrength', label: '剥离强度', unit: 'N/25mm' }
+        { key: 'viscosity', label: '粘度', unit: 'cps' },
+        { key: 'peelStrength', label: '剥离强度', unit: 'N/25mm' },
+        { key: 'releaseForceA', label: '离型力A', unit: 'gf/in' },
+        { key: 'releaseForceB', label: '离型力B', unit: 'gf/in' }
       ]
     },
     createRangeField(unit = '') {
       return { label: '', standardValue: '', min: '', max: '', unit, judgeMode: 'range', remark: '' }
     },
-    getDefaultPerformanceForm(category) {
-      const schema = this.getInspectionSchema(category)
+    getDefaultPerformanceForm() {
+      const schema = this.getInspectionSchema()
       const result = {}
       schema.forEach(item => {
-        result[item.key] = { ...this.createRangeField(item.unit), label: item.label }
+        result[item.key] = ''
       })
       return result
     },
     getCurrentInspectionFields() {
-      return this.getInspectionSchema(this.form.materialCategory)
+      return this.getInspectionSchema()
     },
     parsePerformanceParams(text) {
       if (!text) return {}
@@ -425,19 +396,21 @@ export default {
 
       return { standardValue: text, min: '', max: '', unit: defaultUnit, judgeMode: 'value', remark: '' }
     },
-    normalizePerformanceForm(parsed, category) {
-      const defaults = this.getDefaultPerformanceForm(category)
+    normalizePerformanceForm(parsed) {
+      const defaults = this.getDefaultPerformanceForm()
       const source = parsed && typeof parsed === 'object' ? parsed : {}
       const normalized = { ...defaults }
       Object.keys(defaults).forEach(key => {
-        const normalizedField = this.normalizeRangeField(source[key], defaults[key] && defaults[key].unit)
-        normalized[key] = { ...normalizedField, label: (normalizedField.label || (defaults[key] && defaults[key].label) || key) }
+        normalized[key] = this.formatRangeField(source[key])
       })
+      // 兼容历史别名
+      if (!normalized.appearance && source.surface) normalized.appearance = this.formatRangeField(source.surface)
+      if (!normalized.viscosity && source.viscosityValue) normalized.viscosity = this.formatRangeField(source.viscosityValue)
       return normalized
     },
     loadPerformanceForm() {
       const parsed = this.parsePerformanceParams(this.form.performanceParams)
-      this.performanceForm = this.normalizePerformanceForm(parsed, this.form.materialCategory)
+      this.performanceForm = this.normalizePerformanceForm(parsed)
     },
     formatRangeField(value) {
       if (value === null || value === undefined || value === '') return ''
@@ -459,12 +432,37 @@ export default {
     formatPerformanceSummary(row) {
       const parsed = this.parsePerformanceParams(row && row.performanceParams)
       if (!parsed || Object.keys(parsed).length === 0) return '-'
-      const category = (row && (row.materialCategoryRaw || row.materialCategory)) || ''
-      const schema = this.getInspectionSchema(category)
+      const schema = this.getInspectionSchema()
       return schema.map(item => {
         const val = parsed[item.key]
         return val ? `${item.label}:${this.formatRangeField(val)}` : ''
       }).filter(Boolean).join('；') || '-'
+    },
+    getPerfCell(row, key) {
+      const parsed = this.parsePerformanceParams(row && row.performanceParams)
+      if (!parsed || typeof parsed !== 'object') return '-'
+      const direct = this.formatRangeField(parsed[key])
+      if (direct) return direct
+      // 历史兼容
+      if (key === 'appearance') return this.formatRangeField(parsed.surface) || '-'
+      if (key === 'viscosity') return this.formatRangeField(parsed.viscosityValue) || '-'
+      if (key === 'releaseForceA') return this.formatRangeField(parsed.releaseForcea) || '-'
+      if (key === 'releaseForceB') return this.formatRangeField(parsed.releaseForceb) || '-'
+      return '-'
+    },
+    buildPerformanceParamsPayload() {
+      const payload = {}
+      this.getInspectionSchema().forEach(item => {
+        const raw = String(this.performanceForm[item.key] || '').trim()
+        if (!raw) return
+        const normalizedField = this.normalizeRangeField(raw, item.unit || '')
+        payload[item.key] = {
+          ...normalizedField,
+          label: item.label,
+          unit: normalizedField.unit || item.unit || ''
+        }
+      })
+      return payload
     },
     formatType(type) {
       const map = {
@@ -485,43 +483,106 @@ export default {
       }
       return map[category] || category || '-'
     },
-    unitOptionsForCategory() {
-      const mode = this.getCategoryMode(this.form.materialCategory)
+    defaultMaterialTypeByCategory(category) {
+      const mode = this.getCategoryMode(category)
+      if (mode === 'baseFilm') return 'PET膜'
+      if (mode === 'release') return 'PE离型膜'
+      if (mode === 'core') return '纸管'
+      return 'resin'
+    },
+    getMaterialTypeOptionsByMode(mode) {
+      if (mode === 'baseFilm') {
+        return [
+          { label: 'PET膜', value: 'PET膜' },
+          { label: 'BOPP膜', value: 'BOPP膜' },
+          { label: 'PE离型膜', value: 'PE离型膜' }
+        ]
+      }
+      if (mode === 'release') {
+        return [
+          { label: 'PE离型膜', value: 'PE离型膜' },
+          { label: '离型膜', value: '离型膜' },
+          { label: '离型纸', value: '离型纸' }
+        ]
+      }
+      if (mode === 'core') {
+        return [
+          { label: '纸管', value: '纸管' },
+          { label: '胶管', value: '胶管' }
+        ]
+      }
+      return [
+        { label: '树脂', value: 'resin' },
+        { label: '溶剂', value: 'solvent' },
+        { label: '助剂', value: 'additive' },
+        { label: '固化剂', value: 'curing' }
+      ]
+    },
+    getUnitOptionsByMode(mode) {
       if (mode === 'baseFilm') {
         return [
           { label: '㎡', value: '㎡' },
-          { label: 'CPS', value: 'CPS' },
+          { label: 'pcs', value: 'pcs' },
           { label: 'Kg', value: 'kg' },
           { label: '卷', value: '卷' }
         ]
       }
       if (mode === 'core') {
         return [
-          { label: 'CPS', value: 'CPS' },
+          { label: 'pcs', value: 'pcs' },
           { label: '支', value: '支' },
           { label: '个', value: '个' },
-          { label: '㎡', value: '㎡' },
           { label: 'Kg', value: 'kg' }
         ]
       }
       return [
         { label: '㎡', value: '㎡' },
-        { label: 'CPS', value: 'CPS' },
+        { label: 'pcs', value: 'pcs' },
         { label: 'Kg', value: 'kg' },
         { label: '桶', value: '桶' }
       ]
     },
+    normalizeUnitValue(unit) {
+      const v = String(unit || '').trim().toLowerCase()
+      if (v === 'cps' || v === 'pcs') return 'pcs'
+      return unit
+    },
+    materialTypeSearchOptions() {
+      const all = [
+        ...this.getMaterialTypeOptionsByMode('chemical'),
+        ...this.getMaterialTypeOptionsByMode('baseFilm'),
+        ...this.getMaterialTypeOptionsByMode('release'),
+        ...this.getMaterialTypeOptionsByMode('core')
+      ]
+      const map = new Map()
+      all.forEach(item => {
+        if (!map.has(item.value)) map.set(item.value, item)
+      })
+      return Array.from(map.values())
+    },
+    materialTypeOptionsForCategory(category) {
+      const mode = this.getCategoryMode(category || this.form.materialCategory)
+      return this.getMaterialTypeOptionsByMode(mode)
+    },
+    unitOptionsForCategory() {
+      const mode = this.getCategoryMode(this.form.materialCategory)
+      return this.getUnitOptionsByMode(mode)
+    },
     onCategoryChange(value) {
       this.form.materialCategoryRaw = value
+      this.form.unit = this.normalizeUnitValue(this.form.unit)
       const mode = this.getCategoryMode(value)
-      if (mode === 'baseFilm') {
-        this.form.unit = this.form.unit || '㎡'
-      } else if (mode === 'core') {
-        this.form.unit = this.form.unit || '支'
-      } else {
-        this.form.unit = this.form.unit || 'kg'
+      const options = this.materialTypeOptionsForCategory(value)
+      const hasCurrentType = options.some(x => x.value === this.form.materialType)
+      if (!hasCurrentType) {
+        this.form.materialType = options.length ? options[0].value : this.defaultMaterialTypeByCategory(value)
       }
-      this.performanceForm = this.getDefaultPerformanceForm(value)
+      const unitOptions = this.getUnitOptionsByMode(mode)
+      const hasCurrentUnit = unitOptions.some(x => x.value === this.form.unit)
+      if (!hasCurrentUnit) {
+        this.form.unit = unitOptions.length ? unitOptions[0].value : 'kg'
+      }
+      this.performanceForm = this.getDefaultPerformanceForm()
     },
     specPlaceholder() {
       const mode = this.getCategoryMode(this.form.materialCategory)
@@ -557,7 +618,15 @@ export default {
       this.fetchData()
     },
     handleReset() {
-      this.searchForm = { materialCode: '', materialName: '', materialCategory: '', materialType: '', status: null }
+      this.searchForm = {
+        materialCode: '',
+        materialName: '',
+        materialCategory: '',
+        materialType: '',
+        status: null,
+        releaseForceA: '',
+        releaseForceB: ''
+      }
       this.handleSearch()
     },
     handleSizeChange(size) {
@@ -571,7 +640,8 @@ export default {
     handleAdd() {
       this.dialogTitle = '新增原材料'
       this.form = this.getEmptyForm()
-      this.performanceForm = this.getDefaultPerformanceForm(this.form.materialCategory)
+      this.form.unit = this.normalizeUnitValue(this.form.unit)
+      this.performanceForm = this.getDefaultPerformanceForm()
       this.dialogVisible = true
       this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
     },
@@ -585,11 +655,10 @@ export default {
           materialName: res.data.materialName,
           materialCategory: res.data.materialCategoryRaw || res.data.materialCategory || '化工料',
           materialCategoryRaw: res.data.materialCategoryRaw || res.data.materialCategory || '化工料',
-          materialType: res.data.materialType || 'resin',
-          unit: res.data.unit || 'kg',
+          materialType: res.data.materialType || this.defaultMaterialTypeByCategory(res.data.materialCategoryRaw || res.data.materialCategory || '化工料'),
+          unit: this.normalizeUnitValue(res.data.unit || 'kg'),
           spec: res.data.spec || '',
           performanceParams: res.data.performanceParams || '',
-          sortOrder: res.data.sortOrder || 0,
           status: res.data.status == null ? 1 : res.data.status
         }
         this.loadPerformanceForm()
@@ -605,7 +674,8 @@ export default {
         this.submitting = true
         try {
           this.form.materialCategoryRaw = this.form.materialCategory
-          this.form.performanceParams = JSON.stringify(this.performanceForm || {})
+          this.form.unit = this.normalizeUnitValue(this.form.unit)
+          this.form.performanceParams = JSON.stringify(this.buildPerformanceParamsPayload())
           const api = this.form.id ? updateRawMaterial : createRawMaterial
           const res = await api(this.form)
           if (this.isSuccess(res.code)) {

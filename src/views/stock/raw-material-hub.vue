@@ -7,6 +7,7 @@
         </span>
         <div style="float: right">
           <el-button size="small" type="primary" @click="goTapeStock">胶带仓导入</el-button>
+          <el-button size="small" @click="goLegacy('package')">包材仓页面</el-button>
           <el-button size="small" @click="goLegacy('film')">薄膜旧页面</el-button>
           <el-button size="small" @click="goLegacy('chemical')">化工旧页面</el-button>
           <el-button size="small" @click="goLegacy('chemical-requisition')">化工请购</el-button>
@@ -49,7 +50,7 @@
 
       <el-alert
         v-if="showPackagingPlaceholder"
-        title="包材库存接口暂未独立接入，当前为分类占位。可先通过料号规则识别并在此筛选查看。"
+        title="当前筛选为包材分类，但暂无匹配数据。可点击右上角“包材仓页面”查看明细仓库存。"
         type="warning"
         :closable="false"
         style="margin-bottom: 12px"
@@ -82,7 +83,7 @@
         stripe
         style="width: 100%; margin-top: 8px"
       >
-        <el-table-column type="index" label="序号" width="60" align="center" />
+        <el-table-column type="index" label="序号" width="60" align="center" :index="indexMethod" />
         <el-table-column prop="category" label="分类" width="90" align="center">
           <template slot-scope="scope">
             <el-tag :type="categoryTagType(scope.row.category)" size="small">
@@ -118,6 +119,17 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <el-pagination
+        style="margin-top: 12px; text-align: right"
+        :current-page="pagination.current"
+        :page-sizes="[20, 50, 100]"
+        :page-size="pagination.size"
+        :total="pagination.total"
+        layout="total, sizes, prev, pager, next, jumper"
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange"
+      />
     </el-card>
   </div>
 </template>
@@ -134,7 +146,13 @@ export default {
     return {
       loading: false,
       allRows: [],
+      filteredRows: [],
       tableData: [],
+      pagination: {
+        current: 1,
+        size: 20,
+        total: 0
+      },
       summary: {
         totalCount: 0,
         filmCount: 0,
@@ -153,7 +171,7 @@ export default {
   },
   computed: {
     showPackagingPlaceholder() {
-      return this.filterForm.category === '包材' && this.tableData.length === 0
+      return this.filterForm.category === '包材' && this.filteredRows.length === 0
     }
   },
   methods: {
@@ -184,6 +202,7 @@ export default {
       }
     },
     handleSearch() {
+      this.pagination.current = 1
       this.applyFilter()
     },
     handleReset() {
@@ -191,12 +210,13 @@ export default {
         keyword: '',
         category: ''
       }
+      this.pagination.current = 1
       this.applyFilter()
     },
     applyFilter() {
       const keyword = String(this.filterForm.keyword || '').trim().toLowerCase()
       const category = this.filterForm.category
-      this.tableData = this.allRows.filter(row => {
+      this.filteredRows = this.allRows.filter(row => {
         if (category && row.category !== category) {
           return false
         }
@@ -207,8 +227,33 @@ export default {
         const name = String(row.materialName || '').toLowerCase()
         return code.includes(keyword) || name.includes(keyword)
       })
+      this.pagination.total = this.filteredRows.length
+      this.applyPagination()
+    },
+    applyPagination() {
+      const start = (this.pagination.current - 1) * this.pagination.size
+      const end = start + this.pagination.size
+      this.tableData = this.filteredRows.slice(start, end)
+    },
+    handleSizeChange(size) {
+      this.pagination.size = Number(size || 20)
+      this.pagination.current = 1
+      this.applyPagination()
+      this.scheduleTableLayout()
+    },
+    handleCurrentChange(current) {
+      this.pagination.current = Number(current || 1)
+      this.applyPagination()
+      this.scheduleTableLayout()
+    },
+    indexMethod(index) {
+      return (this.pagination.current - 1) * this.pagination.size + index + 1
     },
     goLegacy(type) {
+      if (type === 'package') {
+        this.$router.push({ path: '/stock/package-stock' })
+        return
+      }
       if (type === 'film') {
         this.$router.push({ path: '/stock/film-stock' })
         return

@@ -3,6 +3,7 @@
     <el-card>
       <div slot="header" class="clearfix">
         <span>配方管理</span>        <div style="float: right">
+          <el-button v-if="$canEdit()" type="danger" plain icon="el-icon-refresh" size="small" @click="handleResequence">重编流水号</el-button>
           <el-button v-if="$canImportExport()" type="success" icon="el-icon-download" size="small" @click="handleDownloadTemplate">下载模板</el-button>
           <el-button v-if="$canImportExport()" type="warning" icon="el-icon-upload2" size="small" @click="handleImportClick">导入</el-button>
           <el-button v-if="$canImportExport()" type="info" icon="el-icon-download" size="small" @click="handleExportAll">导出</el-button>
@@ -35,6 +36,7 @@
         <el-table-column prop="productName" label="产品名称" min-width="180" show-overflow-tooltip />
         <el-table-column prop="materialCode" label="产品料号" width="200" show-overflow-tooltip />
         <el-table-column prop="glueModel" label="胶水型号" width="180" show-overflow-tooltip />
+        <el-table-column prop="glueType" label="胶水类型" width="90" align="center" />
         <el-table-column prop="colorCode" label="颜色" width="70" align="center">
           <template slot-scope="scope">
             <el-tag size="small">{{ scope.row.colorCode }}</el-tag>
@@ -79,29 +81,36 @@
         <el-row :gutter="20">
           <el-col :span="8">
             <el-form-item label="文件编号">
-              <el-input v-model="form.formulaNo" placeholder="如: 107" />
+              <el-input v-model="form.formulaNo" placeholder="系统自动生成，如 F00001" disabled />
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="版次">
-              <el-input v-model="form.version" placeholder="如: A/0" />
+              <el-input v-model="form.version" placeholder="系统自动维护" disabled />
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="制定日期">
-              <el-date-picker v-model="form.createDate" type="date" placeholder="选择日期" style="width:100%" />
+              <el-date-picker v-model="form.createDate" type="datetime" placeholder="选择日期时间" style="width:100%" />
             </el-form-item>
           </el-col>
         </el-row>
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="产品料号" prop="materialCode">
-              <el-input v-model="form.materialCode" placeholder="如: 1011-R02-1204-G01-0300" />
+              <el-autocomplete
+                v-model="form.materialCode"
+                :fetch-suggestions="queryMaterialCodeSuggestions"
+                placeholder="输入关键字搜索研发料号/原料料号"
+                style="width:100%"
+                @select="handleMaterialCodeSelect"
+                @blur="handleMaterialCodeInputChange"
+              />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="产品名称" prop="productName">
-              <el-input v-model="form.productName" placeholder="如: 16μm翠绿PET终止胶带" />
+              <el-input v-model="form.productName" placeholder="根据料号自动带出" disabled />
             </el-form-item>
           </el-col>
         </el-row>
@@ -109,9 +118,16 @@
         <!-- 胶水信息 -->
         <el-divider content-position="left">胶水信息</el-divider>
         <el-row :gutter="20">
-          <el-col :span="12">
+          <el-col :span="8">
             <el-form-item label="胶水型号">
-              <el-input v-model="form.glueModel" placeholder="如: YKLJ0801G01040300" />
+              <el-input v-model="form.glueModel" placeholder="系统自动生成，如 GLU-00001" disabled />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="胶水类型">
+              <el-select v-model="form.glueType" placeholder="请选择" style="width:100%" @change="handleGlueTypeChange">
+                <el-option v-for="it in glueTypeOptions" :key="it.value" :label="it.label" :value="it.value" />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="6">
@@ -119,7 +135,9 @@
               <el-input v-model="form.colorCode" placeholder="如: G01" />
             </el-form-item>
           </el-col>
-          <el-col :span="6">
+        </el-row>
+        <el-row>
+          <el-col :span="24">
             <el-form-item label="状态">
               <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="禁用" />
             </el-form-item>
@@ -149,79 +167,67 @@
         </el-row>
         <el-row>
           <el-col :span="24">
-            <el-form-item label="工艺备注">
-              <el-input v-model="form.processRemark" type="textarea" :rows="2" placeholder="温度、速度等工艺参数" />
+            <el-form-item label="工艺温度">
+              <el-input v-model="form.processTemperature" placeholder="如: 70/80/120/120/120/90/80/70" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row>
+          <el-col :span="24">
+            <el-form-item label="工艺车速">
+              <el-input v-model="form.processSpeed" placeholder="如: 40m/min" />
             </el-form-item>
           </el-col>
         </el-row>
 
-        <!-- 原料配比 -->
-        <el-divider content-position="left">原料配比</el-divider>
-        <el-row :gutter="20" style="margin-bottom: 10px;">
-          <el-col :span="8">
-            <el-form-item label="原料类别">
-              <el-select v-model="rawMaterialCategory" style="width:100%" placeholder="请选择">
-                <el-option label="化工物料" value="chemical" />
-                <el-option label="薄膜" value="film" />
-                <el-option label="全部" value="" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="16">
-            <div style="line-height: 32px; color: #909399;">原料列表会按类别过滤，胶水配方建议选择“化工物料”。</div>
-          </el-col>
-        </el-row>
-        <el-table :data="form.items" border size="small" style="margin-bottom: 10px">
-          <el-table-column label="物料代码" width="150">
+        <!-- 胶水配比 -->
+        <el-divider content-position="left">胶水配比（化工）</el-divider>
+        <el-table :data="form.glueItems" border size="small" style="margin-bottom: 10px">
+          <el-table-column label="物料代码" width="220">
             <template slot-scope="scope">
               <el-select
                 v-model="scope.row.materialCode"
                 filterable
-                allow-create
-                placeholder="选择或输入"
+                placeholder="请选择（原材料表）"
                 size="small"
                 style="width:100%"
+                @focus="ensureRawMaterialsLoaded"
                 @change="onRawMaterialChange(scope.row, $event)"
               >
                 <el-option
-                  v-for="item in filteredRawMaterialOptions()"
+                  v-for="item in getSectionMaterialOptions('glue')"
                   :key="item.id"
                   :label="item.materialCode"
                   :value="item.materialCode"
                 >
                   <span style="float:left">{{ item.materialCode }}</span>
-                  <span style="float:right; color:#8492a6; font-size:12px">{{ item.materialName }} / {{ formatMaterialCategory(item.materialCategory) }}</span>
+                  <span style="float:right; color:#8492a6; font-size:12px">{{ item.materialName }}</span>
                 </el-option>
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column label="物料名称" width="120">
-            <template slot-scope="scope">
-              <el-input v-model="scope.row.materialName" size="small" placeholder="名称" />
-            </template>
-          </el-table-column>
-          <el-table-column label="重量(Kg/桶)" width="130">
+          <el-table-column label="重量(Kg/桶)" width="150">
             <template slot-scope="scope">
               <el-input-number v-model="scope.row.weight" :min="0" :precision="4" size="small" style="width:100%" />
             </template>
           </el-table-column>
-          <el-table-column label="比例(%)" width="120">
+          <el-table-column label="比例(%)" width="140">
             <template slot-scope="scope">
               <el-input-number v-model="scope.row.ratio" :min="0" :precision="4" size="small" style="width:100%" />
             </template>
           </el-table-column>
-          <el-table-column label="备注" min-width="200">
+          <el-table-column label="备注" min-width="260">
             <template slot-scope="scope">
               <el-input v-model="scope.row.remark" size="small" placeholder="稀释说明等" />
             </template>
           </el-table-column>
           <el-table-column label="操作" width="70" align="center">
             <template slot-scope="scope">
-              <el-button type="text" size="small" style="color:#f56c6c" @click="removeItem(scope.$index)">删除</el-button>
+              <el-button type="text" size="small" style="color:#f56c6c" @click="removeSectionItem('glueItems', scope.$index)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
-        <el-button type="primary" size="small" icon="el-icon-plus" @click="addItem">添加原料</el-button>
+        <el-button type="primary" size="small" icon="el-icon-plus" @click="addSectionItem('glueItems')">添加胶水配比</el-button>
         <el-button
           type="success"
           size="small"
@@ -229,7 +235,20 @@
           style="margin-left: 8px"
           :loading="ocrLoading"
           @click="handleOcrPageClick"
-        >单页识别录入BOM</el-button>
+        >单页识别录入胶水BOM</el-button>
+        <el-select v-model="selectedCompoundMaterialCode" filterable clearable size="small" style="width:260px; margin-left: 8px;" placeholder="选择复配料(如AJSZ0101(20%))">
+          <el-option
+            v-for="item in getCompoundMaterialOptions()"
+            :key="item.id"
+            :label="item.materialCode"
+            :value="item.materialCode"
+          >
+            <span style="float:left">{{ item.materialCode }}</span>
+            <span style="float:right; color:#8492a6; font-size:12px">{{ item.materialName }}</span>
+          </el-option>
+        </el-select>
+        <el-button type="warning" size="small" icon="el-icon-plus" style="margin-left: 6px" @click="addCompoundMaterialToGlue">添加复配料</el-button>
+        <span style="margin-left: 12px; color: #909399; font-size: 12px;">支持录入类似 AJSZ0101(20%)，系统会按基础料号匹配并建议备注。</span>
         <input
           ref="ocrPageFile"
           type="file"
@@ -237,6 +256,144 @@
           style="display:none"
           @change="handleOcrPageChange"
         >
+
+        <!-- 隔离剂配比 -->
+        <el-divider content-position="left">隔离剂配比（化工）</el-divider>
+        <el-table :data="form.isolatorItems" border size="small" style="margin-bottom: 10px">
+          <el-table-column label="物料代码" width="220">
+            <template slot-scope="scope">
+              <el-select
+                v-model="scope.row.materialCode"
+                filterable
+                placeholder="请选择（原材料表）"
+                size="small"
+                style="width:100%"
+                @focus="ensureRawMaterialsLoaded"
+                @change="onRawMaterialChange(scope.row, $event)"
+              >
+                <el-option
+                  v-for="item in getSectionMaterialOptions('isolator')"
+                  :key="item.id"
+                  :label="item.materialCode"
+                  :value="item.materialCode"
+                >
+                  <span style="float:left">{{ item.materialCode }}</span>
+                  <span style="float:right; color:#8492a6; font-size:12px">{{ item.materialName }}</span>
+                </el-option>
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="重量(Kg/桶)" width="150">
+            <template slot-scope="scope">
+              <el-input-number v-model="scope.row.weight" :min="0" :precision="4" size="small" style="width:100%" />
+            </template>
+          </el-table-column>
+          <el-table-column label="比例(%)" width="140">
+            <template slot-scope="scope">
+              <el-input-number v-model="scope.row.ratio" :min="0" :precision="4" size="small" style="width:100%" />
+            </template>
+          </el-table-column>
+          <el-table-column label="备注" min-width="260">
+            <template slot-scope="scope">
+              <el-input v-model="scope.row.remark" size="small" placeholder="稀释说明等" />
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="70" align="center">
+            <template slot-scope="scope">
+              <el-button type="text" size="small" style="color:#f56c6c" @click="removeSectionItem('isolatorItems', scope.$index)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-button type="primary" size="small" icon="el-icon-plus" @click="addSectionItem('isolatorItems')">添加隔离剂配比</el-button>
+
+        <!-- 离型材料 -->
+        <el-divider content-position="left">离型材料用量</el-divider>
+        <el-table :data="form.releaseItems" border size="small" style="margin-bottom: 10px">
+          <el-table-column label="物料代码" width="260">
+            <template slot-scope="scope">
+              <el-select
+                v-model="scope.row.materialCode"
+                filterable
+                placeholder="请选择（原材料表）"
+                size="small"
+                style="width:100%"
+                @focus="ensureRawMaterialsLoaded"
+                @change="onRawMaterialChange(scope.row, $event)"
+              >
+                <el-option
+                  v-for="item in getSectionMaterialOptions('release')"
+                  :key="item.id"
+                  :label="item.materialCode"
+                  :value="item.materialCode"
+                >
+                  <span style="float:left">{{ item.materialCode }}</span>
+                  <span style="float:right; color:#8492a6; font-size:12px">{{ item.materialName }}</span>
+                </el-option>
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="平米数(㎡)" width="160">
+            <template slot-scope="scope">
+              <el-input-number v-model="scope.row.weight" :min="0" :precision="2" size="small" style="width:100%" />
+            </template>
+          </el-table-column>
+          <el-table-column label="备注" min-width="320">
+            <template slot-scope="scope">
+              <el-input v-model="scope.row.remark" size="small" placeholder="备注" />
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="70" align="center">
+            <template slot-scope="scope">
+              <el-button type="text" size="small" style="color:#f56c6c" @click="removeSectionItem('releaseItems', scope.$index)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-button type="primary" size="small" icon="el-icon-plus" @click="addSectionItem('releaseItems', true)">添加离型材料</el-button>
+
+        <!-- 基材 -->
+        <el-divider content-position="left">基材用量</el-divider>
+        <el-table :data="form.baseItems" border size="small" style="margin-bottom: 10px">
+          <el-table-column label="物料代码" width="260">
+            <template slot-scope="scope">
+              <el-select
+                v-model="scope.row.materialCode"
+                filterable
+                placeholder="请选择（原材料表）"
+                size="small"
+                style="width:100%"
+                @focus="ensureRawMaterialsLoaded"
+                @change="onRawMaterialChange(scope.row, $event)"
+              >
+                <el-option
+                  v-for="item in getSectionMaterialOptions('base')"
+                  :key="item.id"
+                  :label="item.materialCode"
+                  :value="item.materialCode"
+                >
+                  <span style="float:left">{{ item.materialCode }}</span>
+                  <span style="float:right; color:#8492a6; font-size:12px">{{ item.materialName }}</span>
+                </el-option>
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="平米数(㎡)" width="160">
+            <template slot-scope="scope">
+              <el-input-number v-model="scope.row.weight" :min="0" :precision="2" size="small" style="width:100%" />
+            </template>
+          </el-table-column>
+          <el-table-column label="备注" min-width="320">
+            <template slot-scope="scope">
+              <el-input v-model="scope.row.remark" size="small" placeholder="备注" />
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="70" align="center">
+            <template slot-scope="scope">
+              <el-button type="text" size="small" style="color:#f56c6c" @click="removeSectionItem('baseItems', scope.$index)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-button type="primary" size="small" icon="el-icon-plus" @click="addSectionItem('baseItems', true)">添加基材</el-button>
+
         <span style="margin-left: 20px; font-weight: bold;">
           总重量: {{ calculateTotalWeight() }} kg
         </span>
@@ -264,6 +421,7 @@
 
       <div slot="footer">
         <el-button @click="dialogVisible = false">取 消</el-button>
+        <el-button :loading="submitting" @click="handleTempSave">临时保存</el-button>
         <el-button type="primary" :loading="submitting" @click="handleSubmit">确 定</el-button>
       </div>
     </el-dialog>
@@ -295,8 +453,14 @@
           <tr>
             <td class="label">胶水型号</td>
             <td colspan="2">{{ viewData.glueModel }}</td>
+            <td class="label">胶水类型</td>
+            <td colspan="2">{{ viewData.glueType || '-' }}</td>
+          </tr>
+          <tr>
             <td class="label">颜色</td>
             <td colspan="2">{{ viewData.colorCode }}</td>
+            <td class="label">工艺车速</td>
+            <td colspan="2">{{ viewData.processSpeed || '-' }}</td>
           </tr>
           <tr>
             <td class="label">涂胶厚度(μm)</td>
@@ -311,8 +475,8 @@
             <td colspan="5">{{ viewData.coatingArea }}</td>
           </tr>
           <tr>
-            <td class="label">备注</td>
-            <td colspan="5" class="remark-cell">{{ viewData.processRemark }}</td>
+            <td class="label">工艺温度</td>
+            <td colspan="5" class="remark-cell">{{ viewData.processTemperature || '-' }}</td>
           </tr>
         </table>
 
@@ -320,20 +484,20 @@
         <table class="item-table">
           <thead>
             <tr>
+              <th>分组</th>
               <th>物料代码</th>
-              <th>物料名称</th>
-              <th>Kg/桶</th>
+              <th>数值</th>
               <th>比例</th>
               <th>备注</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(item, idx) in viewData.items" :key="idx">
+              <td>{{ getSectionLabel(getItemSection(item)) }}</td>
               <td>{{ item.materialCode }}</td>
-              <td>{{ item.materialName }}</td>
-              <td class="number">{{ item.weight }}</td>
-              <td class="number">{{ item.ratio ? item.ratio + '%' : '/' }}</td>
-              <td>{{ item.remark }}</td>
+              <td class="number">{{ formatItemValue(item) }}</td>
+              <td class="number">{{ isAreaSection(getItemSection(item)) ? '/' : (item.ratio ? item.ratio + '%' : '/') }}</td>
+              <td>{{ stripStoredRemark(item.remark) }}</td>
             </tr>
             <tr class="total-row">
               <td colspan="2"><strong>总重量(kg)</strong></td>
@@ -365,9 +529,11 @@
 <script>
 import {
   getFormulaList, getFormulaById, createFormula, updateFormula, deleteFormula, exportFormula,
+  resequenceFormula,
   downloadTemplate, importFormula, exportAllFormula
 } from '@/api/tapeFormula'
 import { getRawMaterialList } from '@/api/tapeRawMaterial'
+import { getSpecByMaterialCode, getSpecSuggestions } from '@/api/tapeSpec'
 import * as XLSX from 'xlsx'
 
 export default {
@@ -380,7 +546,25 @@ export default {
         glueModel: ''
       },
       rawMaterials: [],
-      rawMaterialCategory: 'chemical',
+      glueTypeOptions: [
+        { label: '亚克力', value: '亚克力' },
+        { label: '橡胶', value: '橡胶' },
+        { label: '硅胶', value: '硅胶' },
+        { label: 'PU胶', value: 'PU胶' },
+        { label: '固化剂', value: '固化剂' },
+        { label: '催化剂', value: '催化剂' },
+        { label: '离型剂', value: '离型剂' },
+        { label: '静电剂', value: '静电剂' },
+        { label: '光油', value: '光油' },
+        { label: '油墨', value: '油墨' }
+      ],
+      glueDensityMap: {
+        亚克力: 1.05,
+        橡胶: 0.98,
+        硅胶: 1.1,
+        PU胶: 1.12
+      },
+      selectedCompoundMaterialCode: '',
       list: [],
       loading: false,
       pagination: { page: 1, size: 20, total: 0 },
@@ -407,6 +591,54 @@ export default {
     this.fetchRawMaterials()
   },
   methods: {
+    getTempDraftStorageKey() {
+      if (this.form && this.form.id) return `tape_formula_temp_draft_${this.form.id}`
+      return 'tape_formula_temp_draft_new'
+    },
+    buildTempDraftPayload() {
+      this.syncFlatItemsFromSections()
+      return {
+        form: {
+          ...this.form,
+          createDate: this.form && this.form.createDate ? this.form.createDate : null
+        },
+        savedAt: Date.now()
+      }
+    },
+    readTempDraft() {
+      try {
+        const key = this.getTempDraftStorageKey()
+        const raw = window.localStorage.getItem(key)
+        if (!raw) return null
+        const data = JSON.parse(raw)
+        if (!data || !data.form) return null
+        return data
+      } catch (e) {
+        return null
+      }
+    },
+    clearTempDraft(key) {
+      try {
+        const targetKey = key || this.getTempDraftStorageKey()
+        window.localStorage.removeItem(targetKey)
+      } catch (e) {
+        // ignore
+      }
+    },
+    async tryRestoreTempDraft() {
+      const data = this.readTempDraft()
+      if (!data || !data.form) return
+      try {
+        await this.$confirm('检测到上次临时保存的草稿，是否恢复继续编辑？', '提示', { type: 'info' })
+        this.form = { ...this.getEmptyForm(), ...data.form }
+        this.form.createDate = this.form.createDate ? new Date(this.form.createDate) : new Date()
+        if (!this.form.items) this.form.items = []
+        this.initializeSectionItemsFromFlat()
+        this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
+      } catch (e) {
+        // 用户取消恢复，不处理
+      }
+    },
     $canEdit() {
       // 只有 admin 和 rd 角色可以进行增删改操作
       return this.$hasRole('admin') || this.$hasRole('rd')
@@ -424,14 +656,84 @@ export default {
         console.error('获取原料字典失败', e)
       }
     },
+    ensureRawMaterialsLoaded() {
+      if (!Array.isArray(this.rawMaterials) || this.rawMaterials.length === 0) {
+        this.fetchRawMaterials()
+      }
+    },
     formatMaterialCategory(category) {
       const map = { film: '薄膜', chemical: '化工物料' }
       return map[category] || category || '-'
     },
-    filteredRawMaterialOptions() {
+    normalizeMaterialCategory(category) {
+      const text = String(category || '').trim().toLowerCase()
+      if (!text) return ''
+      if (text === 'chemical' || text.includes('化工')) return 'chemical'
+      if (text === 'film' || text.includes('薄膜')) return 'film'
+      return text
+    },
+    isChemicalLikeMaterial(item) {
+      const cat = this.normalizeMaterialCategory(item && item.materialCategory)
+      if (cat === 'chemical') return true
+      const text = [
+        item && item.materialType,
+        item && item.materialMajor,
+        item && item.materialCategoryRaw,
+        item && item.materialName,
+        item && item.materialCode
+      ].filter(Boolean).join(' ').toLowerCase()
+      return /化工|树脂|固化剂|催化剂|离型剂|静电剂|油墨|光油|胶/.test(text)
+    },
+    isAreaLikeMaterial(item) {
+      const cat = this.normalizeMaterialCategory(item && item.materialCategory)
+      if (cat === 'film') return true
+      const text = [
+        item && item.materialType,
+        item && item.materialMajor,
+        item && item.materialCategoryRaw,
+        item && item.materialCategory,
+        item && item.materialName,
+        item && item.materialCode
+      ].filter(Boolean).join(' ').toLowerCase()
+      return /薄膜|原膜|基材|离型|保护膜|pet|bopp|opp|ops|cpp|pi|pvc|tpu|tissue|pefoam|fiberglass/.test(text)
+    },
+    filteredRawMaterialOptions(category = '') {
       const list = this.rawMaterials || []
-      if (!this.rawMaterialCategory) return list
-      return list.filter(item => item.materialCategory === this.rawMaterialCategory)
+      if (!category) return list
+      return list.filter(item => this.normalizeMaterialCategory(item.materialCategory) === category)
+    },
+    getSectionMaterialOptions(section) {
+      const list = this.rawMaterials || []
+      if (!list.length) return []
+      if (section === 'glue' || section === 'isolator') {
+        const chemicalList = list.filter(item => this.isChemicalLikeMaterial(item))
+        return chemicalList.length ? chemicalList : list
+      }
+      if (section === 'base' || section === 'release') {
+        const areaList = list.filter(item => this.isAreaLikeMaterial(item))
+        return areaList.length ? areaList : list
+      }
+      return list
+    },
+    getCompoundMaterialOptions() {
+      return (this.rawMaterials || []).filter((item) => {
+        if (this.normalizeMaterialCategory(item.materialCategory) !== 'chemical') return false
+        const code = String(item.materialCode || '')
+        return /[（(]\s*\d+(?:\.\d+)?\s*%\s*[）)]/.test(code)
+      })
+    },
+    addCompoundMaterialToGlue() {
+      const code = String(this.selectedCompoundMaterialCode || '').trim()
+      if (!code) {
+        this.$message.warning('请先选择复配料')
+        return
+      }
+      const row = this.newMixItem()
+      row.materialCode = code
+      this.onRawMaterialChange(row, code)
+      if (!Array.isArray(this.form.glueItems)) this.$set(this.form, 'glueItems', [])
+      this.form.glueItems.push(row)
+      this.selectedCompoundMaterialCode = ''
     },
     getEmptyForm() {
       return {
@@ -439,31 +741,29 @@ export default {
         materialCode: '',
         productName: '',
         formulaNo: '',
-        version: 'A/0',
+        version: 'A/00',
         createDate: new Date(),
         glueModel: '',
+        glueType: '',
         colorCode: '',
         coatingThickness: null,
         glueDensity: null,
         solidContent: '',
         coatingArea: null,
+        processTemperature: '',
+        processSpeed: '',
         processRemark: '',
         totalWeight: null,
         preparedBy: '',
         reviewedBy: '',
         approvedBy: '',
         status: 1,
-        items: []
+        items: [],
+        glueItems: [],
+        isolatorItems: [],
+        releaseItems: [],
+        baseItems: []
       }
-    },
-    inferRawMaterialCategory(form) {
-      const text = [form && form.materialCode, form && form.productName, form && form.glueModel, form && form.formulaNo]
-        .filter(Boolean)
-        .join(' ')
-      if (/薄膜|film|PET|BOPP|CPP|离型膜|基材|卷材/i.test(text)) {
-        return 'film'
-      }
-      return 'chemical'
     },
     async fetchData() {
       this.loading = true
@@ -503,9 +803,10 @@ export default {
     handleAdd() {
       this.dialogTitle = '新增配方'
       this.form = this.getEmptyForm()
-      this.rawMaterialCategory = this.inferRawMaterialCategory(this.form)
+      this.initializeSectionItemsFromFlat()
       this.dialogVisible = true
       this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
+      this.tryRestoreTempDraft()
     },
     async handleEdit(row) {
       this.dialogTitle = '编辑配方'
@@ -514,9 +815,15 @@ export default {
         const res = await getFormulaById(row.id)
         if (res.code === 20000) {
           this.form = { ...res.data }
+          this.form.createDate = this.form.createDate ? new Date(this.form.createDate) : new Date()
+          if (!this.form.version) {
+            this.form.version = 'A/00'
+          }
           if (!this.form.items) this.form.items = []
-          this.rawMaterialCategory = this.inferRawMaterialCategory(this.form)
+          this.initializeSectionItemsFromFlat()
           this.dialogVisible = true
+          this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
+          this.tryRestoreTempDraft()
         }
       } catch (e) {
         this.$message.error('获取详情失败')
@@ -545,7 +852,8 @@ export default {
         return
       }
 
-      // 计算总重量
+      this.syncFlatItemsFromSections()
+      // 总重量仅统计化工配比（胶水+隔离剂）
       this.form.totalWeight = this.calculateTotalWeight()
 
       this.submitting = true
@@ -553,6 +861,7 @@ export default {
         const res = this.form.id ? await updateFormula(this.form) : await createFormula(this.form)
         if (res.code === 20000) {
           this.$message.success(this.form.id ? '更新成功' : '创建成功')
+          this.clearTempDraft()
           this.dialogVisible = false
           this.fetchData()
         } else {
@@ -562,6 +871,121 @@ export default {
         this.$message.error('操作失败')
       } finally {
         this.submitting = false
+      }
+    },
+    async handleTempSave() {
+      this.submitting = true
+      try {
+        const key = this.getTempDraftStorageKey()
+        const payload = this.buildTempDraftPayload()
+        window.localStorage.setItem(key, JSON.stringify(payload))
+        this.$message.success('已临时保存，下次可继续编辑')
+      } catch (e) {
+        this.$message.error('临时保存失败')
+      } finally {
+        this.submitting = false
+      }
+    },
+    async handleResequence() {
+      this.$confirm('将重编全部历史文件编号与胶水型号，并将版次重置为A/00，是否继续？', '提示', { type: 'warning' })
+        .then(async() => {
+          const res = await resequenceFormula()
+          if (res && (res.code === 20000 || res.code === 200)) {
+            this.$message.success(`重编完成，更新 ${res.data && res.data.updated ? res.data.updated : 0} 条`)
+            this.fetchData()
+            return
+          }
+          this.$message.error((res && res.msg) || '重编失败')
+        })
+        .catch(() => {})
+    },
+    handleGlueTypeChange(type) {
+      const v = this.glueDensityMap[type]
+      if (v !== undefined && v !== null) {
+        this.form.glueDensity = Number(v)
+      }
+    },
+    async queryMaterialCodeSuggestions(queryString, cb) {
+      const keyword = String(queryString || '').trim()
+      if (!keyword) {
+        cb([])
+        return
+      }
+      try {
+        const [specRes] = await Promise.all([
+          getSpecSuggestions(keyword, 20)
+        ])
+
+        const rows = (specRes && (specRes.code === 20000 || specRes.code === 200) && Array.isArray(specRes.data)) ? specRes.data : []
+        const specList = rows.map(it => ({
+          value: it.materialCode || '',
+          materialCode: it.materialCode || '',
+          productName: it.productName || '',
+          colorCode: it.colorCode || '',
+          coatingThickness: it.glueThickness != null ? it.glueThickness : null,
+          source: 'spec'
+        }))
+
+        const rawList = (this.rawMaterials || [])
+          .filter((it) => {
+            const code = String(it.materialCode || '').toLowerCase()
+            const name = String(it.materialName || '').toLowerCase()
+            const kw = keyword.toLowerCase()
+            return code.includes(kw) || name.includes(kw)
+          })
+          .slice(0, 20)
+          .map((it) => ({
+            value: it.materialCode || '',
+            materialCode: it.materialCode || '',
+            productName: it.materialName || '',
+            colorCode: '',
+            coatingThickness: null,
+            source: 'raw'
+          }))
+
+        const mergedMap = new Map()
+        ;[...specList, ...rawList].forEach((it) => {
+          const key = String(it.materialCode || '').trim().toUpperCase()
+          if (!key) return
+          if (!mergedMap.has(key)) {
+            mergedMap.set(key, it)
+          }
+        })
+        const list = Array.from(mergedMap.values())
+        cb(list)
+      } catch (e) {
+        cb([])
+      }
+    },
+    handleMaterialCodeSelect(item) {
+      if (!item) return
+      this.form.materialCode = item.materialCode || item.value || this.form.materialCode
+      if (item.productName) this.form.productName = item.productName
+      if (item.colorCode && !this.form.colorCode) this.form.colorCode = item.colorCode
+      if (item.coatingThickness != null) this.form.coatingThickness = Number(item.coatingThickness)
+    },
+    async handleMaterialCodeInputChange() {
+      const code = String(this.form.materialCode || '').trim()
+      if (!code) {
+        this.form.productName = ''
+        return
+      }
+      if (code.length < 4) return
+
+      const raw = (this.rawMaterials || []).find((it) => String(it.materialCode || '').trim().toUpperCase() === code.toUpperCase())
+      if (raw) {
+        this.form.productName = raw.materialName || this.form.productName
+      }
+
+      try {
+        const res = await getSpecByMaterialCode(code)
+        if (!(res && (res.code === 20000 || res.code === 200) && res.data)) return
+        const data = res.data || {}
+        if (data.productName) this.form.productName = data.productName
+        if (data.colorCode && !this.form.colorCode) this.form.colorCode = data.colorCode
+        if (data.glueThickness != null) this.form.coatingThickness = Number(data.glueThickness)
+      } catch (e) {
+        // 忽略
       }
     },
     handleDelete(row) {
@@ -595,28 +1019,162 @@ export default {
       }
     },
     // 原料操作
-    addItem() {
-      this.form.items.push({
+    getSectionKey(sectionName) {
+      const mapping = {
+        glueItems: 'GLUE',
+        isolatorItems: 'ISOLATOR',
+        releaseItems: 'RELEASE',
+        baseItems: 'BASE'
+      }
+      return mapping[sectionName] || 'GLUE'
+    },
+    getSectionLabel(sectionKey) {
+      const mapping = {
+        GLUE: '胶水配比',
+        ISOLATOR: '隔离剂配比',
+        FILM: '基材',
+        RELEASE: '离型材料',
+        BASE: '基材'
+      }
+      return mapping[sectionKey] || '胶水配比'
+    },
+    isAreaSection(sectionKey) {
+      return ['RELEASE', 'BASE', 'FILM'].includes(sectionKey)
+    },
+    newMixItem() {
+      return {
         materialCode: '',
         materialName: '',
         weight: null,
         ratio: null,
         remark: ''
-      })
+      }
+    },
+    newAreaItem() {
+      return {
+        materialCode: '',
+        materialName: '',
+        weight: null,
+        ratio: null,
+        remark: ''
+      }
+    },
+    addSectionItem(sectionName, isArea = false) {
+      if (!Array.isArray(this.form[sectionName])) {
+        this.$set(this.form, sectionName, [])
+      }
+      this.form[sectionName].push(isArea ? this.newAreaItem() : this.newMixItem())
     },
     onRawMaterialChange(row, code) {
-      const matched = (this.rawMaterials || []).find(item => item.materialCode === code)
+      const norm = (v) => String(v || '').trim().toUpperCase()
+      const codeText = String(code || '').trim()
+      const codeUpper = norm(codeText)
+      const baseUpper = codeUpper.replace(/\s*[（(]\s*\d+(?:\.\d+)?\s*%\s*[）)]\s*$/, '')
+      const matched = (this.rawMaterials || []).find((item) => {
+        const itemCode = norm(item.materialCode)
+        return itemCode === codeUpper || itemCode === baseUpper
+      })
       if (matched) {
         row.materialName = matched.materialName || row.materialName
       }
+      const pct = codeText.match(/[（(]\s*(\d+(?:\.\d+)?)\s*%\s*[）)]/)
+      if (pct && !row.remark) {
+        row.remark = `按${pct[1]}%浓度稀释后使用`
+      }
     },
-    removeItem(index) {
-      this.form.items.splice(index, 1)
+    removeSectionItem(sectionName, index) {
+      if (!Array.isArray(this.form[sectionName])) return
+      this.form[sectionName].splice(index, 1)
+    },
+    toStoredRemark(sectionKey, userRemark) {
+      const remark = String(userRemark || '').trim()
+      return `【分组:${sectionKey}】${remark}`
+    },
+    stripStoredRemark(remark) {
+      return String(remark || '').replace(/^【分组:(GLUE|ISOLATOR|FILM|RELEASE|BASE)】/, '').trim()
+    },
+    getItemSection(item) {
+      const remark = String(item && item.remark ? item.remark : '')
+      const match = remark.match(/^【分组:(GLUE|ISOLATOR|FILM|RELEASE|BASE)】/)
+      if (match && match[1]) return match[1]
+
+      const category = (this.rawMaterials || []).find(r => String(r.materialCode || '').trim().toUpperCase() === String(item.materialCode || '').trim().toUpperCase())
+      const matCategory = category ? this.normalizeMaterialCategory(category.materialCategory) : ''
+      const codeText = String(item.materialCode || '').toUpperCase()
+      if (matCategory === 'chemical') return 'GLUE'
+      if (/离型|RELEASE/.test(codeText)) return 'RELEASE'
+      if (/PET|BOPP|CPP|PI|PVC|OPP|TPU|TISSUE|PEFOAM|FIBERGLASS/.test(codeText)) return 'BASE'
+      return matCategory === 'film' ? 'FILM' : 'GLUE'
+    },
+    initializeSectionItemsFromFlat() {
+      const items = Array.isArray(this.form.items) ? this.form.items : []
+      const groups = {
+        glueItems: [],
+        isolatorItems: [],
+        releaseItems: [],
+        baseItems: []
+      }
+      items.forEach((it) => {
+        const section = this.getItemSection(it)
+        const row = {
+          materialCode: it.materialCode || '',
+          materialName: it.materialName || '',
+          weight: it.weight,
+          ratio: it.ratio,
+          remark: this.stripStoredRemark(it.remark)
+        }
+        if (section === 'ISOLATOR') groups.isolatorItems.push(row)
+        else if (section === 'FILM') groups.baseItems.push(row)
+        else if (section === 'RELEASE') groups.releaseItems.push(row)
+        else if (section === 'BASE') groups.baseItems.push(row)
+        else groups.glueItems.push(row)
+      })
+      this.form.glueItems = groups.glueItems
+      this.form.isolatorItems = groups.isolatorItems
+      this.form.releaseItems = groups.releaseItems
+      this.form.baseItems = groups.baseItems
+    },
+    normalizeSectionList(list) {
+      return (Array.isArray(list) ? list : [])
+        .map(row => ({
+          materialCode: String(row.materialCode || '').trim(),
+          materialName: String(row.materialName || '').trim(),
+          weight: row.weight,
+          ratio: row.ratio,
+          remark: String(row.remark || '').trim()
+        }))
+        .filter(row => row.materialCode)
+    },
+    makeFlatItems(sectionName, list) {
+      const sectionKey = this.getSectionKey(sectionName)
+      return this.normalizeSectionList(list).map(row => ({
+        materialCode: row.materialCode,
+        materialName: row.materialName || '',
+        weight: row.weight,
+        ratio: this.isAreaSection(sectionKey) ? null : row.ratio,
+        remark: this.toStoredRemark(sectionKey, row.remark)
+      }))
+    },
+    syncFlatItemsFromSections() {
+      const flat = []
+      flat.push(...this.makeFlatItems('glueItems', this.form.glueItems))
+      flat.push(...this.makeFlatItems('isolatorItems', this.form.isolatorItems))
+      flat.push(...this.makeFlatItems('releaseItems', this.form.releaseItems))
+      flat.push(...this.makeFlatItems('baseItems', this.form.baseItems))
+      this.form.items = flat
+    },
+    formatItemValue(item) {
+      const section = this.getItemSection(item)
+      const value = item && item.weight !== undefined && item.weight !== null ? item.weight : ''
+      return this.isAreaSection(section) ? `${value} ㎡` : `${value} Kg/桶`
     },
     calculateTotalWeight() {
-      if (!this.form.items || this.form.items.length === 0) return 0
+      const glue = this.normalizeSectionList(this.form.glueItems)
+      const isolator = this.normalizeSectionList(this.form.isolatorItems)
+      const mixRows = [...glue, ...isolator]
+      if (!mixRows.length) return 0
       let total = 0
-      this.form.items.forEach(item => {
+      mixRows.forEach(item => {
         if (item.weight) total += parseFloat(item.weight) || 0
       })
       return total.toFixed(4)
@@ -883,11 +1441,11 @@ export default {
           }
         })
         if (parsed.items && parsed.items.length) {
-          this.form.items = parsed.items
+          this.form.glueItems = parsed.items
           this.form.totalWeight = this.calculateTotalWeight()
-          this.$message.success(`识别完成，已填充 ${parsed.items.length} 条BOM，请核对后保存`) 
+          this.$message.success(`识别完成，已填充胶水配比 ${parsed.items.length} 条，请核对后保存`)
         } else {
-          this.$message.warning('主信息已尝试填充，但未识别到BOM明细，请手工补充')
+          this.$message.warning('主信息已尝试填充，但未识别到胶水配比明细，请手工补充')
         }
       } catch (err) {
         console.error('OCR识别失败', err)

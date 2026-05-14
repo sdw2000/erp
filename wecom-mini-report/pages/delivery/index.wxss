@@ -1,0 +1,13 @@
+@import '../../app.wxss';
+
+.row-middle {
+  align-items: flex-end;
+}
+
+.small {
+  margin-top: 0;
+  margin-left: 12rpx;
+  font-size: 24rpx;
+  padding: 10rpx 16rpx;
+  white-space: nowrap;
+}

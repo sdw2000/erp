@@ -7,6 +7,16 @@
 - 账号登录（复用 MES `/user/login`）
 - 提交工序报工（`/schedule/manual/report-work`）
 - 查询报工记录（`/schedule/manual/report-work/list`）
+- 领料登记（`/schedule/manual/report-work/material-issue`）
+- 领料模板带出（`/schedule/manual/report-work/material-issue-template`）
+- 查询工序领料明细（`/schedule/manual/report-work/material-issues`）
+- 成品出库申请（`/api/tape-stock/outbound`）
+- 完工入库申请（`/api/tape-stock/inbound`）
+- 出库/入库申请列表查询（`/api/tape-stock/outbound/list`、`/api/tape-stock/inbound/list`）
+- 按料号查询成品库存并选批次（`/api/tape-stock/list`）
+- 领料/出库/入库支持扫码二维码与手输二维码编码（加速出入库）
+- 按账号角色展示功能：仓库角色仅显示出库/入库/盘点快捷入口
+- 扫码盘点（`/api/tape-stock/{id}/stocktake`）
 - 兼容 `X-Token` / `token` 请求头
 
 ## 目录结构
@@ -16,6 +26,10 @@
 - `api/`：登录、报工接口
 - `pages/login`：登录页
 - `pages/report`：报工提交页
+- `pages/issue`：领料登记页（支持模板带出、历史查询）
+- `pages/outbound`：成品出库申请页（库存选择 + 提交 + 记录）
+- `pages/inbound`：完工入库申请页（提交 + 记录）
+- `pages/stocktake`：扫码盘点页（扫码/手输二维码 + 实盘提交）
 - `pages/history`：报工记录查询页
 
 ## 使用方式

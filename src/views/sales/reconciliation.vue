@@ -4,19 +4,19 @@
       <div slot="header" class="page-header">
         <span class="card-title">销售对账单</span>
         <div>
-          <el-button size="small" icon="el-icon-upload2" :disabled="!queryForm.customerCode" @click="triggerImportHistory">导入</el-button>
+          <el-button size="small" icon="el-icon-upload2" @click="triggerImportHistory">导入</el-button>
           <el-button size="small" icon="el-icon-download" :disabled="!queryForm.customerCode || !queryForm.month" @click="handleExport">导出</el-button>
           <el-button size="small" icon="el-icon-plus" :disabled="!queryForm.customerCode" @click="openInitDialog">历史初始化</el-button>
           <el-button size="small" icon="el-icon-refresh" @click="handleReset">重置</el-button>
           <el-button type="primary" size="small" icon="el-icon-search" @click="handleSearch">查询</el-button>
           <el-button type="success" size="small" icon="el-icon-printer" :disabled="!statementLoaded" @click="openPrintPreview">打印预览</el-button>
-          <input ref="historyImportFile" type="file" accept=".csv,.txt" style="display:none" @change="handleImportHistoryChange">
+          <input ref="historyImportFile" type="file" accept=".csv,.txt,.xlsx,.xls" style="display:none" @change="handleImportHistoryChange">
         </div>
       </div>
 
       <div class="search-area">
         <el-row :gutter="12">
-          <el-col :span="10">
+          <el-col :span="10" v-if="activeTab === 'detail'">
             <div class="search-item">
               <span class="search-label">客户</span>
               <el-select v-model="queryForm.customerCode" filterable clearable placeholder="请选择客户" style="width:100%">
@@ -30,8 +30,31 @@
               <el-date-picker v-model="queryForm.month" type="month" value-format="yyyy-MM" placeholder="选择月份" style="width:100%" />
             </div>
           </el-col>
+          <el-col :span="10" v-if="activeTab === 'overview'">
+            <div class="search-item" style="display: flex; gap: 12px; align-items: center;">
+              <span class="search-label">客户</span>
+              <el-select v-model="queryForm.customerCode" filterable clearable placeholder="请选择客户（可选）" style="width:180px">
+                <el-option v-for="item in customers" :key="item.id" :label="`${item.shortName || item.customerName}（${item.customerCode}）`" :value="item.customerCode" />
+              </el-select>
+              <span class="search-label">是否对账</span>
+              <el-select v-model="queryForm.reconciledStatus" clearable placeholder="全部" style="width:120px">
+                <el-option label="全部" value="" />
+                <el-option label="已对账" value="RECONCILED" />
+                <el-option label="未对账" value="UNRECONCILED" />
+              </el-select>
+            </div>
+          </el-col>
+          <el-col :span="8" v-if="activeTab === 'detail' && statementLoaded">
+            <div class="search-item">
+              <span class="search-label status-label">状态</span>
+              <el-tag :type="getStatusTagType(statement.reconciliationStatus)" size="small">{{ statement.reconciliationStatusLabel || '未对账' }}</el-tag>
+            </div>
+          </el-col>
         </el-row>
       </div>
+
+      <el-tabs v-model="activeTab" class="reconciliation-tabs" @tab-click="handleTabChange">
+        <el-tab-pane label="对账明细" name="detail">
 
       <div v-if="statementLoaded" class="summary-grid">
         <div class="summary-card">
@@ -59,22 +82,43 @@
       <div class="section-block">
         <div class="section-head">
           <div class="section-title">当月送货明细</div>
-          <el-button
-            type="success"
-            size="small"
-            icon="el-icon-check"
-            :disabled="!statementLoaded || !statement.detailRows.length"
-            @click="confirmCurrentStatement"
-          >
-            确认对账
-          </el-button>
+          <div class="section-head-actions">
+            <el-button
+              size="small"
+              icon="el-icon-plus"
+              :disabled="!statementLoaded || !queryForm.customerCode || !queryForm.month"
+              @click="openUnreconciledDialog"
+            >
+              增加未对账订单
+            </el-button>
+            <el-button
+              type="success"
+              size="small"
+              icon="el-icon-check"
+              :disabled="!statementLoaded"
+              @click="confirmCurrentStatement"
+            >
+              确认对账
+            </el-button>
+          </div>
         </div>
         <el-table class="reconciliation-table" :data="statement.detailRows" border stripe style="width:100%">
+          <el-table-column label="类型" width="78" align="center">
+            <template slot-scope="scope">
+              <el-tag size="mini" :type="scope.row.bizType === 'return' ? 'warning' : 'success'">
+                {{ scope.row.bizType === 'return' ? '退货' : '发货' }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="出货日期" width="100">
             <template slot-scope="scope">{{ formatShortDate(scope.row.bizDate) }}</template>
           </el-table-column>
           <el-table-column prop="orderNo" label="订单号" min-width="130" show-overflow-tooltip />
-          <el-table-column prop="documentNo" label="送货单号" min-width="135" show-overflow-tooltip />
+          <el-table-column label="业务单号" min-width="150" show-overflow-tooltip>
+            <template slot-scope="scope">
+              {{ scope.row.bizType === 'return' ? `退货单：${scope.row.documentNo || '-'}` : `送货单：${scope.row.documentNo || '-'}` }}
+            </template>
+          </el-table-column>
           <el-table-column prop="materialName" label="产品" min-width="154" show-overflow-tooltip />
           <el-table-column prop="spec" label="规格" min-width="150" show-overflow-tooltip />
           <el-table-column label="数量(R)" width="72" align="right">
@@ -83,26 +127,59 @@
           <el-table-column label="数量/m²" width="100" align="right">
             <template slot-scope="scope">{{ formatNumber(scope.row.areaSize) }}</template>
           </el-table-column>
-          <el-table-column label="单价(元/m²)" width="55" align="right">
-            <template slot-scope="scope">{{ formatNumber(scope.row.unitPrice, 2) }}</template>
+          <el-table-column label="单价" width="110" align="right">
+            <template slot-scope="scope">{{ formatNumber(scope.row.unitPrice, 4) }} / {{ scope.row.priceUnit || '㎡' }}</template>
           </el-table-column>
           <el-table-column label="总金额" width="120" align="right">
             <template slot-scope="scope">
               <span :class="{ 'negative-amount': Number(scope.row.amount) < 0 }">{{ formatNumber(scope.row.amount) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="对账到" width="140" align="center">
+          <el-table-column label="对账月份" width="140" align="center">
             <template slot-scope="scope">
               <el-select
-                v-if="scope.row.bizType === 'delivery'"
+                v-if="scope.row.bizType === 'delivery' && !statement.rpNaturalMonthLocked"
                 v-model="scope.row.reconcileTargetMonth"
                 size="mini"
                 style="width: 120px"
+                @change="handleDetailTargetMonthChange(scope.row)"
               >
                 <el-option :value="queryForm.month" :label="`${queryForm.month}(当月)`" />
                 <el-option :value="getNextMonth(queryForm.month)" :label="`${getNextMonth(queryForm.month)}(下月)`" />
               </el-select>
               <span v-else>{{ scope.row.reconcileTargetMonth || queryForm.month }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="170" align="center">
+            <template slot-scope="scope">
+              <div v-if="scope.row.bizType === 'delivery' || scope.row.bizType === 'return'" class="op-btns">
+                <el-button
+                  v-if="scope.row.bizType === 'delivery' && !statement.rpNaturalMonthLocked"
+                  type="text"
+                  size="mini"
+                  @click="openSplitDialog(scope.row)"
+                >
+                  拆分
+                </el-button>
+                <el-button
+                  v-if="scope.row._splitPairId"
+                  type="text"
+                  size="mini"
+                  @click="restoreSplitRow(scope.row)"
+                >
+                  还原
+                </el-button>
+                <el-button
+                  type="text"
+                  size="mini"
+                  class="op-danger"
+                  :disabled="statement.rpNaturalMonthLocked"
+                  @click="removeDetailRow(scope.row)"
+                >
+                  删除
+                </el-button>
+              </div>
+              <span v-else>-</span>
             </template>
           </el-table-column>
         </el-table>
@@ -155,6 +232,61 @@
           <span class="payable-amount">期末应付金额：{{ formatNumber(getFinalPayableAmount()) }}</span>
         </div>
       </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="客户对账总情况" name="overview">
+          <div class="section-block">
+            <div class="section-head">
+              <div class="section-title">{{ queryForm.month }} 客户对账总览</div>
+            </div>
+            <el-table
+              v-loading="overviewLoading"
+              class="reconciliation-table"
+              :data="overviewRows"
+              border
+              stripe
+              style="width:100%"
+              @sort-change="handleOverviewSortChange"
+            >
+              <el-table-column label="序号" width="70" align="center" type="index" :index="calcOverviewIndex" />
+              <el-table-column prop="customerName" label="客户" min-width="180" show-overflow-tooltip sortable="custom" />
+              <el-table-column prop="statementAmount" label="当月对账金额" width="150" align="right" sortable="custom">
+                <template slot-scope="scope">{{ formatNumber(scope.row.statementAmount) }}</template>
+              </el-table-column>
+              <el-table-column prop="invoiceAmount" label="开票金额" width="140" align="right" sortable="custom">
+                <template slot-scope="scope">{{ formatNumber(scope.row.invoiceAmount) }}</template>
+              </el-table-column>
+              <el-table-column prop="receivedAmount" label="收款金额" width="140" align="right" sortable="custom">
+                <template slot-scope="scope">{{ formatNumber(scope.row.receivedAmount) }}</template>
+              </el-table-column>
+              <el-table-column prop="reconciliationStatus" label="对账状态" width="120" align="center" sortable="custom">
+                <template slot-scope="scope">
+                  <el-tag :type="getStatusTagType(scope.row.reconciliationStatus)" size="small">
+                    {{ scope.row.reconciliationStatusLabel || '未对账' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="110" align="center">
+                <template slot-scope="scope">
+                  <el-button type="text" size="mini" @click="goToReconciliation(scope.row)">去对账</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div class="overview-pagination">
+              <el-pagination
+                background
+                layout="total, sizes, prev, pager, next, jumper"
+                :total="overviewPager.total"
+                :current-page="overviewPager.current"
+                :page-size="overviewPager.size"
+                :page-sizes="[10, 20, 50, 100]"
+                @current-change="handleOverviewCurrentChange"
+                @size-change="handleOverviewSizeChange"
+              />
+            </div>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
     </el-card>
 
     <el-dialog title="对账单打印预览" :visible.sync="printVisible" width="1100px" top="4vh">
@@ -176,27 +308,29 @@
         <table class="print-table">
           <thead>
             <tr>
+              <th>类型</th>
               <th>出货日期</th>
               <th>订单号</th>
-              <th>送货单号</th>
+              <th>业务单号</th>
               <th>产品</th>
               <th>规格</th>
               <th>数量(R)</th>
               <th>数量/m²</th>
-              <th>单价(元/m²)</th>
+              <th>单价</th>
               <th>总金额</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(row, idx) in statement.detailRows" :key="idx">
+              <td>{{ row.bizType === 'return' ? '退货' : '发货' }}</td>
               <td>{{ row.bizDate }}</td>
               <td>{{ row.orderNo }}</td>
-              <td>{{ row.documentNo }}</td>
+              <td>{{ row.bizType === 'return' ? `退货单：${row.documentNo || '-'}` : `送货单：${row.documentNo || '-'}` }}</td>
               <td>{{ row.materialName }}</td>
               <td>{{ row.spec }}</td>
               <td>{{ formatNumber(row.quantity, 0) }}</td>
               <td>{{ formatNumber(row.areaSize) }}</td>
-              <td>{{ formatNumber(row.unitPrice, 2) }}</td>
+              <td>{{ formatNumber(row.unitPrice, 4) }} / {{ row.priceUnit || '㎡' }}</td>
               <td>{{ formatNumber(row.amount) }}</td>
             </tr>
           </tbody>
@@ -272,6 +406,101 @@
         <el-button type="primary" @click="submitInitHistory">保存</el-button>
       </span>
     </el-dialog>
+
+    <el-dialog title="增加未对账订单" :visible.sync="unreconciledDialogVisible" width="1100px" top="6vh">
+      <div v-loading="unreconciledLoading">
+        <div class="unreconciled-search-row">
+          <span class="search-label">订单号</span>
+          <el-input
+            v-model="unreconciledOrderNo"
+            clearable
+            size="small"
+            placeholder="请输入订单号（支持模糊查询）"
+            style="width: 320px"
+            @keyup.enter.native="searchUnreconciledCandidates"
+          />
+          <el-button type="primary" size="small" icon="el-icon-search" @click="searchUnreconciledCandidates">查询未对账订单</el-button>
+        </div>
+        <div class="unreconciled-tip">
+          可查询该客户截至 {{ unreconciledPeriodEnd || '-' }} 未进入任何对账月的送货明细；输入订单号后可精准筛选“未在 {{ queryForm.month }} 对账”的明细，再勾选插入 {{ queryForm.month }}。
+        </div>
+        <el-table
+          ref="unreconciledTable"
+          class="reconciliation-table"
+          :data="unreconciledCandidates"
+          border
+          stripe
+          style="width:100%"
+          @selection-change="handleUnreconciledSelectionChange"
+        >
+          <el-table-column type="selection" width="50" />
+          <el-table-column label="出货日期" width="110">
+            <template slot-scope="scope">{{ formatShortDate(scope.row.bizDate) }}</template>
+          </el-table-column>
+          <el-table-column prop="orderNo" label="订单号" min-width="130" show-overflow-tooltip />
+          <el-table-column prop="documentNo" label="送货单号" min-width="130" show-overflow-tooltip />
+          <el-table-column prop="materialName" label="产品" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="spec" label="规格" min-width="150" show-overflow-tooltip />
+          <el-table-column label="数量(R)" width="90" align="right">
+            <template slot-scope="scope">{{ formatNumber(scope.row.quantity, 0) }}</template>
+          </el-table-column>
+          <el-table-column label="数量/m²" width="110" align="right">
+            <template slot-scope="scope">{{ formatNumber(scope.row.areaSize) }}</template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <span slot="footer" class="dialog-footer-actions">
+        <el-button @click="unreconciledDialogVisible = false">关闭</el-button>
+        <el-button
+          type="primary"
+          :loading="unreconciledSubmitting"
+          :disabled="!selectedUnreconciledIds.length"
+          @click="insertSelectedUnreconciled"
+        >
+          插入当月对账
+        </el-button>
+      </span>
+    </el-dialog>
+
+    <el-dialog title="拆分对账明细" :visible.sync="splitDialogVisible" width="460px">
+      <el-form :model="splitForm" label-width="110px" size="small">
+        <el-form-item label="送货单号">
+          <el-input :value="splitSourceRow ? (splitSourceRow.documentNo || '-') : '-'" disabled />
+        </el-form-item>
+        <el-form-item label="订单号">
+          <el-input :value="splitSourceRow ? (splitSourceRow.orderNo || '-') : '-'" disabled />
+        </el-form-item>
+        <el-form-item label="原始面积(㎡)">
+          <el-input :value="formatNumber(splitSourceRow ? splitSourceRow.areaSize : 0)" disabled />
+        </el-form-item>
+        <el-form-item label="原始卷数(R)">
+          <el-input :value="formatNumber(splitSourceRow ? splitSourceRow.quantity : 0, 0)" disabled />
+        </el-form-item>
+        <el-form-item label="拆分卷数(R)">
+          <el-input-number
+            v-model="splitForm.splitQuantity"
+            :min="1"
+            :max="getSplitQuantityMax()"
+            :precision="0"
+            :step="1"
+            style="width:100%"
+          />
+        </el-form-item>
+        <el-form-item label="新行对账月份">
+          <el-date-picker
+            v-model="splitForm.targetMonth"
+            type="month"
+            value-format="yyyy-MM"
+            placeholder="选择月份"
+            style="width:100%"
+          />
+        </el-form-item>
+      </el-form>
+      <span slot="footer" class="dialog-footer-actions">
+        <el-button @click="splitDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitSplitRow">确认拆分</el-button>
+      </span>
+    </el-dialog>
   </div>
 </template>
 
@@ -281,9 +510,12 @@ import {
   confirmSalesReconciliationDetails,
   deleteSalesReconciliationHistory,
   exportSalesReconciliationStatement,
+  getSalesReconciliationOverview,
   getSalesReconciliationStatement,
   importSalesReconciliationHistory,
   initializeSalesReconciliationHistory,
+  queryUnreconciledSalesReconciliationCandidates,
+  removeSalesReconciliationDetail,
   saveSalesReconciliationHistory
 } from '@/api/salesReconciliation'
 import request from '@/utils/request'
@@ -293,13 +525,39 @@ export default {
   data() {
     return {
       customers: [],
+      activeTab: 'detail',
       queryForm: {
         customerCode: '',
-        month: this.getCurrentMonth()
+        month: this.getCurrentMonth(),
+        reconciledStatus: '' // 新增：是否对账筛选
+      },
+      overviewLoading: false,
+      overviewRows: [],
+      overviewPager: {
+        current: 1,
+        size: 20,
+        total: 0
+      },
+      overviewSort: {
+        prop: 'reconciliationStatus',
+        order: 'ascending'
       },
       statementLoaded: false,
       printVisible: false,
       initDialogVisible: false,
+      unreconciledDialogVisible: false,
+      unreconciledLoading: false,
+      unreconciledSubmitting: false,
+      unreconciledCandidates: [],
+      unreconciledPeriodEnd: '',
+      unreconciledOrderNo: '',
+      selectedUnreconciledIds: [],
+      splitDialogVisible: false,
+      splitSourceRow: null,
+      splitForm: {
+        splitQuantity: null,
+        targetMonth: ''
+      },
       initForm: {
         statementMonth: this.getCurrentMonth(),
         unpaidAmount: 0,
@@ -319,6 +577,10 @@ export default {
         customerCode: '',
         customerName: '',
         month: '',
+        rpNaturalMonthLocked: false,
+        reconciliationStatus: 'UNRECONCILED',
+        reconciliationStatusLabel: '未对账',
+        allDetailRows: [],
         detailRows: [],
         historyRows: [],
         printHistoryRows: [],
@@ -383,40 +645,137 @@ export default {
       const currentAmount = Number((this.statement.summary && this.statement.summary.totalAmount) || 0)
       return currentAmount + this.getHistoryTotalUnpaid() - this.getHistoryTotalInvoice()
     },
+    hasMeaningfulHistoryInfo(row) {
+      if (!row) return false
+      const unpaidAmount = Number(row.unpaidAmount) || 0
+      const invoiceAmount = Number(row.invoiceAmount) || 0
+      const invoiceDate = String(row.invoiceDate || '').trim()
+      const remark = String(row.remark || '').trim()
+      return unpaidAmount !== 0 || invoiceAmount !== 0 || !!invoiceDate || !!remark
+    },
     getPrintHistoryRows() {
       const printRows = this.statement.printHistoryRows || []
-      if (printRows.length) return printRows
-      return this.statement.historyRows || []
+      const sourceRows = printRows.length ? printRows : (this.statement.historyRows || [])
+      return sourceRows.filter(row => this.hasMeaningfulHistoryInfo(row))
     },
     async handleSearch() {
-      if (!this.queryForm.customerCode) return this.$message.warning('请先选择客户')
       if (!this.queryForm.month) return this.$message.warning('请选择月份')
+      if (this.activeTab === 'overview') {
+        this.overviewPager.current = 1
+        await this.fetchOverview()
+        return
+      }
+      if (!this.queryForm.customerCode) return this.$message.warning('请先选择客户')
       const res = await getSalesReconciliationStatement({ customerCode: this.queryForm.customerCode, month: this.queryForm.month })
       if (!res || (res.code !== 200 && res.code !== 20000)) {
         return this.$message.error((res && (res.msg || res.message)) || '查询失败')
       }
       const data = res.data || {}
       this.statement = Object.assign({}, this.statement, data)
-      this.statement.detailRows = (data.detailRows || []).map(row => {
-        const targetMonth = row.reconcileTargetMonth || this.queryForm.month
+      this.statement.rpNaturalMonthLocked = !!data.rpNaturalMonthLocked
+      const allDetailRows = (data.detailRows || []).map(row => {
+        const targetMonth = this.statement.rpNaturalMonthLocked
+          ? this.queryForm.month
+          : (row.reconcileTargetMonth || this.queryForm.month)
         return {
           ...row,
-          reconcileTargetMonth: targetMonth
+          reconcileTargetMonth: targetMonth,
+          includeInCurrentStatement: this.statement.rpNaturalMonthLocked
+            ? true
+            : (row.includeInCurrentStatement !== false)
         }
       })
+      // 仅展示当前对账月应纳入的明细；已调到下月或删除（顺延下月）的数据不再显示在当前月页面
+      this.statement.allDetailRows = allDetailRows
+      this.statement.detailRows = this.statement.rpNaturalMonthLocked
+        ? allDetailRows
+        : allDetailRows.filter(row => row.includeInCurrentStatement !== false)
       this.statement.historyRows = (data.historyRows || []).map(item => ({ ...item, _editing: false }))
       this.statement.printHistoryRows = data.printHistoryRows || []
       this.statement.summary = data.summary || this.statement.summary
+      this.recomputeCurrentSummaryFromDetailRows()
+      this.statement.reconciliationStatus = data.reconciliationStatus || 'UNRECONCILED'
+      this.statement.reconciliationStatusLabel = data.reconciliationStatusLabel || '未对账'
       this.statementLoaded = true
+    },
+    async fetchOverview() {
+      this.overviewLoading = true
+      try {
+        const res = await getSalesReconciliationOverview({
+          month: this.queryForm.month,
+          customerCode: this.queryForm.customerCode || '',
+          reconciledStatus: this.queryForm.reconciledStatus || '',
+          current: this.overviewPager.current,
+          size: this.overviewPager.size,
+          sortProp: this.overviewSort.prop,
+          sortOrder: this.overviewSort.order
+        })
+        if (!res || (res.code !== 200 && res.code !== 20000)) {
+          return this.$message.error((res && (res.msg || res.message)) || '查询总览失败')
+        }
+        const data = res.data || {}
+        this.overviewRows = data.rows || data.records || []
+        this.overviewPager.total = Number(data.total || 0)
+        this.overviewPager.current = Number(data.current || this.overviewPager.current || 1)
+        this.overviewPager.size = Number(data.size || this.overviewPager.size || 20)
+      } finally {
+        this.overviewLoading = false
+      }
+    },
+    async handleTabChange() {
+      if (!this.queryForm.month) return
+      if (this.activeTab === 'overview') {
+        await this.fetchOverview()
+      }
+    },
+    getStatusTagType(status) {
+      return status === 'RECONCILED' ? 'success' : 'danger'
+    },
+    async handleOverviewSortChange({ prop, order }) {
+      this.overviewSort.prop = prop || 'reconciliationStatus'
+      this.overviewSort.order = order || 'ascending'
+      this.overviewPager.current = 1
+      await this.fetchOverview()
+    },
+    async handleOverviewCurrentChange(page) {
+      this.overviewPager.current = page || 1
+      await this.fetchOverview()
+    },
+    calcOverviewIndex(index) {
+      const current = Number(this.overviewPager.current || 1)
+      const size = Number(this.overviewPager.size || 20)
+      return (current - 1) * size + index + 1
+    },
+    async handleOverviewSizeChange(size) {
+      this.overviewPager.size = size || 20
+      this.overviewPager.current = 1
+      await this.fetchOverview()
+    },
+    async goToReconciliation(row) {
+      if (!row || !row.customerCode) {
+        return this.$message.warning('客户信息缺失，无法跳转')
+      }
+      this.activeTab = 'detail'
+      this.queryForm.customerCode = row.customerCode
+      this.queryForm.month = row.month || this.queryForm.month
+      await this.handleSearch()
     },
     handleReset() {
       this.queryForm = { customerCode: '', month: this.getCurrentMonth() }
+      this.overviewRows = []
+      this.overviewLoading = false
+      this.overviewPager = { current: 1, size: 20, total: 0 }
+      this.overviewSort = { prop: 'reconciliationStatus', order: 'ascending' }
       this.statementLoaded = false
       this.initDialogVisible = false
       this.statement = {
         customerCode: '',
         customerName: '',
         month: '',
+        rpNaturalMonthLocked: false,
+        reconciliationStatus: 'UNRECONCILED',
+        reconciliationStatusLabel: '未对账',
+        allDetailRows: [],
         detailRows: [],
         historyRows: [],
         printHistoryRows: [],
@@ -437,10 +796,11 @@ export default {
       }
     },
     triggerImportHistory() {
-      if (!this.queryForm.customerCode) {
-        return this.$message.warning('请先选择客户')
+      if (this.queryForm.customerCode) {
+        this.$message.info('当前为单客户导入：支持CSV与宽表Excel')
+      } else {
+        this.$message.info('当前为全表导入：请上传原始宽表Excel（不选客户时不支持CSV）')
       }
-      this.$message.info('请导入CSV：月份,欠款金额,开票金额,开票日期,备注')
       if (this.$refs.historyImportFile) {
         this.$refs.historyImportFile.value = ''
         this.$refs.historyImportFile.click()
@@ -450,7 +810,7 @@ export default {
       const file = event && event.target && event.target.files && event.target.files[0]
       if (!file) return
       try {
-        const res = await importSalesReconciliationHistory(this.queryForm.customerCode, file)
+        const res = await importSalesReconciliationHistory(this.queryForm.customerCode || '', file)
         if (!res || (res.code !== 200 && res.code !== 20000)) {
           return this.$message.error((res && (res.msg || res.message)) || '导入失败')
         }
@@ -581,13 +941,202 @@ export default {
       d.setMonth(d.getMonth() + 1)
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     },
+    openSplitDialog(row) {
+      if (this.statement.rpNaturalMonthLocked) {
+        return this.$message.warning('RP客户固定自然月，不支持拆分到下月')
+      }
+      if (!row || row.bizType !== 'delivery') {
+        return this.$message.warning('仅发货明细支持拆分')
+      }
+      const quantity = Math.abs(Math.round(Number(row.quantity) || 0))
+      if (quantity <= 1) {
+        return this.$message.warning('该行卷数不足2卷，无法拆分')
+      }
+      this.splitSourceRow = row
+      this.splitForm = {
+        splitQuantity: Math.max(1, Math.floor(quantity / 2)),
+        targetMonth: this.getNextMonth(this.queryForm.month)
+      }
+      this.splitDialogVisible = true
+    },
+    getSplitQuantityMax() {
+      const row = this.splitSourceRow
+      const quantity = Math.abs(Math.round(Number(row && row.quantity) || 0))
+      if (quantity <= 1) return 1
+      return quantity - 1
+    },
+    submitSplitRow() {
+      const row = this.splitSourceRow
+      if (!row) {
+        return this.$message.warning('未找到待拆分行')
+      }
+      const totalQuantity = Math.abs(Math.round(Number(row.quantity) || 0))
+      const splitQuantity = Math.round(Number(this.splitForm.splitQuantity) || 0)
+      if (!Number.isFinite(splitQuantity) || splitQuantity <= 0) {
+        return this.$message.warning('请输入有效的拆分卷数')
+      }
+      if (splitQuantity >= totalQuantity) {
+        return this.$message.warning('拆分卷数必须小于原始卷数')
+      }
+      if (!this.splitForm.targetMonth || !/^\d{4}-\d{2}$/.test(this.splitForm.targetMonth)) {
+        return this.$message.warning('请选择新行对账月份')
+      }
+      if (row._splitPairId) {
+        this.restoreSplitRow(row, true)
+      }
+
+      const originalQuantity = Number(row.quantity) || 0
+      const originalArea = Number(row.areaSize) || 0
+      const originalAmount = Number(row.amount) || 0
+      const ratio = splitQuantity / Math.abs(originalQuantity || totalQuantity)
+
+      const childQuantity = Number((Math.sign(originalQuantity || 1) * splitQuantity).toFixed(0))
+      const childArea = Number((originalArea * ratio).toFixed(2))
+      const childAmount = Number((originalAmount * ratio).toFixed(2))
+
+      const remainQuantity = Number((originalQuantity - childQuantity).toFixed(0))
+      const remainArea = Number((originalArea - childArea).toFixed(2))
+      const remainAmount = Number((originalAmount - childAmount).toFixed(2))
+
+      const pairId = `split_${Date.now()}_${Math.floor(Math.random() * 10000)}`
+      const targetMonth = this.splitForm.targetMonth
+      const includeInCurrent = targetMonth === this.queryForm.month
+      const childRow = {
+        ...row,
+        _splitPairId: pairId,
+        _isSplitChild: true,
+        _splitFromNoticeItemId: row.noticeItemId || null,
+        reconcileTargetMonth: targetMonth,
+        includeInCurrentStatement: includeInCurrent,
+        quantity: childQuantity,
+        areaSize: childArea,
+        amount: childAmount
+      }
+
+      this.$set(row, '_splitPairId', pairId)
+      this.$set(row, '_isSplitChild', false)
+      this.$set(row, '_splitFromNoticeItemId', row.noticeItemId || null)
+      this.$set(row, 'includeInCurrentStatement', true)
+      this.$set(row, 'quantity', remainQuantity)
+      this.$set(row, 'areaSize', remainArea)
+      this.$set(row, 'amount', remainAmount)
+
+      const allRows = this.statement.allDetailRows || []
+      const allIdx = allRows.findIndex(item => item === row)
+      if (allIdx >= 0) {
+        allRows.splice(allIdx + 1, 0, childRow)
+      } else {
+        allRows.push(childRow)
+      }
+      this.refreshCurrentMonthDetailRows()
+
+      this.splitDialogVisible = false
+      this.$message.success(includeInCurrent ? '拆分成功，可分别选择两行的对账月份' : '拆分成功，拆分到下月的明细已从本月隐藏')
+    },
+    restoreSplitRow(row, silent = false) {
+      if (!row || !row._splitPairId) return
+      const pairId = row._splitPairId
+      const pairRows = (this.statement.allDetailRows || []).filter(item => item && item._splitPairId === pairId)
+      if (pairRows.length < 2) {
+        if (!silent) {
+          this.$message.warning('未找到可还原的拆分数据')
+        }
+        return
+      }
+      const keepRow = pairRows.find(item => !item._isSplitChild) || pairRows[0]
+      const mergedQuantity = pairRows.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
+      const mergedArea = pairRows.reduce((sum, item) => sum + (Number(item.areaSize) || 0), 0)
+      const mergedAmount = pairRows.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+
+      this.$set(keepRow, 'quantity', Number(mergedQuantity.toFixed(0)))
+      this.$set(keepRow, 'areaSize', Number(mergedArea.toFixed(2)))
+      this.$set(keepRow, 'amount', Number(mergedAmount.toFixed(2)))
+      this.$set(keepRow, 'includeInCurrentStatement', true)
+      this.$delete(keepRow, '_splitPairId')
+      this.$delete(keepRow, '_isSplitChild')
+      this.$delete(keepRow, '_splitFromNoticeItemId')
+
+      this.statement.allDetailRows = (this.statement.allDetailRows || []).filter(item => {
+        if (!item || item._splitPairId !== pairId) return true
+        return item === keepRow
+      })
+      this.refreshCurrentMonthDetailRows()
+
+      if (!silent) {
+        this.$message.success('已还原拆分行')
+      }
+    },
+    handleDetailTargetMonthChange(row) {
+      if (!row || row.bizType !== 'delivery') return
+      if (this.statement.rpNaturalMonthLocked) {
+        this.$set(row, 'reconcileTargetMonth', this.queryForm.month)
+        this.$set(row, 'includeInCurrentStatement', true)
+        this.refreshCurrentMonthDetailRows()
+        return
+      }
+      const targetMonth = (row.reconcileTargetMonth || this.queryForm.month || '').trim()
+      this.$set(row, 'includeInCurrentStatement', targetMonth === this.queryForm.month)
+      this.refreshCurrentMonthDetailRows()
+    },
+    refreshCurrentMonthDetailRows() {
+      this.statement.detailRows = (this.statement.allDetailRows || []).filter(item => item && item.includeInCurrentStatement !== false)
+      this.recomputeCurrentSummaryFromDetailRows()
+    },
+    recomputeCurrentSummaryFromDetailRows() {
+      const rows = this.statement.detailRows || []
+      let totalRolls = 0
+      let totalArea = 0
+      let totalAmount = 0
+      let deliveryAmount = 0
+      let returnAmount = 0
+
+      rows.forEach(row => {
+        const rolls = Number(row.quantity) || 0
+        const area = Number(row.areaSize) || 0
+        const amount = Number(row.amount) || 0
+        totalRolls += rolls
+        totalArea += area
+        totalAmount += amount
+        if (row.bizType === 'return') {
+          returnAmount += amount
+        } else {
+          deliveryAmount += amount
+        }
+      })
+
+      this.statement.summary = Object.assign({}, this.statement.summary || {}, {
+        totalRolls: Number(totalRolls.toFixed(2)),
+        totalArea: Number(totalArea.toFixed(2)),
+        totalAmount: Number(totalAmount.toFixed(2)),
+        deliveryAmount: Number(deliveryAmount.toFixed(2)),
+        returnAmount: Number(returnAmount.toFixed(2))
+      })
+    },
     buildDetailConfirmPayload() {
-      const details = (this.statement.detailRows || [])
+      const detailsMap = new Map()
+      ;(this.statement.allDetailRows || [])
         .filter(row => row.bizType === 'delivery' && row.noticeItemId)
-        .map(row => ({
-          noticeItemId: row.noticeItemId,
-          targetMonth: row.reconcileTargetMonth || this.queryForm.month
-        }))
+        .forEach(row => {
+          const targetMonth = this.statement.rpNaturalMonthLocked
+            ? this.queryForm.month
+            : (row.reconcileTargetMonth || this.queryForm.month)
+          const dedupKey = `${row.noticeItemId}_${targetMonth}`
+          if (!detailsMap.has(dedupKey)) {
+            detailsMap.set(dedupKey, {
+              noticeItemId: row.noticeItemId,
+              targetMonth,
+              splitQuantity: Number(row.quantity) || 0,
+              splitArea: Number(row.areaSize) || 0,
+              splitAmount: Number(row.amount) || 0
+            })
+          } else {
+            const existing = detailsMap.get(dedupKey)
+            existing.splitQuantity = Number(existing.splitQuantity || 0) + (Number(row.quantity) || 0)
+            existing.splitArea = Number(existing.splitArea || 0) + (Number(row.areaSize) || 0)
+            existing.splitAmount = Number(existing.splitAmount || 0) + (Number(row.amount) || 0)
+          }
+        })
+      const details = Array.from(detailsMap.values())
       return {
         customerCode: this.queryForm.customerCode,
         month: this.queryForm.month,
@@ -599,15 +1148,94 @@ export default {
         return this.$message.warning('请先选择客户和月份')
       }
       const payload = this.buildDetailConfirmPayload()
-      if (!payload.details.length) {
-        return this.$message.warning('无可确认的发货明细')
-      }
       const res = await confirmSalesReconciliationDetails(payload)
       if (!res || (res.code !== 200 && res.code !== 20000)) {
         return this.$message.error((res && (res.msg || res.message)) || '确认失败')
       }
       this.$message.success('对账确认成功')
       await this.handleSearch()
+    },
+    async openUnreconciledDialog() {
+      if (!this.queryForm.customerCode || !this.queryForm.month) {
+        return this.$message.warning('请先选择客户和月份')
+      }
+      this.unreconciledDialogVisible = true
+      this.unreconciledCandidates = []
+      this.unreconciledPeriodEnd = ''
+      this.unreconciledOrderNo = ''
+      this.selectedUnreconciledIds = []
+      await this.searchUnreconciledCandidates()
+    },
+    async searchUnreconciledCandidates() {
+      this.unreconciledLoading = true
+      try {
+        const res = await queryUnreconciledSalesReconciliationCandidates({
+          customerCode: this.queryForm.customerCode,
+          month: this.queryForm.month,
+          orderNo: this.unreconciledOrderNo || ''
+        })
+        if (!res || (res.code !== 200 && res.code !== 20000)) {
+          return this.$message.error((res && (res.msg || res.message)) || '查询失败')
+        }
+        const data = res.data || {}
+        this.unreconciledCandidates = data.rows || []
+        this.unreconciledPeriodEnd = data.periodEnd || ''
+        this.selectedUnreconciledIds = []
+        if (!this.unreconciledCandidates.length && data.hint) {
+          this.$message.warning(data.hint)
+        }
+      } finally {
+        this.unreconciledLoading = false
+      }
+    },
+    handleUnreconciledSelectionChange(rows) {
+      this.selectedUnreconciledIds = (rows || []).map(item => item.noticeItemId).filter(Boolean)
+    },
+    async insertSelectedUnreconciled() {
+      if (!this.selectedUnreconciledIds.length) {
+        return this.$message.warning('请先勾选要插入的明细')
+      }
+      this.unreconciledSubmitting = true
+      try {
+        const payload = {
+          customerCode: this.queryForm.customerCode,
+          month: this.queryForm.month,
+          details: this.selectedUnreconciledIds.map(id => ({ noticeItemId: id, targetMonth: this.queryForm.month }))
+        }
+        const res = await confirmSalesReconciliationDetails(payload)
+        if (!res || (res.code !== 200 && res.code !== 20000)) {
+          return this.$message.error((res && (res.msg || res.message)) || '插入失败')
+        }
+        this.$message.success(`已插入 ${this.selectedUnreconciledIds.length} 条到当月对账`)
+        this.unreconciledDialogVisible = false
+        await this.handleSearch()
+      } finally {
+        this.unreconciledSubmitting = false
+      }
+    },
+    async removeDetailRow(row) {
+      if (this.statement.rpNaturalMonthLocked) {
+        return this.$message.warning('RP客户固定自然月，不支持顺延到下月删除')
+      }
+      const isDelivery = row && row.bizType === 'delivery'
+      const isReturn = row && row.bizType === 'return'
+      const detailId = isDelivery ? row.noticeItemId : (isReturn ? row.returnItemId : null)
+      if (!row || !detailId) {
+        return this.$message.warning('该行不支持删除')
+      }
+      await this.$confirm('删除后该明细将顺延到下月对账，是否继续？', '提示', { type: 'warning' }).then(async() => {
+        const res = await removeSalesReconciliationDetail({
+          detailId,
+          bizType: row.bizType,
+          customerCode: this.queryForm.customerCode,
+          month: this.queryForm.month
+        })
+        if (!res || (res.code !== 200 && res.code !== 20000)) {
+          return this.$message.error((res && (res.msg || res.message)) || '删除失败')
+        }
+        this.$message.success('删除成功，已顺延到下月')
+        await this.handleSearch()
+      }).catch(() => {})
     },
     handlePrintBrowser() {
       const area = document.getElementById('reconciliationPrintArea')
@@ -658,6 +1286,8 @@ export default {
 .search-area { margin-bottom: 16px; padding: 14px 16px; background:#f8fafc; border:1px solid #ebeef5; border-radius:10px; }
 .search-item { display:flex; align-items:center; gap:10px; }
 .search-label { flex: 0 0 40px; color:#606266; font-size:13px; }
+.status-label { flex-basis: 52px; }
+.reconciliation-tabs { margin-top: 4px; }
 .summary-grid { display:grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap:12px; margin-bottom:16px; }
 .summary-card { padding:14px 16px; border:1px solid #ebeef5; border-radius:10px; background:#fff; }
 .summary-label { color:#909399; font-size:12px; margin-bottom:6px; }
@@ -666,6 +1296,7 @@ export default {
 .warning-card { background:#fff7ed; border-color:#fed7aa; }
 .section-block { margin-top: 16px; }
 .section-head { display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; }
+.section-head-actions { display:flex; align-items:center; gap:8px; }
 .section-title { font-size:14px; font-weight:600; color:#303133; margin-bottom:10px; }
 .reconciliation-table { border:1px solid #ebeef5; border-radius:8px; overflow:hidden; }
 .reconciliation-table /deep/ th.el-table__cell { background:#f5f7fa; color:#606266; font-weight:600; }
@@ -687,4 +1318,7 @@ export default {
 .print-table th { background:#f1f1f1; }
 .print-total { text-align:right; font-size:12px; font-weight:700; margin-bottom:12px; }
 .print-signature { margin-top:24px; display:flex; justify-content:space-between; font-size:12px; }
+.unreconciled-search-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.unreconciled-tip { margin-bottom:10px; color:#606266; font-size:13px; }
+.overview-pagination { margin-top: 12px; display: flex; justify-content: flex-end; }
 </style>
