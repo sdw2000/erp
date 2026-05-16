@@ -1703,6 +1703,7 @@ export default {
 
         if (res.code === 200 && res.data) {
           const order = res.data
+          const rpCustomer = this.isRpCustomerCode(order.customerCode || order.customer)
 
           // 填充订单基本信息
           this.currentNotice.orderId = order.id
@@ -1716,10 +1717,15 @@ export default {
           // 用户可以修改卷数（quantity），其他字段如面积、重量等可以根据需要计算
           if (order.items && order.items.length > 0) {
             this.currentNotice.items = order.items.map(oItem => {
-              // 计算未发货数量（订单数量 - 已发货数量）
+              // 普通客户：按欠货量（订单数量 - 已发货数量）
               const remainingRolls = (oItem.rolls || 0) - (oItem.shippedRolls || 0)
+              // RP客户：按已报工可发（已报工数量 - 已发货数量）
+              const producedQty = this.resolveProducedQtyForRp(oItem)
+              const rpShippable = producedQty - (oItem.shippedRolls || 0)
               const unitArea = this.calcUnitArea(oItem)
-              const qty = remainingRolls > 0 ? remainingRolls : 0
+              const qty = rpCustomer
+                ? (rpShippable > 0 ? rpShippable : 0)
+                : (remainingRolls > 0 ? remainingRolls : 0)
 
               return {
                 orderItemId: oItem.id,
@@ -1748,6 +1754,26 @@ export default {
         console.error('加载订单详情失败：', e)
         this.$message.error('加载订单详情失败，请检查订单号是否正确')
       }
+    },
+
+    isRpCustomerCode(codeLike) {
+      const code = String(codeLike || '').trim().toUpperCase()
+      if (!code) return false
+      return ['RP01', 'GDRP01', 'JSRP01', 'JXRP001', 'LZRP01', 'SHRP001'].includes(code)
+    },
+
+    resolveProducedQtyForRp(orderItem) {
+      if (!orderItem) return 0
+      const deliveredQty = Number(orderItem.deliveredQty)
+      if (Number.isFinite(deliveredQty)) {
+        return Math.max(deliveredQty, 0)
+      }
+      const rolls = Number(orderItem.rolls)
+      const remainingQty = Number(orderItem.remainingQty)
+      if (Number.isFinite(rolls) && Number.isFinite(remainingQty)) {
+        return Math.max(rolls - Math.max(remainingQty, 0), 0)
+      }
+      return 0
     },
 
     async applyCustomerInfoToNotice(order) {
