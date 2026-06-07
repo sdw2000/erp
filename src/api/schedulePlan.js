@@ -49,6 +49,17 @@ export function getStagePlanTaskPage(params) {
 }
 
 /**
+ * 获取指定工序任务汇总（数量/面积）
+ */
+export function getStagePlanTaskSummary(params) {
+  return request({
+    url: '/schedule/plan/stage/summary',
+    method: 'get',
+    params
+  })
+}
+
+/**
  * 订单->母卷 对应关系分页
  */
 export function getOrderMaterialRelationPage(params) {

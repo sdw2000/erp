@@ -1,6 +1,74 @@
 <template>
   <div class="app-container">
-    <el-card shadow="never" class="mb-10">
+    <el-card v-if="standaloneLabelOnly" shadow="never" class="mb-10">
+      <div class="section-head">
+        <span style="font-weight: 600;">复卷标签独立打印（无需排程）</span>
+      </div>
+      <el-form :inline="true" label-width="100px" class="rewinding-label-form mb-10">
+        <el-form-item label="母卷号">
+          <el-autocomplete
+            v-model.trim="reportForm.rewindingMotherRollCode"
+            :fetch-suggestions="queryRewindingMotherRollSuggestions"
+            placeholder="输入母卷号/料号/品名搜索"
+            clearable
+            trigger-on-focus
+            style="width: 360px"
+            @select="handleRewindingMotherRollSelect"
+            @blur="resolveRewindingMotherRollInfo"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button size="small" @click="resolveRewindingMotherRollInfo()">查询母卷</el-button>
+        </el-form-item>
+      </el-form>
+
+      <el-row class="mb-10" :gutter="16">
+        <el-col :span="8"><strong>料号：</strong>{{ (reportForm.rewindingMotherInfo && reportForm.rewindingMotherInfo.materialCode) || '-' }}</el-col>
+        <el-col :span="8"><strong>物料名称：</strong>{{ (reportForm.rewindingMotherInfo && (reportForm.rewindingMotherInfo.materialName || reportForm.rewindingMotherInfo.productName)) || '-' }}</el-col>
+        <el-col :span="8"><strong>母卷规格：</strong>{{ formatRewindingMotherRollSpec(reportForm.rewindingMotherInfo) }}</el-col>
+      </el-row>
+
+      <el-form :inline="true" label-width="100px" class="rewinding-label-form">
+        <el-form-item label="复卷人员">
+          <el-select
+            v-model="reportForm.operator"
+            filterable
+            clearable
+            placeholder="请选择包装部门复卷人员"
+            style="width: 220px"
+          >
+            <el-option
+              v-for="item in packagingStaffOptions"
+              :key="item.id"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="复卷长度(m)">
+          <el-input-number
+            v-model="reportForm.rewindingLabelLengthM"
+            size="small"
+            :min="1"
+            :step="1"
+            :precision="0"
+            controls-position="right"
+            style="width: 140px"
+          />
+        </el-form-item>
+        <el-form-item label="打印标签数量">
+          <el-input-number v-model="reportForm.rewindingPrintCount" size="small" :min="1" :step="1" controls-position="right" style="width: 140px" />
+        </el-form-item>
+        <el-form-item label="起始序号">
+          <el-input-number v-model="reportForm.rewindingSerialStart" size="small" :min="1" :step="1" controls-position="right" style="width: 140px" />
+        </el-form-item>
+        <el-form-item>
+          <el-button size="small" type="primary" icon="el-icon-printer" @click="printRewindingLabel">打印复卷标签</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
+    <el-card v-if="!standaloneLabelOnly" shadow="never" class="mb-10">
       <el-form :inline="true" :model="query" @submit.native.prevent>
         <el-form-item v-if="!fixedType" label="类型">
           <el-select v-model="query.type" placeholder="全部" clearable style="width: 140px">
@@ -77,7 +145,7 @@
       </el-form>
     </el-card>
 
-    <el-card shadow="never">
+    <el-card v-if="!standaloneLabelOnly" shadow="never">
       <div class="mb-10 table-summary">
         <span>
           物料代码 {{ taskMaterialCodeCount }} 个，当班生产报工总平米数 {{ formatAreaNum(taskTotalArea) }}m²；
@@ -251,7 +319,8 @@
     <el-dialog
       :title="`${processLabel(reportForm.processType)}${isLabelPrintMode ? '标签打印' : '报工'}`"
       :visible.sync="reportDialogVisible"
-      width="860px"
+      :width="reportDialogWidth"
+      :custom-class="reportDialogClass"
       @close="closeReportDialog"
     >
       <template slot="title">
@@ -309,7 +378,7 @@
         <el-form-item v-if="reportForm.processType === 'COATING'" label="实际数量(㎡)">
           <el-input :value="formatAreaNum(calcCoatingOrderReportedTotalArea())" size="small" style="width: 140px" disabled />
         </el-form-item>
-        <el-form-item v-else :label="reportForm.processType === 'SLITTING' ? '生产卷数' : '生产数量'">
+        <el-form-item v-else-if="!(isLabelPrintMode && reportForm.processType === 'SLITTING')" :label="reportForm.processType === 'SLITTING' ? '生产卷数' : '生产数量'">
           <el-input-number
             v-model="reportForm.producedQty"
             :min="reportForm.processType === 'SLITTING' ? 0 : 0.01"
@@ -320,7 +389,7 @@
             @change="handleSlittingInputChanged"
           />
         </el-form-item>
-        <el-form-item v-if="reportForm.processType === 'SLITTING'" label="批次号">
+        <el-form-item v-if="reportForm.processType === 'SLITTING' && !(isLabelPrintMode && reportForm.processType === 'SLITTING')" label="批次号">
           <div style="display:flex; align-items:center; gap:10px;">
             <el-checkbox v-model="reportForm.batchNoRequired">必填</el-checkbox>
             <el-select
@@ -475,190 +544,281 @@
           <el-button size="mini" type="primary" plain icon="el-icon-printer" @click="printRewindingLabel">打印标签</el-button>
         </div>
       </div>
-      <el-form v-if="isLabelPrintMode && reportForm.processType === 'REWINDING'" :inline="true" label-width="110px" class="mb-10">
-        <el-form-item label="母卷号">
-          <el-input
-            v-model="reportForm.rewindingMotherRollCode"
-            size="small"
-            clearable
-            placeholder="可扫码输入母卷号"
-            style="width: 220px"
-          />
-        </el-form-item>
-        <el-form-item label="序列起始号">
-          <el-input-number v-model="reportForm.rewindingSerialStart" size="small" :min="1" :step="1" controls-position="right" style="width: 140px" />
-        </el-form-item>
-        <el-form-item label="打印个数">
-          <el-input-number v-model="reportForm.rewindingPrintCount" size="small" :min="1" :step="1" controls-position="right" style="width: 140px" />
-        </el-form-item>
-      </el-form>
+      <div v-if="isLabelPrintMode && reportForm.processType === 'REWINDING'" class="mb-10 rewinding-label-tabs-wrap">
+        <el-tabs v-model="rewindingLabelTab" type="card">
+          <el-tab-pane label="打印复卷标签" name="print">
+            <el-form :inline="true" label-width="100px" class="rewinding-label-form">
+              <el-form-item label="母卷号">
+                <el-input
+                  v-model.trim="reportForm.rewindingMotherRollCode"
+                  size="small"
+                  clearable
+                  placeholder="输入/扫码母卷号"
+                  style="width: 240px"
+                  @change="reportForm.rewindingMotherInfo = null"
+                  @blur="resolveRewindingMotherRollInfo"
+                />
+              </el-form-item>
+              <el-form-item>
+                <el-button size="small" @click="resolveRewindingMotherRollInfo()">查询母卷</el-button>
+              </el-form-item>
+              <el-form-item label="长度(m)">
+                <el-input-number
+                  v-model="reportForm.rewindingLabelLengthM"
+                  size="small"
+                  :min="1"
+                  :step="1"
+                  :precision="0"
+                  controls-position="right"
+                  style="width: 140px"
+                />
+              </el-form-item>
+              <el-form-item label="序列起始号">
+                <el-input-number v-model="reportForm.rewindingSerialStart" size="small" :min="1" :step="1" controls-position="right" style="width: 140px" />
+              </el-form-item>
+              <el-form-item label="打印个数">
+                <el-input-number v-model="reportForm.rewindingPrintCount" size="small" :min="1" :step="1" controls-position="right" style="width: 140px" />
+              </el-form-item>
+            </el-form>
+
+            <el-descriptions v-if="reportForm.rewindingMotherInfo" :column="3" size="mini" border class="rewinding-info-desc">
+              <el-descriptions-item label="品名">{{ reportForm.rewindingMotherInfo.materialName || reportForm.rewindingMotherInfo.productName || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="料号">{{ reportForm.rewindingMotherInfo.materialCode || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="厚度(μm)">{{ reportForm.rewindingMotherInfo.thickness || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="宽度(mm)">{{ reportForm.rewindingMotherInfo.widthMm || reportForm.rewindingMotherInfo.width || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="长度(m)">{{ reportForm.rewindingMotherInfo.lengthM || reportForm.rewindingMotherInfo.length || reportForm.rewindingMotherInfo.currentLength || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="母卷号">{{ reportForm.rewindingMotherInfo.value || reportForm.rewindingMotherRollCode || '-' }}</el-descriptions-item>
+            </el-descriptions>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
 
       <div v-if="isLabelPrintMode && reportForm.processType === 'SLITTING'" class="section-head">
         <span style="font-weight: 600;">分切标签打印</span>
         <div />
       </div>
       <el-form v-if="isLabelPrintMode && reportForm.processType === 'SLITTING'" :inline="true" label-width="110px" class="mb-10 slitting-print-form">
-        <el-form-item label="卷/筒" class="pair-field">
-          <el-input-number
-            v-model="reportForm.slittingRollPerTube"
-            :min="1"
-            :step="1"
-            :precision="0"
-            size="small"
-            controls-position="right"
-            style="width: 140px"
-            @change="handleSlittingInputChanged"
-          />
-        </el-form-item>
-        <el-form-item label="筒/箱" class="pair-field">
-          <el-input-number
-            v-model="reportForm.slittingTubePerBoxCount"
-            :min="0"
-            :step="1"
-            :precision="0"
-            size="small"
-            controls-position="right"
-            style="width: 140px"
-            @change="val => (typeof handleSlittingTubePerBoxChanged === 'function' ? handleSlittingTubePerBoxChanged(val) : handleSlittingInputChanged())"
-          />
-        </el-form-item>
-        <el-form-item label="纸箱规格">
-          <el-select
-            v-model="reportForm.cartonPreset"
-            size="small"
-            style="width: 180px"
-            :disabled="!cartonPresetOptions.length"
-            placeholder="请先在研发管理维护"
-            @change="handleCartonPresetChanged"
-          >
-            <el-option
-              v-for="item in cartonPresetOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
+        <div class="slitting-print-row">
+          <el-form-item label="生产卷数">
+            <el-input-number
+              v-model="reportForm.producedQty"
+              :min="0"
+              :step="1"
+              :precision="0"
+              size="small"
+              controls-position="right"
+              style="width: 140px"
+              @change="handleSlittingInputChanged"
             />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="管芯外径(mm)">
-          <el-input-number
-            v-model="reportForm.coreOuterDiameterMm"
-            :min="0"
-            :step="0.1"
-            :precision="2"
-            size="small"
-            controls-position="right"
-            style="width: 140px"
-            @change="handleSlittingInputChanged"
-          />
-        </el-form-item>
-        <el-form-item label="胶带外径(mm)">
-          <el-input :value="calcSlittingTapeOuterDiameterText(reportForm || {})" size="small" disabled style="width: 160px" />
-        </el-form-item>
-        <el-form-item label="内标张数">
-          <el-input-number
-            v-model="reportForm.slittingInnerPrintCount"
-            :min="0"
-            :step="1"
-            :precision="0"
-            size="small"
-            controls-position="right"
-            style="width: 140px"
-          />
-        </el-form-item>
-        <el-form-item label="外标张数">
-          <el-input-number
-            v-model="reportForm.slittingOuterPrintCount"
-            :min="0"
-            :step="1"
-            :precision="0"
-            size="small"
-            controls-position="right"
-            style="width: 140px"
-          />
-        </el-form-item>
-        <el-form-item label="本箱重量(kg)">
-          <el-input-number
-            v-model="reportForm.boxWeightKg"
-            :min="0"
-            :step="0.01"
-            :precision="2"
-            size="small"
-            controls-position="right"
-            style="width: 140px"
-          />
-        </el-form-item>
-        <el-form-item label="生产日期">
-          <el-date-picker
-            v-model="reportForm.labelProductionDate"
-            type="date"
-            value-format="yyyy-MM-dd"
-            format="yyyy-MM-dd"
-            size="small"
-            style="width: 140px"
-            placeholder="生产日期"
-          />
-        </el-form-item>
-        <el-form-item label="出货日期">
-          <el-date-picker
-            v-model="reportForm.labelShipDate"
-            type="date"
-            value-format="yyyy-MM-dd"
-            format="yyyy-MM-dd"
-            size="small"
-            style="width: 140px"
-            placeholder="出货日期"
-          />
-        </el-form-item>
-        <el-form-item label="送货单号">
-          <el-input v-model="reportForm.deliveryNoteNo" size="small" style="width: 160px" placeholder="如 DH-20260416-001" />
-        </el-form-item>
-        <el-form-item label="保质期(天)">
-          <el-input-number
-            v-model="reportForm.shelfLifeDays"
-            :min="0"
-            :step="1"
-            :precision="0"
-            size="small"
-            controls-position="right"
-            style="width: 140px"
-          />
-        </el-form-item>
-        <el-form-item label="二维码模板">
-          <el-input
-            v-model="reportForm.qrTemplate"
-            size="small"
-            style="width: 420px"
-            :placeholder="'支持 {{field}} 或 {field}，例如 {{orderNo}}|{{batchNo}}|{{boxRollCount}}'"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            size="mini"
-            type="success"
-            plain
-            :loading="qrRuleSaving"
-            @click="saveCurrentCustomerQrRule('SLITTING_OUTER_LABEL')"
-          >保存当前客户二维码规则</el-button>
-        </el-form-item>
-        <el-form-item label="二维码预览">
-          <el-input :value="buildSlittingQrPreview()" size="small" readonly style="width: 420px" />
-        </el-form-item>
-        <el-form-item>
-          <el-select
-            v-model="reportForm.slittingCoreLabelBizType"
-            size="mini"
-            style="width: 180px; margin-right: 8px"
-            :disabled="!isLabelPrintMode || reportForm.processType !== 'SLITTING'"
-            placeholder="请选择卷芯标签类型"
-          >
-            <el-option label="普通管芯标签" value="SLITTING_CORE_LABEL" />
-            <el-option label="窄管芯标签" value="SLITTING_CORE_LABEL_NARROW" />
-          </el-select>
-          <el-button size="mini" type="primary" plain icon="el-icon-printer" @click="printSlittingLabel('slitting-core-label')">打印卷芯标签</el-button>
-          <el-button size="mini" type="primary" plain icon="el-icon-printer" @click="printSlittingLabel('slitting-inner-label')">打印内标签</el-button>
-          <el-button size="mini" type="primary" plain icon="el-icon-printer" @click="printSlittingLabel('slitting-outer-label')">打印外标签</el-button>
-          <el-button size="mini" type="primary" plain icon="el-icon-printer" @click="printSlittingLabel('slitting-pallet-label')">打印栈板标签</el-button>
-        </el-form-item>
+          </el-form-item>
+          <el-form-item label="卷/筒" class="pair-field">
+            <el-input-number
+              v-model="reportForm.slittingRollPerTube"
+              :min="1"
+              :step="1"
+              :precision="0"
+              size="small"
+              controls-position="right"
+              style="width: 140px"
+              @change="handleSlittingInputChanged"
+            />
+          </el-form-item>
+          <el-form-item label="筒/箱" class="pair-field">
+            <el-input-number
+              v-model="reportForm.slittingTubePerBoxCount"
+              :min="0"
+              :step="1"
+              :precision="0"
+              size="small"
+              controls-position="right"
+              style="width: 140px"
+              @change="val => (typeof handleSlittingTubePerBoxChanged === 'function' ? handleSlittingTubePerBoxChanged(val) : handleSlittingInputChanged())"
+            />
+          </el-form-item>
+          <el-form-item label="批次号">
+            <div class="slitting-required-wrap">
+              <el-checkbox v-model="reportForm.batchNoRequired">必填</el-checkbox>
+              <el-select
+                ref="slittingBatchNoSelect"
+                v-model="reportForm.batchNo"
+                size="small"
+                filterable
+                allow-create
+                default-first-option
+                clearable
+                style="width: 220px"
+                placeholder="可搜索已领料批次号，也可手输"
+                @blur="commitSlittingBatchNoInput"
+              >
+                <el-option
+                  v-for="item in slittingIssuedBatchOptions"
+                  :key="item"
+                  :label="item"
+                  :value="item"
+                />
+              </el-select>
+            </div>
+          </el-form-item>
+        </div>
+
+        <div class="slitting-print-row">
+          <el-form-item label="数字号">
+            <div class="slitting-required-wrap">
+              <el-checkbox v-model="reportForm.slittingDigitalNoEnabled">启用</el-checkbox>
+              <el-checkbox v-model="reportForm.slittingDigitalNoRequired">必填</el-checkbox>
+              <el-input
+                v-model.trim="reportForm.slittingDigitalNo"
+                size="small"
+                :disabled="!reportForm.slittingDigitalNoEnabled"
+                style="width: 130px"
+                placeholder="如 001"
+              />
+            </div>
+          </el-form-item>
+        </div>
+
+        <div class="slitting-print-row">
+          <el-form-item label="卷芯张数">
+            <el-input-number v-model="reportForm.slittingCorePrintCount" :min="0" :step="1" :precision="0" size="small" controls-position="right" style="width: 140px" />
+          </el-form-item>
+          <el-form-item label="内标张数">
+            <el-input-number v-model="reportForm.slittingInnerPrintCount" :min="0" :step="1" :precision="0" size="small" controls-position="right" style="width: 140px" />
+          </el-form-item>
+          <el-form-item label="外标张数">
+            <el-input-number v-model="reportForm.slittingOuterPrintCount" :min="0" :step="1" :precision="0" size="small" controls-position="right" style="width: 140px" />
+          </el-form-item>
+          <el-form-item label="栈板张数">
+            <el-input-number v-model="reportForm.slittingPalletPrintCount" :min="0" :step="1" :precision="0" size="small" controls-position="right" style="width: 140px" />
+          </el-form-item>
+        </div>
+
+        <div class="slitting-print-row">
+          <el-form-item label="生产日期">
+            <el-date-picker
+              v-model="reportForm.labelProductionDate"
+              type="date"
+              value-format="yyyy-MM-dd"
+              format="yyyy-MM-dd"
+              size="small"
+              style="width: 140px"
+              placeholder="生产日期"
+            />
+          </el-form-item>
+          <el-form-item label="保质期(天)">
+            <el-input-number v-model="reportForm.shelfLifeDays" :min="0" :step="1" :precision="0" size="small" controls-position="right" style="width: 140px" />
+          </el-form-item>
+          <el-form-item label="出货日期">
+            <el-date-picker
+              v-model="reportForm.labelShipDate"
+              type="date"
+              value-format="yyyy-MM-dd"
+              format="yyyy-MM-dd"
+              size="small"
+              style="width: 140px"
+              placeholder="出货日期"
+            />
+          </el-form-item>
+          <el-form-item label="送货单号">
+            <el-input v-model="reportForm.deliveryNoteNo" size="small" style="width: 180px" placeholder="如 DH-20260416-001" />
+          </el-form-item>
+        </div>
+
+        <div class="slitting-print-row">
+          <el-form-item label="纸箱规格">
+            <el-select
+              v-model="reportForm.cartonPreset"
+              size="small"
+              style="width: 230px"
+              :disabled="!cartonPresetOptions.length"
+              placeholder="请先在研发管理维护"
+              @change="handleCartonPresetChanged"
+            >
+              <el-option
+                v-for="item in cartonPresetOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="管芯外径(mm)">
+            <el-input-number
+              v-model="reportForm.coreOuterDiameterMm"
+              :min="0"
+              :step="0.1"
+              :precision="2"
+              size="small"
+              controls-position="right"
+              style="width: 140px"
+              @change="handleSlittingInputChanged"
+            />
+          </el-form-item>
+          <el-form-item label="胶带外径(mm)">
+            <el-input :value="calcSlittingTapeOuterDiameterText(reportForm || {})" size="small" disabled style="width: 140px" />
+          </el-form-item>
+          <el-form-item label="本箱重量(kg)">
+            <el-input-number v-model="reportForm.boxWeightKg" :min="0" :step="0.01" :precision="2" size="small" controls-position="right" style="width: 140px" />
+          </el-form-item>
+        </div>
+
+        <div class="slitting-print-row">
+          <el-form-item label="规格类型">
+            <el-select
+              v-model="reportForm.slittingQrRuleBizType"
+              size="small"
+              style="width: 160px"
+              @change="handleSlittingQrRuleBizTypeChanged"
+            >
+              <el-option label="管芯标签" value="SLITTING_CORE_LABEL" />
+              <el-option label="窄管芯标签" value="SLITTING_CORE_LABEL_NARROW" />
+              <el-option label="内标签" value="SLITTING_INNER_LABEL" />
+              <el-option label="外标签" value="SLITTING_OUTER_LABEL" />
+              <el-option label="栈板标签" value="SLITTING_PALLET_LABEL" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="二维码模板" class="slitting-qr-template-item">
+            <el-input
+              v-model="reportForm.qrTemplate"
+              size="small"
+              style="width: 480px"
+              :placeholder="'支持 {{field}} 或 {field}，例如 {{orderNo}}|{{batchNo}}|{{boxRollCount}}'"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              size="mini"
+              type="success"
+              plain
+              :loading="qrRuleSaving"
+              @click="saveCurrentCustomerQrRule(reportForm.slittingQrRuleBizType || 'SLITTING_OUTER_LABEL')"
+            >保存当前客户该类型二维码规则</el-button>
+          </el-form-item>
+        </div>
+
+        <div class="slitting-print-row">
+          <el-form-item label="二维码预览" class="slitting-qr-preview-item">
+            <el-input :value="buildSlittingQrPreview()" size="small" readonly style="width: 760px" />
+          </el-form-item>
+        </div>
+
+        <div class="slitting-print-row">
+          <el-form-item>
+            <el-select
+              v-model="reportForm.slittingCoreLabelBizType"
+              size="mini"
+              style="width: 160px; margin-right: 8px"
+              :disabled="!isLabelPrintMode || reportForm.processType !== 'SLITTING'"
+              placeholder="卷芯类型"
+            >
+              <el-option label="普通管芯" value="SLITTING_CORE_LABEL" />
+              <el-option label="窄管芯" value="SLITTING_CORE_LABEL_NARROW" />
+            </el-select>
+            <el-button size="mini" type="primary" plain icon="el-icon-printer" @click="printSlittingLabel('slitting-core-label')">打印卷芯标签</el-button>
+            <el-button size="mini" type="primary" plain icon="el-icon-printer" @click="printSlittingLabel('slitting-inner-label')">打印内标签</el-button>
+            <el-button size="mini" type="primary" plain icon="el-icon-printer" @click="printSlittingLabel('slitting-outer-label')">打印外标签</el-button>
+            <el-button size="mini" type="primary" plain icon="el-icon-printer" @click="printSlittingLabel('slitting-pallet-label')">打印栈板标签</el-button>
+          </el-form-item>
+        </div>
       </el-form>
 
       <div
@@ -693,8 +853,11 @@
           />
         </svg>
         <div v-else class="packing-preview-empty">暂无可预览排布（请先选择纸箱并填写有效规格）</div>
-        <div class="packing-preview-meta">
+        <div class="packing-preview-meta" :class="{ 'packing-preview-meta-danger': slittingPackingPreview && slittingPackingPreview.requestedCount > 0 && !slittingPackingPreview.fitsRequested }">
           直径取整：{{ slittingPackingPreview.diameterRoundedMm || 0 }}mm，预览可放：{{ slittingPackingPreview.count || 0 }} 筒
+          ，计划装筒：{{ slittingPackingPreview.requestedCount || 0 }} 筒
+          ，本箱卷数：{{ slittingPackingPreview.requestedRollCount || 0 }} 卷
+          ，{{ slittingPackingPreview.requestedCount > 0 ? (slittingPackingPreview.fitsRequested ? '可放下' : '放不下') : '未设置' }}
         </div>
       </div>
 
@@ -1076,7 +1239,7 @@
 <script>
 import request from '@/utils/request'
 import { getProductionTasks } from '@/api/productionManagement'
-import { getStagePlanTaskPage } from '@/api/schedulePlan'
+import { getStagePlanTaskPage, getStagePlanTaskSummary } from '@/api/schedulePlan'
 import { getShiftProductionSummary } from '@/api/schedule'
 import { getCoatingSchedules, getPendingOrders, reportWork, getReportWorkList, getReportWorkDetail, getLatestScheduleId, getNextCoatingRollCode, updateReportWork, deleteReportWork } from '@/api/manualSchedule'
 import { queryOrderLockedStocks, allocateMaterials, returnMaterials, createIssueOrder } from '@/api/scheduleMaterial'
@@ -1093,6 +1256,9 @@ import {
 import { matchCustomerMaterialMapping } from '@/api/customerMaterialMapping'
 import { updateCoatingActualTimes } from '@/api/productionManagement'
 import { getCartonSpecList } from '@/api/rdCartonSpec'
+import { searchMotherRolls, resolveMotherRollInfo } from '@/api/tapeStock'
+import { getAllActiveStaff } from '@/api/staff'
+import { getWorkshopList } from '@/api/equipment'
 import { getSpecByMaterialCode } from '@/api/tapeSpec'
 import { getOrderDetailForProduction, resolveOrderItemByDetailId } from '@/api/sales'
 import { getCustomerLabelQrRule, saveCustomerLabelQrRule } from '@/api/labelQrRule'
@@ -1101,7 +1267,10 @@ import QRCode from 'qrcode'
 
 export default {
   name: 'ProductionTasks',
-  props: { fixedType: { type: String, default: '' }},
+  props: {
+    fixedType: { type: String, default: '' },
+    standaloneLabelOnly: { type: Boolean, default: false }
+  },
   data() {
     return {
       loading: false,
@@ -1211,8 +1380,14 @@ export default {
         slittingTubePerBoxCount: 0,
         slittingTubeRollCount: 0,
         slittingCoreLabelBizType: 'SLITTING_CORE_LABEL',
+        slittingQrRuleBizType: 'SLITTING_OUTER_LABEL',
+        slittingDigitalNoEnabled: true,
+        slittingDigitalNoRequired: true,
+        slittingDigitalNo: '',
+        slittingCorePrintCount: 0,
         slittingInnerPrintCount: 0,
         slittingOuterPrintCount: 0,
+        slittingPalletPrintCount: 0,
         boxWeightKg: null,
         labelProductionDate: '',
         labelShipDate: '',
@@ -1244,6 +1419,8 @@ export default {
         allowBrowserFallback: false
       },
       printPreviewEnabled: true,
+      rewindingLabelTab: 'print',
+      packagingStaffOptions: [],
       customerMaterialAliasCache: {},
       materialNameByCodeCache: {},
       colorNameByCodeCache: {},
@@ -1268,7 +1445,10 @@ export default {
         boxHeightPx: 0,
         circles: [],
         count: 0,
-        diameterRoundedMm: 0
+        diameterRoundedMm: 0,
+        requestedCount: 0,
+        fitsRequested: true,
+        requestedRollCount: 0
       },
       slittingTubePerBoxManual: false,
       slittingIssuedBatchOptions: [],
@@ -1302,6 +1482,17 @@ export default {
     orderNoVisible() { return !this.isCoating || this.showOrderNo },
     hasRealtimeKeywordFilter() {
       return !!(this.normalizeKeywordText(this.query.materialCodeKeyword) || this.normalizeKeywordText(this.query.specKeyword))
+    },
+    reportDialogWidth() {
+      if (this.isLabelPrintMode && this.reportForm && this.reportForm.processType === 'SLITTING') {
+        return '1220px'
+      }
+      return '860px'
+    },
+    reportDialogClass() {
+      return this.isLabelPrintMode && this.reportForm && this.reportForm.processType === 'SLITTING'
+        ? 'slitting-print-dialog'
+        : ''
     },
     liveFilteredList() {
       const source = Array.isArray(this.list) ? this.list : []
@@ -1387,6 +1578,13 @@ export default {
       const normalized = String(raw).trim().toUpperCase().replace(/班$/g, '').replace(/[^A-Z0-9]/g, '')
       return normalized || 'A'
     },
+    currentUserTeamName() {
+      const profile = this.$store.getters.userProfile || {}
+      const raw = profile.teamName || profile.groupName || profile.workGroup || profile.classGroup || profile.shiftGroup || this.$store.getters.workGroup || ''
+      const text = String(raw || '').trim()
+      if (text) return text
+      return `${this.currentWorkGroup || 'A'}组`
+    },
     reportSegmentCount() {
       if (!this.reportForm || !this.reportForm.enableSegment) return 1
       const start = this.parseDateTimeValue(this.reportForm.startTime)
@@ -1434,8 +1632,17 @@ export default {
   },
   created() {
     if (this.fixedType) this.query.type = this.fixedType
+    const today = this.todayDate()
+    if (!Array.isArray(this.query.dateRange) || this.query.dateRange.length === 0) {
+      this.query.dateRange = [today, today]
+    }
     this.loadBarTenderConfig()
-    this.lockQuery.planDate = this.todayDate()
+    if (this.standaloneLabelOnly) {
+      this.initStandaloneRewindingLabelForm()
+      this.loadPackagingStaffOptions()
+      return
+    }
+    this.lockQuery.planDate = today
     this.loadShiftProductionSummary()
     this.loadTasks()
   },
@@ -1446,6 +1653,175 @@ export default {
     this.focusDetailQrScanInput()
   },
   methods: {
+    initStandaloneRewindingLabelForm() {
+      this.reportDialogMode = 'print'
+      this.reportDialogVisible = false
+      this.reportForm = {
+        ...this.reportForm,
+        scheduleId: null,
+        orderDetailId: null,
+        processType: 'REWINDING',
+        taskNo: '',
+        orderNo: '',
+        customerOrderNo: '',
+        customerCode: '',
+        orderDetailRemark: '',
+        lineNo: '',
+        materialCode: '',
+        materialName: '',
+        batchNo: '',
+        thickness: '',
+        widthMm: null,
+        lengthM: null,
+        rewindingSpec: '',
+        rewindingMotherRollCode: '',
+        rewindingLabelLengthM: null,
+        rewindingMotherInfo: null,
+        rewindingSerialStart: 1,
+        rewindingPrintCount: 1,
+        producedQty: null,
+        producedRolls: [],
+        materialIssues: [],
+        startTime: this.toDateTimeString(new Date()),
+        endTime: this.toDateTimeString(new Date()),
+        operator: this.buildOperatorWithGroup(),
+        remark: ''
+      }
+      this.rewindingLabelTab = 'print'
+    },
+    async loadPackagingStaffOptions() {
+      try {
+        const [staffRes, workshopRes] = await Promise.all([
+          getAllActiveStaff(),
+          getWorkshopList({ status: 1, page: 1, size: 200 }).catch(() => null)
+        ])
+
+        const rows = (staffRes && (staffRes.code === 200 || staffRes.code === 20000) && Array.isArray(staffRes.data)) ? staffRes.data : []
+        const workshopRecords = workshopRes && (workshopRes.code === 200 || workshopRes.code === 20000)
+          ? ((workshopRes.data && (workshopRes.data.records || workshopRes.data.list)) || [])
+          : []
+
+        const rewindingSlittingWorkshopPattern = /(复卷\s*分切|复卷\s*\/\s*分切|分切\s*复卷|rewinding\s*\/?\s*slitting)/i
+        const workshopIdSet = new Set(
+          (Array.isArray(workshopRecords) ? workshopRecords : [])
+            .filter(item => rewindingSlittingWorkshopPattern.test(String((item && item.workshopName) || '').trim()))
+            .map(item => Number(item && item.id))
+            .filter(id => Number.isFinite(id) && id > 0)
+        )
+
+        const options = rows
+          .filter(item => {
+            const workshopId = Number(item && item.workshopId)
+            const workshop = String((item && item.workshopName) || '').trim()
+            const department = String((item && item.department) || '').trim()
+            const team = String((item && item.teamName) || '').trim()
+            const tags = `${workshop}|${department}|${team}`
+
+            if (workshopIdSet.size > 0) {
+              if (Number.isFinite(workshopId) && workshopIdSet.has(workshopId)) return true
+            }
+
+            // 兜底：防止车间ID未返回或主数据名称存在细微差异导致过滤为空
+            return /(复卷.*分切|分切.*复卷|rewinding|slitting)/i.test(tags)
+          })
+          .map(item => {
+            const id = item && item.id
+            const name = String((item && item.staffName) || '').trim()
+            const code = String((item && item.staffCode) || '').trim()
+            const workshop = String((item && item.workshopName) || '').trim()
+            const team = String((item && item.teamName) || '').trim()
+            return {
+              id,
+              value: name,
+              label: code
+                ? `${name}(${code})${workshop ? ` - ${workshop}` : ''}${team ? `/${team}` : ''}`
+                : `${name}${workshop ? ` - ${workshop}` : ''}${team ? `/${team}` : ''}`
+            }
+          })
+          .filter(x => x.id && x.value)
+
+        this.packagingStaffOptions = options
+        const current = String((this.reportForm && this.reportForm.operator) || '').trim()
+        if (!current && options.length) {
+          this.reportForm.operator = options[0].value
+        }
+      } catch (e) {
+        this.packagingStaffOptions = []
+      }
+    },
+    async queryRewindingMotherRollSuggestions(queryString, cb) {
+      const keyword = String(queryString || '').trim()
+      try {
+        const res = await searchMotherRolls({ keyword, size: 20 })
+        const rows = (res && (res.code === 200 || res.code === 20000) && Array.isArray(res.data)) ? res.data : []
+        const seen = new Set()
+        const list = rows
+          .map(item => {
+            const raw = String((item && (item.value || item.rollCode || item.motherRollCode || item.code)) || '').trim()
+            const normalizedCode = this.normalizeRewindingMotherRollCode(raw)
+            if (!normalizedCode) return null
+            if (seen.has(normalizedCode)) return null
+            seen.add(normalizedCode)
+            return {
+              ...item,
+              rawValue: raw,
+              value: normalizedCode
+            }
+          })
+          .filter(Boolean)
+        cb(list)
+      } catch (e) {
+        cb([])
+      }
+    },
+    normalizeRewindingMotherRollCode(rawCode) {
+      const text = String(rawCode || '').trim()
+      if (!text) return ''
+      return text.replace(/-\d{3}$/g, '')
+    },
+    handleRewindingMotherRollSelect(item) {
+      if (!item || typeof item !== 'object') return
+      const code = this.normalizeRewindingMotherRollCode(item.value)
+      if (code) this.reportForm.rewindingMotherRollCode = code
+      this.applyResolvedRewindingMotherInfo(item)
+      const guard = this.ensureRewindingSerialStartMonotonic(this.reportForm.rewindingMotherRollCode, this.reportForm.rewindingSerialStart)
+      this.reportForm.rewindingSerialStart = guard.startNo
+    },
+    formatRewindingMotherRollSpec(info) {
+      const src = info || {}
+      const t = Number(src.thickness)
+      const w = Number(src.widthMm != null ? src.widthMm : src.width)
+      const l = Number(src.lengthM != null ? src.lengthM : (src.length != null ? src.length : src.currentLength))
+      const tText = Number.isFinite(t) && t > 0 ? `${t}μm` : '-'
+      const wText = Number.isFinite(w) && w > 0 ? `${w}mm` : '-'
+      const lText = Number.isFinite(l) && l > 0 ? `${l}m` : '-'
+      if (tText === '-' && wText === '-' && lText === '-') return '-'
+      return `${tText}*${wText}*${lText}`
+    },
+    applyResolvedRewindingMotherInfo(info) {
+      const src = info || {}
+      this.reportForm.rewindingMotherInfo = src
+
+      const materialCode = String(src.materialCode || '').trim()
+      const materialName = String((src.materialName || src.productName) || '').trim()
+      if (materialCode) this.reportForm.materialCode = materialCode
+      if (materialName) this.reportForm.materialName = materialName
+
+      const thickness = Number(src.thickness)
+      if (Number.isFinite(thickness) && thickness > 0) {
+        this.reportForm.thickness = thickness
+      }
+
+      const width = Number(src.widthMm != null ? src.widthMm : src.width)
+      if (Number.isFinite(width) && width > 0) {
+        this.reportForm.widthMm = width
+      }
+
+      const motherLength = Number(src.lengthM != null ? src.lengthM : (src.length != null ? src.length : src.currentLength))
+      if (!(Number(this.reportForm.rewindingLabelLengthM) > 0) && Number.isFinite(motherLength) && motherLength > 0) {
+        this.reportForm.rewindingLabelLengthM = Math.trunc(motherLength)
+      }
+    },
     taskSortHeaderClass(field) {
       if (!this.isCoating) return ''
       return {
@@ -2009,8 +2385,20 @@ export default {
     },
     getDefaultCartonPreset() {
       const list = Array.isArray(this.cartonPresetOptions) ? this.cartonPresetOptions : []
+      const rank13 = (item) => {
+        const label = String((item && item.label) || '').trim().toUpperCase()
+        const value = String((item && item.value) || '').trim().toUpperCase()
+        const text = `${label} ${value}`
+        if (/13\s*#/.test(text) || /13\s*号/.test(text)) return 3
+        if (/(^|[^0-9])13([^0-9]|$)/.test(text)) return 2
+        return 0
+      }
+      const prefer13 = list
+        .map(item => ({ item, score: rank13(item) }))
+        .filter(x => x.score > 0)
+        .sort((a, b) => b.score - a.score)[0]
       return list.length
-        ? list[0]
+        ? ((prefer13 && prefer13.item) || list[0])
         : { value: '', lengthMm: 0, widthMm: 0, heightMm: 0 }
     },
     loadBarTenderConfig() {
@@ -2122,11 +2510,12 @@ export default {
       const customerOrderNo = String(((payload || {}).customerOrderNo) || '').trim()
       const materialCode = customerMaterialCode || String(internalMaterialCode || '').trim()
       const materialName = customerMaterialName || String(internalMaterialName || '').trim()
-      return {
+      const nextPayload = {
         ...(payload || {}),
         materialCode,
         materialName,
         ...(customerSpec ? { spec: customerSpec } : {}),
+        ...(customerSpec ? { specification: customerSpec } : {}),
         ...(mappedRemark ? { remark: mappedRemark } : {}),
         orderNoDisplay: customerOrderNo || orderNo || '',
         productName: materialName,
@@ -2140,6 +2529,12 @@ export default {
         customerSpecText: customerSpec,
         customerProductName: customerMaterialName || materialName
       }
+      const specText = String((nextPayload.spec != null ? nextPayload.spec : nextPayload.specification) || '').trim()
+      if (specText) {
+        nextPayload.spec = specText
+        nextPayload.specification = specText
+      }
+      return nextPayload
     },
     getPrintScene(type) {
       const sceneType = String(type || '').trim()
@@ -2168,7 +2563,7 @@ export default {
             })
             const printTime = this.toDateTimeString(new Date())
             const productionDate = this.toDateString(String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() || this.toDateString((this.reportForm && this.reportForm.startTime) || printTime))
-            const groupNo = `${this.currentWorkGroup || 'A'}组`
+            const groupNo = this.currentUserTeamName
             const labelOrderNo = this.resolveLabelOrderNo(this.reportForm)
 
             const payload = {
@@ -2218,19 +2613,26 @@ export default {
               String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() ||
               this.toDateString((this.reportForm && this.reportForm.startTime) || printTime)
             )
-            const groupNo = `${this.currentWorkGroup || 'A'}组`
+            const groupNo = this.currentUserTeamName
             const labelOrderNo = this.resolveLabelOrderNo(this.reportForm)
             const srcWidth = Number(source && source.widthMm)
             const srcLength = Number(source && source.lengthM)
+            const formLength = Number((this.reportForm && this.reportForm.rewindingLabelLengthM) || 0)
+            const motherWidth = Number((this.reportForm && this.reportForm.rewindingMotherInfo && (this.reportForm.rewindingMotherInfo.widthMm != null ? this.reportForm.rewindingMotherInfo.widthMm : this.reportForm.rewindingMotherInfo.width)) || 0)
             const widthMm = Number.isFinite(srcWidth) && srcWidth > 0
               ? srcWidth
-              : Number((this.reportForm && this.reportForm.widthMm) || 0)
+              : (Number.isFinite(motherWidth) && motherWidth > 0
+                  ? motherWidth
+                  : Number((this.reportForm && this.reportForm.widthMm) || 0))
             const lengthM = Number.isFinite(srcLength) && srcLength > 0
               ? srcLength
-              : Number((this.reportForm && this.reportForm.lengthM) || 0)
+              : (Number.isFinite(formLength) && formLength > 0
+                  ? formLength
+                  : Number((this.reportForm && this.reportForm.lengthM) || 0))
 
             const payload = {
               spec,
+              specification: spec,
               rollCode: rollSerialCode,
               qrText: rollSerialCode,
               rollSerialCode,
@@ -2251,7 +2653,13 @@ export default {
               operator: this.reportForm.operator || '-',
               printTime
             }
-            return this.applyMaterialAlias(payload, runtime.alias, materialCode, materialName)
+            const merged = this.applyMaterialAlias(payload, runtime.alias, materialCode, materialName)
+            // 复卷标签规格必须使用复卷长度，不能被客户规格映射覆盖
+            return {
+              ...merged,
+              spec,
+              specification: spec
+            }
           }
         }
       }
@@ -2289,6 +2697,10 @@ export default {
             const tubeRollCount = Math.max(0, Math.trunc(Number((this.reportForm && this.reportForm.slittingTubeRollCount) || 0) || 0))
             const tubePerBoxCount = Math.max(0, Math.trunc(Number((this.reportForm && this.reportForm.slittingTubePerBoxCount) || 0) || 0))
             const quantityPerLabel = Math.max(1, Math.trunc(Number(source && source.quantityOverride) || 0) || tubeRollCount || rollPerTube)
+            const serialStart = Number.isFinite(serialNo) ? serialNo : 1
+            const copies = Math.max(1, Math.trunc(Number((source && source.copies) || 1) || 1))
+            const serialNoText = this.formatSerialNoRange(serialStart, 1)
+            const serialNoEnd = serialStart
             const perBoxRolls = (tubeRollCount > 0 && tubePerBoxCount > 0) ? (tubeRollCount * tubePerBoxCount) : 0
             const isOuterLabel = sceneType === 'slitting-outer-label'
             const quantityUnit = isOuterLabel ? '卷/箱' : '卷/筒'
@@ -2309,13 +2721,16 @@ export default {
             const batchNo2 = batchNo ? `FN${batchNo}` : ''
             const productionDateText = this.toDateString(String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() || this.toDateString((this.reportForm && this.reportForm.startTime) || printTime))
             const shipDateText = this.toDateString(String((this.reportForm && this.reportForm.labelShipDate) || '').trim() || this.resolveDateTextFromRow(this.reportForm || {}))
-            const productionDate = this.toCompactDateStringStrict(productionDateText)
+            const productionDate = this.toCompactDateYYMMDD(productionDateText)
+            const productionDate8 = this.toCompactDateStringStrict(productionDateText)
             const shipDate = this.toCompactDateStringStrict(shipDateText)
             const deliveryNoteNo = String((this.reportForm && this.reportForm.deliveryNoteNo) || '').trim()
             const shelfLifeDays = Math.max(0, Math.trunc(Number((this.reportForm && this.reportForm.shelfLifeDays) || 0) || 0))
             const expiryDate = this.calcExpiryDate(productionDate, shelfLifeDays)
             const boxWeightKg = Number((this.reportForm && this.reportForm.boxWeightKg) || 0)
             const boxWeightValue = Number.isFinite(boxWeightKg) && boxWeightKg > 0 ? Number(boxWeightKg.toFixed(2)) : null
+            const digitalNoEnabled = !!(this.reportForm && this.reportForm.slittingDigitalNoEnabled)
+            const digitalNo = digitalNoEnabled ? String((this.reportForm && this.reportForm.slittingDigitalNo) || '').trim() : ''
             const labelOrderNo = this.resolveLabelOrderNo(this.reportForm)
             const qtyOrWeight = this.resolveQtyOrWeightText({
               grossWeightKg: boxWeightValue,
@@ -2376,6 +2791,7 @@ export default {
               shuliangzhongliang: packageQtyValue,
               shuliangzhgongliang: packageQtyValue,
               productionDate: productionDate,
+              productionDate8,
               productionDateText,
               productionDateCompact: productionDate,
               production_date: productionDate,
@@ -2396,6 +2812,10 @@ export default {
               shelfLifeDays,
               shelfLifeText,
               expiryDate,
+              digitalNo,
+              digitalNumber: digitalNo,
+              sequenceNo: digitalNo,
+              sequence_number: digitalNo,
               deliveryNoteNo,
               boxWeightKg: boxWeightValue,
               currentBoxWeightKg: boxWeightValue,
@@ -2409,8 +2829,11 @@ export default {
               cartonHeightMm: Number((this.reportForm && this.reportForm.cartonHeightMm) || 0) || null,
               coreOuterDiameterMm: coreOuterDiameterMm > 0 ? coreOuterDiameterMm : null,
               tapeOuterDiameterMm,
-              serialNo: Number.isFinite(serialNo) ? serialNo : 1,
-              labelCode: `${sceneMeta.bizType}-${Number.isFinite(serialNo) ? serialNo : 1}`,
+              serialNo: serialNoText,
+              serialNoStart: String(serialStart).padStart(3, '0'),
+              serialNoEnd: String(serialNoEnd).padStart(3, '0'),
+              serialNoNum: serialStart,
+              labelCode: `${sceneMeta.bizType}-${serialNoText}`,
               operator: (this.reportForm && this.reportForm.operator) || '-',
               printDate: this.toCompactDateString((this.reportForm && this.reportForm.startTime) || printTime),
               printTime
@@ -2468,7 +2891,15 @@ export default {
     resolveRewindingSpecText() {
       const fromSpec = String((this.reportForm && this.reportForm.rewindingSpec) || '').trim()
       if (fromSpec && fromSpec !== '-') return this.normalizeSpecTextWithUnits(fromSpec)
-      return this.formatRewindingSpec(this.reportForm || {})
+      const form = this.reportForm || {}
+      const rewindingLength = Number(form.rewindingLabelLengthM)
+      const patched = {
+        ...form,
+        rewindingLength: Number.isFinite(rewindingLength) && rewindingLength > 0 ? rewindingLength : form.rewindingLength,
+        lengthM: Number.isFinite(rewindingLength) && rewindingLength > 0 ? rewindingLength : form.lengthM,
+        length: Number.isFinite(rewindingLength) && rewindingLength > 0 ? rewindingLength : form.length
+      }
+      return this.formatRewindingSpec(patched)
     },
     normalizeSpecTextWithUnits(rawSpec) {
       const raw = String(rawSpec || '').trim()
@@ -2514,13 +2945,36 @@ export default {
       })
     },
     buildRewindingRollSerialCode(serialNo) {
-      const motherRollCode = String((this.reportForm && this.reportForm.rewindingMotherRollCode) || '').trim()
+      const motherRollCode = this.normalizeRewindingMotherRollCode(this.reportForm && this.reportForm.rewindingMotherRollCode)
       const start = Number((this.reportForm && this.reportForm.rewindingSerialStart) || 1)
       const serial = Number.isFinite(Number(serialNo)) ? Number(serialNo) : start
       const serialWidth = Math.max(3, String(Math.trunc(start)).length)
       const serialText = String(Math.trunc(serial)).padStart(serialWidth, '0')
       if (motherRollCode && serialText) return `${motherRollCode}-${serialText}`
       return motherRollCode || serialText || ''
+    },
+    async resolveRewindingMotherRollInfo() {
+      if (!this.reportForm || this.reportForm.processType !== 'REWINDING') return
+      const code = this.normalizeRewindingMotherRollCode(this.reportForm && this.reportForm.rewindingMotherRollCode)
+      if (!code) {
+        this.reportForm.rewindingMotherInfo = null
+        return
+      }
+      this.reportForm.rewindingMotherRollCode = code
+      try {
+        const res = await resolveMotherRollInfo(code)
+        if (res && (res.code === 200 || res.code === 20000) && res.data) {
+          this.applyResolvedRewindingMotherInfo(res.data || {})
+          const guard = this.ensureRewindingSerialStartMonotonic(this.reportForm.rewindingMotherRollCode, this.reportForm.rewindingSerialStart)
+          this.reportForm.rewindingSerialStart = guard.startNo
+          return
+        }
+        this.reportForm.rewindingMotherInfo = null
+        this.$message.warning((res && (res.msg || res.message)) || '未找到母卷信息')
+      } catch (e) {
+        this.reportForm.rewindingMotherInfo = null
+        this.$message.error(this.resolveErrorMessage(e, '查询母卷信息失败'))
+      }
     },
     resolveCoatingRewindingPrintSpec(source) {
       const src = source || {}
@@ -2537,7 +2991,78 @@ export default {
       if (this.reportForm && this.reportForm.processType === 'COATING') {
         return this.resolveCoatingRewindingPrintSpec(source)
       }
-      return this.resolveRewindingSpecText()
+      const src = source || {}
+      const thickness = Number((this.reportForm && this.reportForm.thickness) || 0)
+      const srcWidth = Number(src.widthMm)
+      const motherWidth = Number((this.reportForm && this.reportForm.rewindingMotherInfo && (this.reportForm.rewindingMotherInfo.widthMm != null ? this.reportForm.rewindingMotherInfo.widthMm : this.reportForm.rewindingMotherInfo.width)) || 0)
+      const formWidth = Number((this.reportForm && this.reportForm.widthMm) || 0)
+      const srcLength = Number(src.lengthM)
+      const formLabelLength = Number((this.reportForm && this.reportForm.rewindingLabelLengthM) || 0)
+      const formLength = Number((this.reportForm && this.reportForm.lengthM) || 0)
+
+      const width = Number.isFinite(srcWidth) && srcWidth > 0
+        ? srcWidth
+        : (Number.isFinite(motherWidth) && motherWidth > 0 ? motherWidth : formWidth)
+      const length = Number.isFinite(srcLength) && srcLength > 0
+        ? srcLength
+        : (Number.isFinite(formLabelLength) && formLabelLength > 0 ? formLabelLength : formLength)
+
+      return `${this.formatSpecPartWithUnit(thickness, 'μm')}*${this.formatSpecPartWithUnit(width, 'mm')}*${this.formatSpecPartWithUnit(length, 'm')}`
+    },
+    getRewindingSerialStoreKey() {
+      return 'MES_REWINDING_PRINTED_SERIAL_MAX_MAP'
+    },
+    loadRewindingSerialMaxMap() {
+      try {
+        if (typeof window === 'undefined' || !window.localStorage) return {}
+        const raw = window.localStorage.getItem(this.getRewindingSerialStoreKey())
+        if (!raw) return {}
+        const parsed = JSON.parse(raw)
+        return parsed && typeof parsed === 'object' ? parsed : {}
+      } catch (e) {
+        return {}
+      }
+    },
+    saveRewindingSerialMaxMap(mapObj) {
+      try {
+        if (typeof window === 'undefined' || !window.localStorage) return
+        const payload = mapObj && typeof mapObj === 'object' ? mapObj : {}
+        window.localStorage.setItem(this.getRewindingSerialStoreKey(), JSON.stringify(payload))
+      } catch (e) {
+        // ignore
+      }
+    },
+    getPrintedMaxSerialByMotherRoll(motherRollCode) {
+      const key = this.normalizeRewindingMotherRollCode(motherRollCode)
+      if (!key) return 0
+      const mapObj = this.loadRewindingSerialMaxMap()
+      const n = Number(mapObj[key])
+      return Number.isFinite(n) && n > 0 ? Math.trunc(n) : 0
+    },
+    savePrintedMaxSerialByMotherRoll(motherRollCode, maxSerial) {
+      const key = this.normalizeRewindingMotherRollCode(motherRollCode)
+      const n = Number(maxSerial)
+      if (!key || !Number.isFinite(n) || n < 1) return
+      const mapObj = this.loadRewindingSerialMaxMap()
+      const old = Number(mapObj[key])
+      const oldSafe = Number.isFinite(old) && old > 0 ? Math.trunc(old) : 0
+      if (n <= oldSafe) return
+      mapObj[key] = Math.trunc(n)
+      this.saveRewindingSerialMaxMap(mapObj)
+    },
+    ensureRewindingSerialStartMonotonic(motherRollCode, requestedStart) {
+      const key = this.normalizeRewindingMotherRollCode(motherRollCode)
+      const start = Math.max(1, Math.trunc(Number(requestedStart) || 1))
+      if (!key) return { startNo: start, adjusted: false, maxPrinted: 0 }
+      const maxPrinted = this.getPrintedMaxSerialByMotherRoll(key)
+      if (start <= maxPrinted) {
+        return {
+          startNo: maxPrinted + 1,
+          adjusted: true,
+          maxPrinted
+        }
+      }
+      return { startNo: start, adjusted: false, maxPrinted }
     },
     async fillNextRewindingMotherRollCode() {
       if (!this.reportForm || this.reportForm.processType !== 'COATING') return
@@ -2581,6 +3106,9 @@ export default {
       if (!(Number(this.reportForm.rewindingSerialStart) > 0)) {
         this.reportForm.rewindingSerialStart = 1
       }
+
+      const check = this.ensureRewindingSerialStartMonotonic(this.reportForm.rewindingMotherRollCode, this.reportForm.rewindingSerialStart)
+      this.reportForm.rewindingSerialStart = check.startNo
     },
     normalizeCoatingFirstRowForRewindingMode() {
       if (!this.reportForm || this.reportForm.processType !== 'COATING') return
@@ -2704,7 +3232,8 @@ export default {
     },
     async printCoatingRewindingLabelBatch() {
       if (!this.reportForm || this.reportForm.processType !== 'COATING') return
-      const motherRollCode = String((this.reportForm && this.reportForm.rewindingMotherRollCode) || '').trim()
+      const motherRollCode = this.normalizeRewindingMotherRollCode(this.reportForm && this.reportForm.rewindingMotherRollCode)
+      this.reportForm.rewindingMotherRollCode = motherRollCode
       const startNo = Number((this.reportForm && this.reportForm.rewindingSerialStart) || 1)
       const printCount = Number(this.reportForm && this.reportForm.rewindingPrintCount)
       if (!motherRollCode) {
@@ -2719,8 +3248,14 @@ export default {
         this.$message.warning('请先填写打印张数（必须为大于0的整数）')
         return
       }
+      const serialGuard = this.ensureRewindingSerialStartMonotonic(motherRollCode, startNo)
+      if (serialGuard.adjusted) {
+        this.reportForm.rewindingSerialStart = serialGuard.startNo
+        this.$message.warning(`该母卷已打印到序号 ${serialGuard.maxPrinted}，起始序号已自动调整为 ${serialGuard.startNo}`)
+      }
+      const safeStartNo = serialGuard.startNo
       // 打印前：按打印张数自动回填报工母卷明细，便于操作员核对后一次性报工
-      this.backfillProducedRollsFromPrintCount(startNo, printCount)
+      this.backfillProducedRollsFromPrintCount(safeStartNo, printCount)
       // 同步操作人班组（与母卷模板保持一致）
       this.reportForm.operator = this.buildOperatorWithGroup()
       const materialCode = String((this.reportForm && this.reportForm.materialCode) || '').trim()
@@ -2756,7 +3291,7 @@ export default {
       })
       const ok = await this.confirmPrintPreview('涂布小支标签（复卷模板）', [
         { label: '母卷号前缀', value: motherRollCode },
-        { label: '起始序号', value: startNo },
+        { label: '起始序号', value: safeStartNo },
         { label: '打印张数', value: printCount },
         { label: '订单号', value: this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo) },
         { label: '规格', value: previewSpec || '-' }
@@ -2766,7 +3301,7 @@ export default {
       try {
         this.loadBarTenderConfig()
         for (let i = 0; i < printCount; i++) {
-          const serialNo = Math.trunc(startNo) + i
+          const serialNo = Math.trunc(safeStartNo) + i
           const rollCode = this.buildRewindingRollSerialCode(serialNo)
           const row = producedRollCodeMap.get(rollCode) || producedRollSerialMap.get(serialNo) || firstFilled || {}
           await printByScene(this.getPrintScene('rewinding-label'), {
@@ -2779,7 +3314,9 @@ export default {
             alias
           })
         }
-        this.reportForm.rewindingSerialStart = Math.trunc(startNo) + printCount
+        const nextStart = Math.trunc(safeStartNo) + printCount
+        this.reportForm.rewindingSerialStart = nextStart
+        this.savePrintedMaxSerialByMotherRoll(motherRollCode, nextStart - 1)
         this.$message.success(`已提交BarTender打印任务（复卷模板）${printCount}张`)
       } catch (e) {
         const msg = (e && e.message) || '未知错误'
@@ -2885,6 +3422,19 @@ export default {
       }
 
       return this.toCompactDateString(raw)
+    },
+    toCompactDateYYMMDD(value) {
+      const full = this.toCompactDateStringStrict(value)
+      if (/^\d{8}$/.test(full)) return full.slice(2)
+      if (/^\d{6}$/.test(full)) return full
+      return ''
+    },
+    formatSerialNoRange(startNo, count = 1) {
+      const start = Math.max(1, Math.trunc(Number(startNo || 0) || 1))
+      const copies = Math.max(1, Math.trunc(Number(count || 0) || 1))
+      const end = start + copies - 1
+      const pad3 = n => String(Math.max(1, Math.trunc(Number(n || 0) || 1))).padStart(3, '0')
+      return copies > 1 ? `${pad3(start)}-${pad3(end)}` : pad3(start)
     },
     composeOrderNoDisplay(orderNo, customerOrderNo) {
       const o = String(orderNo || '').trim()
@@ -3009,7 +3559,8 @@ export default {
       const lineNo = String((form && (form.lineNo || form.orderDetailRemark)) || '').trim()
       const productionDateText = this.toDateString(String(form.labelProductionDate || '').trim() || this.toDateString(form.startTime))
       const shipDateText = this.toDateString(String(form.labelShipDate || '').trim())
-      const productionDate = this.toCompactDateStringStrict(productionDateText)
+      const productionDate = this.toCompactDateYYMMDD(productionDateText)
+      const productionDate8 = this.toCompactDateStringStrict(productionDateText)
       const shipDate = this.toCompactDateStringStrict(shipDateText)
       const shelfLifeDays = Math.max(0, Math.trunc(Number(form.shelfLifeDays || 0) || 0))
       const expiryDate = this.calcExpiryDate(productionDate, shelfLifeDays)
@@ -3021,6 +3572,9 @@ export default {
         quantityUnit: '卷/箱'
       })
       const shelfLifeText = shelfLifeDays > 0 ? String(shelfLifeDays) : ''
+      const digitalNoEnabled = !!form.slittingDigitalNoEnabled
+      const digitalNo = digitalNoEnabled ? String(form.slittingDigitalNo || '').trim() : ''
+      const serialNo = '001'
       return this.buildDynamicQrContent(form.qrTemplate, {
         orderNo,
         customerOrderNo,
@@ -3047,12 +3601,18 @@ export default {
         grossWeightKg: grossWeightValue,
         boxWeightKg: grossWeightValue,
         qtyOrWeight,
+        rollPerTube,
+        tubeRollCount: rollPerTube,
         productionDate,
+        productionDate8,
         productionDateText,
         productionDateCompact: productionDate,
         production_date: productionDate,
         prodDate: productionDate,
         prodDateText: productionDateText,
+        serialNo,
+        serialNoStart: '001',
+        serialNoEnd: '001',
         shipDate,
         shipDateText,
         shipDateCompact: shipDate,
@@ -3064,8 +3624,21 @@ export default {
         shelfLifeDays,
         shelfLifeText,
         expiryDate,
+        digitalNo,
+        digitalNumber: digitalNo,
+        sequenceNo: digitalNo,
+        sequence_number: digitalNo,
         remark: String(form.remark || '').trim()
       })
+    },
+    resolveSlittingQrBizTypeByScene(sceneType) {
+      if (sceneType === 'slitting-core-label') {
+        return this.resolveSelectedSlittingCoreBizType()
+      }
+      if (sceneType === 'slitting-inner-label') return 'SLITTING_INNER_LABEL'
+      if (sceneType === 'slitting-outer-label') return 'SLITTING_OUTER_LABEL'
+      if (sceneType === 'slitting-pallet-label') return 'SLITTING_PALLET_LABEL'
+      return 'SLITTING_OUTER_LABEL'
     },
     async loadCustomerQrRuleForSlitting(customerCode, bizType = 'SLITTING_OUTER_LABEL') {
       const code = String(customerCode || '').trim()
@@ -3075,10 +3648,19 @@ export default {
         const res = await getCustomerLabelQrRule(code, safeBizType)
         if (res && (res.code === 200 || res.code === 20000) && res.data && res.data.qrTemplate) {
           this.reportForm.qrTemplate = String(res.data.qrTemplate || '').trim() || this.getDefaultSlittingQrTemplate()
+          if (this.reportForm) {
+            this.reportForm.slittingQrRuleBizType = safeBizType
+          }
         }
       } catch (e) {
         // 忽略加载失败，保持本地默认模板
       }
+    },
+    async handleSlittingQrRuleBizTypeChanged(value) {
+      if (!this.reportForm || this.reportForm.processType !== 'SLITTING') return
+      const bizType = this.normalizeQrRuleBizType(value)
+      this.reportForm.slittingQrRuleBizType = bizType
+      await this.loadCustomerQrRuleForSlitting(this.reportForm.customerCode, bizType)
     },
     normalizeQrRuleBizType(input) {
       const text = String(input == null ? '' : input).trim()
@@ -3086,7 +3668,8 @@ export default {
       if (!text || upper === '[OBJECT POINTEREVENT]' || upper === '[OBJECT MOUSEEVENT]' || upper.indexOf('ISTRUSTED') > -1) {
         return 'SLITTING_OUTER_LABEL'
       }
-      return text
+      const allowed = new Set(['SLITTING_CORE_LABEL', 'SLITTING_CORE_LABEL_NARROW', 'SLITTING_INNER_LABEL', 'SLITTING_OUTER_LABEL', 'SLITTING_PALLET_LABEL'])
+      return allowed.has(upper) ? upper : 'SLITTING_OUTER_LABEL'
     },
     async saveCurrentCustomerQrRule(bizType = 'SLITTING_OUTER_LABEL', silent = false) {
       const form = this.reportForm || {}
@@ -3119,8 +3702,8 @@ export default {
       }
     },
     async persistQrRuleOnFirstPrint(sceneType) {
-      if (sceneType !== 'slitting-outer-label') return
-      await this.saveCurrentCustomerQrRule('SLITTING_OUTER_LABEL', true)
+      const bizType = this.resolveSlittingQrBizTypeByScene(sceneType)
+      await this.saveCurrentCustomerQrRule(bizType, true)
     },
     parseDateTimeValue(value) {
       if (!value) return null
@@ -3391,7 +3974,7 @@ export default {
         lengthM: Number.isFinite(length) ? length : '-'
       })
       const productionDate = this.toDateString(String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() || this.toDateString((this.reportForm && this.reportForm.startTime) || new Date()))
-      const groupNo = `${this.currentWorkGroup || 'A'}组`
+      const groupNo = this.currentUserTeamName
       const materialCode = String((this.reportForm && this.reportForm.materialCode) || '').trim()
       const materialName = this.resolveMaterialNameByCode(materialCode)
       const alias = await this.resolveCustomerMaterialAliasForPrint({
@@ -3525,9 +4108,12 @@ export default {
       this.printHtml(`涂布入库单-${this.reportForm.scheduleId || 'NA'}`, html)
     },
     async printRewindingLabel() {
-      const motherRollCode = String((this.reportForm && this.reportForm.rewindingMotherRollCode) || '').trim()
+      const motherRollCode = this.normalizeRewindingMotherRollCode(this.reportForm && this.reportForm.rewindingMotherRollCode)
+      this.reportForm.rewindingMotherRollCode = motherRollCode
       const startNo = Number((this.reportForm && this.reportForm.rewindingSerialStart) || 1)
       const printCount = Number(this.reportForm && this.reportForm.rewindingPrintCount)
+      const labelLengthM = Number((this.reportForm && this.reportForm.rewindingLabelLengthM) || 0)
+      const motherInfo = (this.reportForm && this.reportForm.rewindingMotherInfo) || null
 
       if (!motherRollCode) {
         this.$message.warning('请先填写母卷号（可扫码）后再打印标签')
@@ -3541,10 +4127,24 @@ export default {
         this.$message.warning('请先填写打印张数（必须为大于0的整数）')
         return
       }
+      if (!(labelLengthM > 0)) {
+        this.$message.warning('请先填写复卷标签长度(m)')
+        return
+      }
+      const serialGuard = this.ensureRewindingSerialStartMonotonic(motherRollCode, startNo)
+      if (serialGuard.adjusted) {
+        this.reportForm.rewindingSerialStart = serialGuard.startNo
+        this.$message.warning(`该母卷已打印到序号 ${serialGuard.maxPrinted}，起始序号已自动调整为 ${serialGuard.startNo}`)
+      }
+      const safeStartNo = serialGuard.startNo
 
       const materialCode = String((this.reportForm && this.reportForm.materialCode) || '').trim()
-      const width = Number((this.reportForm && this.reportForm.widthMm) || 0)
-      const length = Number((this.reportForm && this.reportForm.lengthM) || 0)
+      const width = Number(
+        (motherInfo && (motherInfo.widthMm != null ? motherInfo.widthMm : motherInfo.width)) ||
+        (this.reportForm && this.reportForm.widthMm) ||
+        0
+      )
+      const length = labelLengthM
       const alias = await this.resolveCustomerMaterialAliasForPrint({
         customerCode: this.reportForm.customerCode,
         materialCode,
@@ -3554,15 +4154,18 @@ export default {
         length
       })
       const materialName = this.resolveMaterialNameByCode(materialCode)
+      const previewSpec = this.resolveRewindingTemplateSpec({ widthMm: width, lengthM: labelLengthM })
       const ok = await this.confirmPrintPreview('复卷标签', [
         { label: '母卷号', value: motherRollCode },
         { label: '订单号', value: this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo) },
         { label: '客户订单号', value: this.reportForm.customerOrderNo || '-' },
         { label: '物料代码', value: (alias && alias.customerMaterialCode) || materialCode || '-' },
         { label: '物料名称', value: (alias && alias.customerMaterialName) || materialName || '-' },
-        { label: '客户规格', value: (alias && alias.customerSpec) || this.resolveRewindingSpecText() || '-' },
-        { label: '规格', value: this.resolveRewindingSpecText() || '-' },
-        { label: '起始序号', value: startNo },
+        { label: '客户规格', value: (alias && alias.customerSpec) || previewSpec || '-' },
+        { label: '规格', value: previewSpec || '-' },
+        { label: '长度(m)', value: labelLengthM },
+        { label: '母卷宽度(mm)', value: width > 0 ? width : '-' },
+        { label: '起始序号', value: safeStartNo },
         { label: '打印张数', value: printCount }
       ])
       if (!ok) return
@@ -3570,14 +4173,16 @@ export default {
       try {
         this.loadBarTenderConfig()
         for (let i = 0; i < printCount; i++) {
-          const serialNo = Math.trunc(startNo) + i
-          await printByScene(this.getPrintScene('rewinding-label'), { serialNo }, {
+          const serialNo = Math.trunc(safeStartNo) + i
+          await printByScene(this.getPrintScene('rewinding-label'), { serialNo, widthMm: width, lengthM: labelLengthM }, {
             config: this.barTenderConfig,
             vm: this,
             alias
           })
         }
-        this.reportForm.rewindingSerialStart = Math.trunc(startNo) + printCount
+        const nextStart = Math.trunc(safeStartNo) + printCount
+        this.reportForm.rewindingSerialStart = nextStart
+        this.savePrintedMaxSerialByMotherRoll(motherRollCode, nextStart - 1)
         this.$message.success(`已提交BarTender打印任务（复卷标签）${printCount}张`)
       } catch (e) {
         const msg = (e && e.message) || '未知错误'
@@ -3588,11 +4193,24 @@ export default {
       const validScenes = ['slitting-core-label', 'slitting-inner-label', 'slitting-outer-label', 'slitting-pallet-label']
       if (!validScenes.includes(sceneType)) return
 
+      const qrBizType = this.resolveSlittingQrBizTypeByScene(sceneType)
+      if (this.reportForm) {
+        this.reportForm.slittingQrRuleBizType = qrBizType
+      }
+      await this.loadCustomerQrRuleForSlitting((this.reportForm && this.reportForm.customerCode) || '', qrBizType)
+
       this.commitSlittingBatchNoInput()
       const batchNoRequired = !!(this.reportForm && this.reportForm.batchNoRequired)
       const batchNo = String((this.reportForm && this.reportForm.batchNo) || '').trim()
       if (batchNoRequired && !batchNo) {
         this.$message.warning('批次号已设置为必填，请先选择或填写批次号后再打印')
+        return
+      }
+      const digitalNoEnabled = !!(this.reportForm && this.reportForm.slittingDigitalNoEnabled)
+      const digitalNoRequired = !!(this.reportForm && this.reportForm.slittingDigitalNoRequired)
+      const digitalNoRaw = String((this.reportForm && this.reportForm.slittingDigitalNo) || '').trim()
+      if (digitalNoEnabled && digitalNoRequired && !digitalNoRaw) {
+        this.$message.warning('数字号已设置为必填，请先填写后再打印')
         return
       }
 
@@ -3601,17 +4219,28 @@ export default {
       const rollPerTube = Math.max(1, Math.trunc(Number((this.reportForm && this.reportForm.slittingRollPerTube) || 0) || defaultRollPerTube))
       const tubeRollCount = rollPerTube
       const tubePerBoxCount = Math.max(0, Math.trunc(Number((this.reportForm && this.reportForm.slittingTubePerBoxCount) || 0) || 0))
+      const corePrintCount = Math.max(0, Math.trunc(Number((this.reportForm && this.reportForm.slittingCorePrintCount) || 0) || 0))
       const innerPrintCount = Math.max(0, Math.trunc(Number((this.reportForm && this.reportForm.slittingInnerPrintCount) || 0) || 0))
       const outerPrintCount = Math.max(0, Math.trunc(Number((this.reportForm && this.reportForm.slittingOuterPrintCount) || 0) || 0))
-      const defaultPrintCount = producedQty
+      const palletPrintCount = Math.max(0, Math.trunc(Number((this.reportForm && this.reportForm.slittingPalletPrintCount) || 0) || 0))
       const printCount = sceneType === 'slitting-inner-label'
         ? innerPrintCount
         : sceneType === 'slitting-outer-label'
           ? outerPrintCount
-          : defaultPrintCount
+          : sceneType === 'slitting-core-label'
+            ? corePrintCount
+            : palletPrintCount
 
       if (!(printCount > 0)) {
-        this.$message.warning(sceneType === 'slitting-inner-label' ? '请先填写内标张数后再打印' : (sceneType === 'slitting-outer-label' ? '请先填写外标张数后再打印' : '打印张数必须大于0'))
+        this.$message.warning(
+          sceneType === 'slitting-core-label'
+            ? '请先填写卷芯张数后再打印'
+            : sceneType === 'slitting-inner-label'
+              ? '请先填写内标张数后再打印'
+              : sceneType === 'slitting-outer-label'
+                ? '请先填写外标张数后再打印'
+                : '请先填写栈板张数后再打印'
+        )
         return
       }
       if (!Array.isArray(this.cartonPresetOptions) || !this.cartonPresetOptions.length || !String((this.reportForm && this.reportForm.cartonPreset) || '').trim()) {
@@ -3643,7 +4272,7 @@ export default {
       const quantities = this.buildSlittingInnerLabelQuantities(producedQty, tubeRollCount, tubePerBoxCount, printCount, sceneType)
       const mergedItems = this.buildMergedSlittingPrintItems(quantities)
       const standardBoxRollCount = (tubeRollCount > 0 && tubePerBoxCount > 0) ? (tubeRollCount * tubePerBoxCount) : 0
-      const productionDate = this.toCompactDateStringStrict(String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() || this.toDateString((this.reportForm && this.reportForm.startTime) || new Date())) || '-'
+      const productionDate = this.toCompactDateYYMMDD(String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() || this.toDateString((this.reportForm && this.reportForm.startTime) || new Date())) || '-'
       const shipDate = this.toCompactDateStringStrict(String((this.reportForm && this.reportForm.labelShipDate) || '').trim()) || '-'
       const deliveryNoteNo = String((this.reportForm && this.reportForm.deliveryNoteNo) || '').trim() || '-'
       const shelfLifeDays = Math.max(0, Math.trunc(Number((this.reportForm && this.reportForm.shelfLifeDays) || 0) || 0))
@@ -3651,6 +4280,9 @@ export default {
       const boxWeightKg = Number((this.reportForm && this.reportForm.boxWeightKg) || 0)
       const boxWeightText = Number.isFinite(boxWeightKg) && boxWeightKg > 0 ? `${Number(boxWeightKg.toFixed(2))}kg` : '-'
       const packageQtyValue = this.formatPackagingQtyByLength((this.reportForm && this.reportForm.lengthM), Number(quantities && quantities.length ? quantities[0] : 0)) || '-'
+      const digitalNo = this.reportForm && this.reportForm.slittingDigitalNoEnabled
+        ? (digitalNoRaw || '-')
+        : '-'
       const ok = await this.confirmPrintPreview(labelName, [
         { label: '订单号', value: this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo), field: 'orderNo | orderNoDisplay' },
         { label: '客户订单号', value: this.reportForm.customerOrderNo || '-', field: 'customerOrderNo' },
@@ -3666,6 +4298,7 @@ export default {
         { label: '生产日期', value: productionDate || '-', field: 'productionDate | shengchanriqi | printDate' },
         { label: '出货日期', value: shipDate, field: 'shipDate | deliveryDate | chuhuoriqi' },
         { label: '送货单号', value: deliveryNoteNo, field: 'deliveryNoteNo' },
+        { label: '数字号', value: digitalNo, field: 'digitalNo | digitalNumber | sequenceNo' },
         { label: '本箱重量', value: boxWeightText, field: 'grossWeightKg | boxWeightKg | currentBoxWeightKg | netWeightKg | boxWeightText' },
         { label: '保质期(天)', value: shelfLifeDays || '-', field: 'shelfLifeDays' },
         { label: '保质期至', value: expiryDate, field: 'expiryDate' },
@@ -3674,8 +4307,10 @@ export default {
         { label: '每张卷数序列', value: (quantities && quantities.length) ? quantities.join(' / ') : '-', field: 'quantityOverride -> quantityPerLabel' },
         { label: '提交批次', value: `${mergedItems.length} 次请求（共 ${printCount} 张）`, field: '同值合并提交(copies)' },
         { label: '筒/箱', value: tubePerBoxCount, field: 'tubePerBoxCount' },
+        { label: '卷芯张数', value: corePrintCount, field: '前端输入值(不入payload)' },
         { label: '内标张数', value: innerPrintCount, field: '前端计算值(不入payload)' },
         { label: '外标张数', value: outerPrintCount, field: '前端计算值(不入payload)' },
+        { label: '栈板张数', value: palletPrintCount, field: '前端输入值(不入payload)' },
         { label: '本次打印张数', value: printCount, field: 'copies(提交次数)' },
         { label: '纸箱规格', value: `${Number(this.reportForm.cartonLengthMm || 0) || 0}×${Number(this.reportForm.cartonWidthMm || 0) || 0}×${Number(this.reportForm.cartonHeightMm || 0) || 0}`, field: 'cartonLengthMm | cartonWidthMm | cartonHeightMm' },
         { label: '管芯外径(mm)', value: coreOuterDiameterMm > 0 ? coreOuterDiameterMm : '-', field: 'coreOuterDiameterMm' },
@@ -3935,11 +4570,16 @@ export default {
     calcMaxTubeCountInCarton(lengthMm, widthMm, diameterMm) {
       return this.calcCartonPackingResult(lengthMm, widthMm, diameterMm).count
     },
-    updateSlittingPackingPreview(packingResult) {
+    updateSlittingPackingPreview(packingResult, requestedTubeCount = 0, rollPerTube = 0) {
       const result = packingResult || {}
       const boxW = Number(result.boxWidthMm || 0)
       const boxH = Number(result.boxHeightMm || 0)
       const circles = Array.isArray(result.circles) ? result.circles : []
+      const capacity = Math.max(0, Math.trunc(Number(result.count || 0) || 0))
+      const requested = Math.max(0, Math.trunc(Number(requestedTubeCount || 0) || 0))
+      const displayCount = requested > 0 ? Math.min(requested, capacity) : capacity
+      const safeRollPerTube = Math.max(0, Math.trunc(Number(rollPerTube || 0) || 0))
+      const fit = requested <= capacity
       const viewWidth = 280
       const viewHeight = 200
       const padding = 8
@@ -3952,8 +4592,11 @@ export default {
           boxWidthPx: 0,
           boxHeightPx: 0,
           circles: [],
-          count: Number(result.count || 0),
-          diameterRoundedMm: Number(result.diameterRoundedMm || 0)
+          count: capacity,
+          diameterRoundedMm: Number(result.diameterRoundedMm || 0),
+          requestedCount: requested,
+          fitsRequested: fit,
+          requestedRollCount: requested * safeRollPerTube
         }
         return
       }
@@ -3971,13 +4614,16 @@ export default {
         padding,
         boxWidthPx,
         boxHeightPx,
-        circles: circles.map(p => ({
+        circles: circles.slice(0, displayCount).map(p => ({
           cx: padding + Number(p.x || 0) * scale,
           cy: padding + Number(p.y || 0) * scale,
           r: radiusPx
         })),
-        count: Number(result.count || 0),
-        diameterRoundedMm: Number(result.diameterRoundedMm || 0)
+        count: capacity,
+        diameterRoundedMm: Number(result.diameterRoundedMm || 0),
+        requestedCount: requested,
+        fitsRequested: fit,
+        requestedRollCount: requested * safeRollPerTube
       }
     },
     calcSlittingTapeOuterDiameterMm(row) {
@@ -4041,23 +4687,11 @@ export default {
     buildMergedSlittingPrintItems(quantities = []) {
       const list = Array.isArray(quantities) ? quantities : []
       if (!list.length) return []
-      const result = []
-      let startSerial = 1
-      let currentQty = Math.max(1, Math.trunc(Number(list[0]) || 1))
-      let copies = 1
-      for (let i = 1; i < list.length; i++) {
-        const qty = Math.max(1, Math.trunc(Number(list[i]) || 1))
-        if (qty === currentQty) {
-          copies += 1
-          continue
-        }
-        result.push({ serialNo: startSerial, quantityOverride: currentQty, copies })
-        startSerial = i + 1
-        currentQty = qty
-        copies = 1
-      }
-      result.push({ serialNo: startSerial, quantityOverride: currentQty, copies })
-      return result
+      return list.map((qty, idx) => ({
+        serialNo: idx + 1,
+        quantityOverride: Math.max(1, Math.trunc(Number(qty) || 1)),
+        copies: 1
+      }))
     },
     handleSlittingTubePerBoxChanged(value) {
       if (!this.reportForm) return
@@ -4082,12 +4716,14 @@ export default {
       if (!this.slittingTubePerBoxManual || !(Number(this.reportForm.slittingTubePerBoxCount) > 0)) {
         this.reportForm.slittingTubePerBoxCount = autoTubePerBox
       }
-      this.updateSlittingPackingPreview(packingResult)
+      this.updateSlittingPackingPreview(packingResult, this.reportForm.slittingTubePerBoxCount, tubeRollCount)
 
       const innerCount = this.calcSlittingInnerLabelCount(producedQty, tubeRollCount)
       const outerCount = this.calcSlittingOuterLabelCount(producedQty, tubeRollCount, this.reportForm.slittingTubePerBoxCount)
+      this.reportForm.slittingCorePrintCount = producedQty
       this.reportForm.slittingInnerPrintCount = innerCount
       this.reportForm.slittingOuterPrintCount = outerCount
+      this.reportForm.slittingPalletPrintCount = outerCount
     },
     resolveMaterialNameByCode(materialCode) {
       const code = String(materialCode || '').trim()
@@ -4436,9 +5072,9 @@ export default {
         return
       }
 
-      const size = Math.max(1, Math.min(expectedTotal, 200000))
       let res
       if (ft === 'coating') {
+        const size = Math.max(1, Math.min(expectedTotal, 200000))
         res = await getCoatingSchedules({
           current: 1,
           size,
@@ -4448,15 +5084,18 @@ export default {
         })
       } else if (['rewinding', 'slitting'].includes(ft)) {
         const stageMap = { coating: 'COATING', rewinding: 'REWINDING', slitting: 'SLITTING' }
-        res = await getStagePlanTaskPage({
+        res = await getStagePlanTaskSummary({
           stage: stageMap[ft],
-          pageNum: 1,
-          pageSize: size,
           status: this.query.status || undefined,
+          finishState: this.query.finishState || undefined,
+          orderNo: this.normalizeOrderNoKeyword(this.query.orderNo) || undefined,
+          materialCode: this.normalizeKeywordText(this.query.materialCodeKeyword) || undefined,
+          specKeyword: this.normalizeKeywordText(this.query.specKeyword) || undefined,
           planDateStart: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[0] : undefined,
           planDateEnd: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[1] : undefined
         })
       } else {
+        const size = Math.max(1, Math.min(expectedTotal, 200000))
         res = await getProductionTasks({
           type: this.query.type || undefined,
           status: this.query.status || undefined,
@@ -4473,6 +5112,16 @@ export default {
       }
 
       const raw = res.data || {}
+      if (['rewinding', 'slitting'].includes(ft)) {
+        this.taskSummary = {
+          materialCodeCount: Number(raw.materialCodeCount || 0),
+          totalArea: Number(raw.totalArea || 0),
+          reportedMaterialCodeCount: Number(raw.reportedMaterialCodeCount != null ? raw.reportedMaterialCodeCount : raw.materialCodeCount || 0),
+          reportedArea: Number(raw.reportedArea != null ? raw.reportedArea : raw.totalArea || 0)
+        }
+        return
+      }
+
       const allRows = raw.list || raw.records || []
       const normalized = this.normalizeTaskList(allRows, ft)
       this.taskSummary = this.calcTaskSummary(normalized)
@@ -4695,6 +5344,8 @@ export default {
           coatingUseRewindingLabel: false,
           coatingWidthSeedMm: null,
           rewindingMotherRollCode: '',
+          rewindingLabelLengthM: null,
+          rewindingMotherInfo: null,
           rewindingSerialStart: 1,
           rewindingPrintCount: null,
           coreOuterDiameterMm: Number(row.coreOuterDiameterMm || row.core_outer_diameter || row.coreDiameter || 87.5) || 87.5,
@@ -4706,8 +5357,14 @@ export default {
           slittingTubePerBoxCount: 0,
           slittingTubeRollCount: defaultTubeRollCount,
           slittingCoreLabelBizType: 'SLITTING_CORE_LABEL',
+          slittingQrRuleBizType: 'SLITTING_OUTER_LABEL',
+          slittingDigitalNoEnabled: true,
+          slittingDigitalNoRequired: true,
+          slittingDigitalNo: '',
+          slittingCorePrintCount: defaultProducedQty,
           slittingInnerPrintCount: defaultInnerPrintCount,
           slittingOuterPrintCount: defaultInnerPrintCount,
+          slittingPalletPrintCount: defaultInnerPrintCount,
           boxWeightKg: processType === 'SLITTING' && Number.isFinite(boxWeightKg) && boxWeightKg > 0 ? Number(boxWeightKg.toFixed(2)) : null,
           labelProductionDate: processType === 'SLITTING' ? productionDate : '',
           labelShipDate: processType === 'SLITTING' ? shipDate : '',
@@ -4735,7 +5392,7 @@ export default {
           })
         }
         if (this.reportDialogMode === 'print' && processType === 'SLITTING') {
-          await this.loadCustomerQrRuleForSlitting(this.reportForm.customerCode, 'SLITTING_OUTER_LABEL')
+          await this.loadCustomerQrRuleForSlitting(this.reportForm.customerCode, this.reportForm.slittingQrRuleBizType || 'SLITTING_OUTER_LABEL')
         }
         this.slittingTubePerBoxManual = false
         this.reportOrderStarted = this.reportDialogMode === 'print' && processType === 'COATING'
@@ -5728,6 +6385,8 @@ export default {
         coatingUseRewindingLabel: false,
         coatingWidthSeedMm: null,
         rewindingMotherRollCode: '',
+        rewindingLabelLengthM: null,
+        rewindingMotherInfo: null,
         rewindingSerialStart: 1,
         rewindingPrintCount: null,
         coreOuterDiameterMm: 87.5,
@@ -5739,8 +6398,14 @@ export default {
         slittingTubePerBoxCount: 0,
         slittingTubeRollCount: 0,
         slittingCoreLabelBizType: 'SLITTING_CORE_LABEL',
+        slittingQrRuleBizType: 'SLITTING_OUTER_LABEL',
+        slittingDigitalNoEnabled: true,
+        slittingDigitalNoRequired: true,
+        slittingDigitalNo: '',
+        slittingCorePrintCount: 0,
         slittingInnerPrintCount: 0,
         slittingOuterPrintCount: 0,
+        slittingPalletPrintCount: 0,
         boxWeightKg: null,
         labelProductionDate: '',
         labelShipDate: '',
@@ -6104,12 +6769,15 @@ export default {
         const normalizedMaterialCode = this.normalizeKeywordText(this.query.materialCodeKeyword)
         const normalizedSpecKeyword = this.normalizeKeywordText(this.query.specKeyword)
         const finishFilter = (this.query.finishState || '').toUpperCase()
-        const hasTaskKeywordMode = ['rewinding', 'slitting'].includes(ft) && (normalizedOrderNo || normalizedMaterialCode || normalizedSpecKeyword)
+        const useBackendPagingForSlitting = ft === 'slitting'
+        const hasTaskKeywordMode = false
         const params = {
           type: this.query.type || undefined,
           status: this.query.status || undefined,
+          finishState: useBackendPagingForSlitting ? (finishFilter || undefined) : undefined,
           orderNo: hasTaskKeywordMode ? undefined : (normalizedOrderNo || undefined),
           materialCode: normalizedMaterialCode || undefined,
+          specKeyword: normalizedSpecKeyword || undefined,
           planDateStart: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[0] : undefined,
           planDateEnd: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[1] : undefined,
           pageNum: this.query.pageNum,
@@ -6236,7 +6904,10 @@ export default {
               pageNum: this.query.pageNum,
               pageSize: this.query.pageSize,
               status: this.query.status || undefined,
+              finishState: useBackendPagingForSlitting ? (finishFilter || undefined) : undefined,
               orderNo: normalizedOrderNo || undefined,
+              materialCode: normalizedMaterialCode || undefined,
+              specKeyword: normalizedSpecKeyword || undefined,
               planDateStart: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[0] : undefined,
               planDateEnd: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[1] : undefined
             })
@@ -6252,18 +6923,20 @@ export default {
           normalizedList = await this.enrichTaskMaterialNamesFromMaster(normalizedList)
           const statusFilter = (this.query.status || '').toUpperCase()
 
-          if (finishFilter === 'COMPLETED') {
-            normalizedList = normalizedList.filter(x => this.isTaskCompleted(x, ft))
-          } else if (finishFilter === 'UNCOMPLETED') {
-            normalizedList = normalizedList.filter(x => !this.isTaskCompleted(x, ft))
-          }
+          if (!useBackendPagingForSlitting) {
+            if (finishFilter === 'COMPLETED') {
+              normalizedList = normalizedList.filter(x => this.isTaskCompleted(x, ft))
+            } else if (finishFilter === 'UNCOMPLETED') {
+              normalizedList = normalizedList.filter(x => !this.isTaskCompleted(x, ft))
+            }
 
-          normalizedList = this.applyTaskKeywordFilters(normalizedList, {
-            ft,
-            orderNoKeyword: normalizedOrderNo,
-            materialCodeKeyword: normalizedMaterialCode,
-            specKeyword: normalizedSpecKeyword
-          })
+            normalizedList = this.applyTaskKeywordFilters(normalizedList, {
+              ft,
+              orderNoKeyword: normalizedOrderNo,
+              materialCodeKeyword: normalizedMaterialCode,
+              specKeyword: normalizedSpecKeyword
+            })
+          }
           this.buildTaskQuerySuggestionPool(normalizedList, ft)
 
           if (hasTaskKeywordMode) {
@@ -6321,7 +6994,8 @@ export default {
     },
     pageChange(p) { this.query.pageNum = p; this.loadTasks() },
     resetQuery() {
-      this.query = { type: this.fixedType || '', status: '', finishState: 'UNCOMPLETED', orderNo: '', materialCodeKeyword: '', specKeyword: '', dateRange: [], pageNum: 1, pageSize: 10 }
+      const today = this.todayDate()
+      this.query = { type: this.fixedType || '', status: '', finishState: 'UNCOMPLETED', orderNo: '', materialCodeKeyword: '', specKeyword: '', dateRange: [today, today], pageNum: 1, pageSize: 10 }
       this.loadTasks()
     },
 
@@ -7483,7 +8157,26 @@ export default {
 .packing-preview-svg { border: 1px solid #dfe6f3; border-radius: 4px; background: #fff; }
 .packing-preview-empty { color: #909399; font-size: 12px; margin: 6px 0; }
 .packing-preview-meta { margin-top: 6px; color: #606266; font-size: 12px; }
+.packing-preview-meta-danger { color: #F56C6C; font-weight: 600; }
 .slitting-print-form .pair-field { margin-right: 14px; }
+.slitting-digital-no-wrap { display: flex; align-items: center; }
+.slitting-print-row { width: 100%; display: block; }
+.slitting-required-wrap { display: flex; align-items: center; gap: 8px; }
+
+.slitting-print-form .slitting-qr-template-item,
+.slitting-print-form .slitting-qr-preview-item {
+  margin-right: 8px;
+}
+
+::v-deep .slitting-print-dialog .el-dialog__body {
+  padding-top: 8px;
+  padding-bottom: 12px;
+}
+
+::v-deep .slitting-print-dialog .slitting-print-form .el-form-item {
+  margin-bottom: 8px;
+  margin-right: 10px;
+}
 
 .task-grid-wrap {
   width: 100%;

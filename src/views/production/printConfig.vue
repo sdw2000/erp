@@ -1754,7 +1754,19 @@ export default {
         await batchSaveLabelPrintConfigs(payload.records, { scope: 'label-rule' })
         saveTemplateRules({ byBizType: payload.byBizType, byCustomer: payload.byCustomer })
         await loadTemplateRules(true)
-        this.$message.success('标签打印规则已保存到数据库')
+
+        const missingMappings = this.ensureGatewayTemplateMappingsForGlobalRules({ autoAppend: true, silent: true })
+        if (Array.isArray(missingMappings) && missingMappings.length) {
+          try {
+            await saveGatewayConfig(this.buildSafeGatewayConfigPayload(), this.localConfig)
+            await this.loadGatewayConfig()
+            this.$message.success('标签打印规则已保存，并已同步模板映射到本机')
+          } catch (syncError) {
+            this.$message.warning('标签打印规则已保存到数据库，但模板映射同步到本机失败，请在“网关与模板映射”点击“保存到本机”')
+          }
+        } else {
+          this.$message.success('标签打印规则已保存到数据库')
+        }
       } catch (error) {
         this.$message.error(error.message || '标签打印规则保存失败')
       } finally {
@@ -1785,9 +1797,8 @@ export default {
 
         const payload = this.buildSafeGatewayConfigPayload()
 
-        const saved = await saveGatewayConfig(payload, this.localConfig)
-        this.gatewayConfig = normalizeGatewayConfig(saved)
-        this.gatewayTemplates = mapTemplatesToRows(this.gatewayConfig.templates)
+        await saveGatewayConfig(payload, this.localConfig)
+        await this.loadGatewayConfig()
         if (!this.gatewayTemplates.length) this.gatewayTemplates = [createTemplateRow()]
         this.$message.success('本机 BarTender 配置已保存')
       } catch (error) {

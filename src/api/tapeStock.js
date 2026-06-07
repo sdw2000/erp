@@ -15,6 +15,23 @@ export function getStockList(params) {
   })
 }
 
+// 复卷标签：搜索母卷号
+export function searchMotherRolls(params) {
+  return request({
+    url: '/api/tape-stock/mother-roll/search',
+    method: 'get',
+    params
+  })
+}
+
+// 复卷标签：解析母卷基础信息
+export function resolveMotherRollInfo(code) {
+  return request({
+    url: `/api/tape-stock/mother-roll/resolve/${encodeURIComponent(code)}`,
+    method: 'get'
+  })
+}
+
 // 按料号汇总库存
 export function getStockSummary() {
   return request({
