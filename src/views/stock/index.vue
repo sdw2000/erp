@@ -234,6 +234,9 @@ export default {
     this.fetchData()
     this.fetchHeaderTotals()
   },
+  beforeDestroy() {
+    this.stopImportPolling()
+  },
   methods: {
     getDigitalNumberText(row) {
       if (!row) return '-'
@@ -594,9 +597,6 @@ export default {
         this.stocktakeSubmitting = false
       }
     }
-  },
-  beforeDestroy() {
-    this.stopImportPolling()
   }
 }
 </script>

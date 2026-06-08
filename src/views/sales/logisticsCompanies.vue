@@ -120,8 +120,7 @@
                     <el-input v-model="form.contactEmail" placeholder="邮箱" maxlength="100" />
                   </el-form-item>
                 </el-col>
-                <el-col :span="12">
-                </el-col>
+                <el-col :span="12" />
               </el-row>
             </el-tab-pane>
           </el-tabs>

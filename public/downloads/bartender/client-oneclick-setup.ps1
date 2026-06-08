@@ -1,5 +1,6 @@
 param(
   [string]$InstallDir = "$env:LOCALAPPDATA\MES-BarTender-Gateway",
+  [string]$TemplateDir = "D:\MES\BarTender\Templates",
   [string]$ListenPrefix = "http://127.0.0.1:9123/",
   [string]$TemplateCoating = "",
   [string]$TemplateRewinding = "",
@@ -63,6 +64,7 @@ function Build-ConfigJson {
   param(
     [string]$ListenPrefix,
     [string]$BarTenderExe,
+    [string]$TemplateDir,
     [string]$TemplateCoating,
     [string]$TemplateRewinding,
     [string]$Printer
@@ -102,11 +104,11 @@ function Build-ConfigJson {
       "printer": "$(Escape-JsonString $Printer)"
     },
     "RUIPU_PUTONG_GUANXIN": {
-      "formatPath": "$(Escape-JsonString (Join-Path (Join-Path $InstallDir 'templates') 'ruipu_putong_guanxin.btw'))",
+      "formatPath": "$(Escape-JsonString (Join-Path $TemplateDir 'ruipu_putong_guanxin.btw'))",
       "printer": "$(Escape-JsonString $Printer)"
     },
     "RP01_fenqie_neibiao": {
-      "formatPath": "$(Escape-JsonString (Join-Path (Join-Path $InstallDir 'templates') 'RP01_fenqie_neibiao.btw'))",
+      "formatPath": "$(Escape-JsonString (Join-Path $TemplateDir 'RP01_fenqie_neibiao.btw'))",
       "printer": "$(Escape-JsonString $Printer)"
     }
   }
@@ -255,6 +257,10 @@ if ($CleanInstall -and (Test-Path $InstallDir)) {
 }
 
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+if (Is-Blank $TemplateDir) {
+  $TemplateDir = 'D:\MES\BarTender\Templates'
+}
+New-Item -ItemType Directory -Path $TemplateDir -Force | Out-Null
 
 $startScriptDst = Join-Path $InstallDir 'start-gateway.ps1'
 $startupScriptDst = Join-Path $InstallDir 'startup-with-sync.ps1'
@@ -282,7 +288,7 @@ if (Is-Blank $Printer) {
 }
 
 if (Is-Blank $TemplateCoating) {
-  $TemplateCoating = Join-Path (Join-Path $InstallDir 'templates') 'coating.btw'
+  $TemplateCoating = Join-Path $TemplateDir 'coating.btw'
 }
 if (Is-Blank $TemplateRewinding) {
   # 默认回退到涂布模板，避免 rolling.btw 缺失导致打印失败
@@ -301,7 +307,7 @@ if (Is-Blank $ManifestUrl) {
 $syncCfg = @"
 {
   "manifestUrl": "$(Escape-JsonString $ManifestUrl)",
-  "templateDir": "$(Escape-JsonString (Join-Path $InstallDir 'templates'))",
+  "templateDir": "$(Escape-JsonString $TemplateDir)",
   "localManifestPath": "$(Escape-JsonString (Join-Path $InstallDir 'template-manifest.local.json'))",
   "configPath": "$(Escape-JsonString $configPath)",
   "listenPrefix": "$(Escape-JsonString $ListenPrefix)",
@@ -312,7 +318,7 @@ $syncCfg = @"
 "@
 Set-Content -Path $syncConfigPath -Value $syncCfg -Encoding UTF8
 
-$configJson = Build-ConfigJson -ListenPrefix $ListenPrefix -BarTenderExe $barTenderExe -TemplateCoating $TemplateCoating -TemplateRewinding $TemplateRewinding -Printer $Printer
+$configJson = Build-ConfigJson -ListenPrefix $ListenPrefix -BarTenderExe $barTenderExe -TemplateDir $TemplateDir -TemplateCoating $TemplateCoating -TemplateRewinding $TemplateRewinding -Printer $Printer
 Set-Content -Path $configPath -Value $configJson -Encoding UTF8
 
 if (Test-Path $installAutostartDst) {
@@ -322,7 +328,7 @@ if (Test-Path $installAutostartDst) {
 
 if ($AutoSyncTemplates -and $ManifestUrl -and (Test-Path $syncScriptDst)) {
   try {
-    & $syncScriptDst -ManifestUrl $ManifestUrl -TemplateDir (Join-Path $InstallDir 'templates') -LocalManifestPath (Join-Path $InstallDir 'template-manifest.local.json')
+    & $syncScriptDst -ManifestUrl $ManifestUrl -TemplateDir $TemplateDir -LocalManifestPath (Join-Path $InstallDir 'template-manifest.local.json')
   } catch {
     Write-Host ("Template sync failed: " + $_.Exception.Message) -ForegroundColor Yellow
   }
@@ -352,6 +358,7 @@ Write-Host "BarTender: $barTenderExe" -ForegroundColor Gray
 Write-Host "Printer: $Printer" -ForegroundColor Gray
 Write-Host "Gateway URL: $ListenPrefix" -ForegroundColor Gray
 Write-Host "Config file: $configPath" -ForegroundColor Gray
+Write-Host "Template dir: $TemplateDir" -ForegroundColor Gray
 Write-Host "Self-healing watchdog: enabled" -ForegroundColor Gray
 if ($ManifestUrl) {
   Write-Host "Template manifest: $ManifestUrl" -ForegroundColor Gray

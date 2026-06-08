@@ -89,124 +89,124 @@
       <el-dialog title="采购订单打印预览" :visible.sync="printVisible" width="auto" top="1vh" custom-class="purchase-print-dialog">
         <div class="purchase-print-preview-wrap">
           <div v-if="currentPrint" id="purchasePrintArea" class="purchase-print-sheet">
-          <div class="purchase-print-header">
-            <div class="purchase-print-header-top">
-              <div class="purchase-logo-wrap">
-                <img v-if="printLogoUrl" :src="printLogoUrl" alt="company-logo" class="purchase-print-logo">
-              </div>
-              <div class="purchase-company-info">
-                <div class="purchase-company-name">{{ companyInfo.companyName }}</div>
-                <div>地址：{{ companyInfo.address }}</div>
-                <div>电话：{{ companyInfo.phone }}  传真：{{ companyInfo.fax }}</div>
-                <div>{{ companyInfo.website }}</div>
+            <div class="purchase-print-header">
+              <div class="purchase-print-header-top">
+                <div class="purchase-logo-wrap">
+                  <img v-if="printLogoUrl" :src="printLogoUrl" alt="company-logo" class="purchase-print-logo">
+                </div>
+                <div class="purchase-company-info">
+                  <div class="purchase-company-name">{{ companyInfo.companyName }}</div>
+                  <div>地址：{{ companyInfo.address }}</div>
+                  <div>电话：{{ companyInfo.phone }}  传真：{{ companyInfo.fax }}</div>
+                  <div>{{ companyInfo.website }}</div>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="purchase-print-title">采购订单</div>
+            <div class="purchase-print-title">采购订单</div>
 
-          <div class="purchase-print-meta">
-            <div>单号：{{ currentPrint.orderNo || '' }}</div>
-            <div>订单日期：{{ formatPurchasePrintDate(currentPrint.orderDate) }}</div>
-          </div>
-          <div class="purchase-print-supplier-row">
-            <span>供应商：{{ getPurchasePrintSupplierName() }}</span>
-          </div>
+            <div class="purchase-print-meta">
+              <div>单号：{{ currentPrint.orderNo || '' }}</div>
+              <div>订单日期：{{ formatPurchasePrintDate(currentPrint.orderDate) }}</div>
+            </div>
+            <div class="purchase-print-supplier-row">
+              <span>供应商：{{ getPurchasePrintSupplierName() }}</span>
+            </div>
 
-          <table class="purchase-print-table">
-            <colgroup>
-              <col :style="printColStyle('code')">
-              <col :style="printColStyle('name')">
-              <col :style="printColStyle('spec')">
-              <col :style="printColStyle('unit')">
-              <col v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle('width')">
-              <col v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle('length')">
-              <col v-if="shouldShowPrintRollColumn()" :style="printColStyle('roll')">
-              <col v-if="shouldShowPurchasePrintQuantityColumn()" :style="printColStyle('qty')">
-              <col :style="printColStyle('price')">
-              <col :style="printColStyle('amount')">
-              <col :style="printColStyle('date')">
-            </colgroup>
-            <thead>
-              <tr>
-                <th :style="printColStyle('code')">物料编码</th>
-                <th :style="printColStyle('name')">物料名称</th>
-                <th :style="printColStyle('spec')">{{ getPurchasePrintSpecHeaderLabel() }}</th>
-                <th :style="printColStyle('unit')">单位</th>
-                <th v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle('width')">宽/mm</th>
-                <th v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle('length')">长/m</th>
-                <th v-if="shouldShowPrintRollColumn()" :style="printColStyle('roll')">{{ getPurchasePrintRollHeaderLabel() }}</th>
-                <th v-if="shouldShowPurchasePrintQuantityColumn()" :style="printColStyle('qty')">数量</th>
-                <th :style="printColStyle('price')">{{ getPurchasePrintPriceHeaderLabel() }}</th>
-                <th :style="printColStyle('amount')">{{ getPurchasePrintAmountHeaderLabel() }}</th>
-                <th :style="printColStyle('date')">到货日期</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in getPurchasePrintRows()" :key="`print-${index}`">
-                <td>{{ getSupplierDisplayMaterialCode(item) || '' }}</td>
-                <td class="text-left">{{ getSupplierDisplayMaterialName(item) || '' }}</td>
-                <td class="text-left">{{ getPurchasePrintSpec(item) }}</td>
-                <td>{{ getPurchasePrintUnit(item) }}</td>
-                <td v-if="shouldShowFilmDimensionColumns()">{{ isPurchaseFilmItem(item) ? (item.width || '') : '' }}</td>
-                <td v-if="shouldShowFilmDimensionColumns()">{{ isPurchaseFilmItem(item) ? (item.lengthDisplay || item.length || '') : '' }}</td>
-                <td v-if="shouldShowPrintRollColumn()">{{ getPurchasePrintRollValue(item) }}</td>
-                <td v-if="shouldShowPurchasePrintQuantityColumn()">{{ getPurchasePrintQuantity(item) }}</td>
-                <td>{{ formatPurchaseMoney(item.unitPrice) }}</td>
-                <td>{{ formatPurchaseMoney(getPurchasePrintAmount(item)) }}</td>
-                <td>{{ formatPurchasePrintDate(currentPrint.deliveryDate) }}</td>
-              </tr>
-              <tr class="purchase-print-total-row">
-                <template v-if="shouldShowFilmDimensionColumns() && shouldShowPurchasePrintQuantityColumn()">
-                  <td colspan="7" class="text-right">{{ getPurchasePrintTotalQtyLabel() }}</td>
-                  <td>{{ formatPurchaseMoney(getPurchasePrintTotalQty()) }}</td>
-                  <td class="text-right">金额：</td>
-                  <td>{{ formatPurchaseMoney(getPurchasePrintTotalAmount()) }}</td>
-                  <td />
-                </template>
-                <template v-else-if="isCountPrintTemplate()">
-                  <td colspan="4" class="text-right">{{ getPurchasePrintTotalQtyLabel() }}</td>
-                  <td>{{ formatPurchaseMoney(getPurchasePrintTotalQty()) }}</td>
-                  <td class="text-right">金额：</td>
-                  <td>{{ formatPurchaseMoney(getPurchasePrintTotalAmount()) }}</td>
-                  <td />
-                </template>
-                <template v-else-if="isChemicalPrintTemplate()">
-                  <td colspan="5" class="text-right">{{ getPurchasePrintTotalQtyLabel() }}</td>
-                  <td>{{ formatPurchaseMoney(getPurchasePrintTotalQty()) }}</td>
-                  <td class="text-right">金额：</td>
-                  <td>{{ formatPurchaseMoney(getPurchasePrintTotalAmount()) }}</td>
-                  <td />
-                </template>
-                <template v-else>
-                  <td colspan="4" class="text-right">{{ getPurchasePrintTotalQtyLabel() }}</td>
-                  <td>{{ formatPurchaseMoney(getPurchasePrintTotalQty()) }}</td>
-                  <td class="text-right">金额：</td>
-                  <td>{{ formatPurchaseMoney(getPurchasePrintTotalAmount()) }}</td>
-                  <td />
-                </template>
-              </tr>
-              <tr class="purchase-print-remark-row">
-                <td :colspan="getPurchasePrintColumnCount()" class="text-left">备注：{{ getPurchasePrintHeaderRemark() || purchasePrintDefaultRemark }}</td>
-              </tr>
-            </tbody>
-          </table>
+            <table class="purchase-print-table">
+              <colgroup>
+                <col :style="printColStyle('code')">
+                <col :style="printColStyle('name')">
+                <col :style="printColStyle('spec')">
+                <col :style="printColStyle('unit')">
+                <col v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle('width')">
+                <col v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle('length')">
+                <col v-if="shouldShowPrintRollColumn()" :style="printColStyle('roll')">
+                <col v-if="shouldShowPurchasePrintQuantityColumn()" :style="printColStyle('qty')">
+                <col :style="printColStyle('price')">
+                <col :style="printColStyle('amount')">
+                <col :style="printColStyle('date')">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th :style="printColStyle('code')">物料编码</th>
+                  <th :style="printColStyle('name')">物料名称</th>
+                  <th :style="printColStyle('spec')">{{ getPurchasePrintSpecHeaderLabel() }}</th>
+                  <th :style="printColStyle('unit')">单位</th>
+                  <th v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle('width')">宽/mm</th>
+                  <th v-if="shouldShowFilmDimensionColumns()" :style="printFilmDimensionColStyle('length')">长/m</th>
+                  <th v-if="shouldShowPrintRollColumn()" :style="printColStyle('roll')">{{ getPurchasePrintRollHeaderLabel() }}</th>
+                  <th v-if="shouldShowPurchasePrintQuantityColumn()" :style="printColStyle('qty')">数量</th>
+                  <th :style="printColStyle('price')">{{ getPurchasePrintPriceHeaderLabel() }}</th>
+                  <th :style="printColStyle('amount')">{{ getPurchasePrintAmountHeaderLabel() }}</th>
+                  <th :style="printColStyle('date')">到货日期</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(item, index) in getPurchasePrintRows()" :key="`print-${index}`">
+                  <td>{{ getSupplierDisplayMaterialCode(item) || '' }}</td>
+                  <td class="text-left">{{ getSupplierDisplayMaterialName(item) || '' }}</td>
+                  <td class="text-left">{{ getPurchasePrintSpec(item) }}</td>
+                  <td>{{ getPurchasePrintUnit(item) }}</td>
+                  <td v-if="shouldShowFilmDimensionColumns()">{{ isPurchaseFilmItem(item) ? (item.width || '') : '' }}</td>
+                  <td v-if="shouldShowFilmDimensionColumns()">{{ isPurchaseFilmItem(item) ? (item.lengthDisplay || item.length || '') : '' }}</td>
+                  <td v-if="shouldShowPrintRollColumn()">{{ getPurchasePrintRollValue(item) }}</td>
+                  <td v-if="shouldShowPurchasePrintQuantityColumn()">{{ getPurchasePrintQuantity(item) }}</td>
+                  <td>{{ formatPurchaseMoney(item.unitPrice) }}</td>
+                  <td>{{ formatPurchaseMoney(getPurchasePrintAmount(item)) }}</td>
+                  <td>{{ formatPurchasePrintDate(currentPrint.deliveryDate) }}</td>
+                </tr>
+                <tr class="purchase-print-total-row">
+                  <template v-if="shouldShowFilmDimensionColumns() && shouldShowPurchasePrintQuantityColumn()">
+                    <td colspan="7" class="text-right">{{ getPurchasePrintTotalQtyLabel() }}</td>
+                    <td>{{ formatPurchaseMoney(getPurchasePrintTotalQty()) }}</td>
+                    <td class="text-right">金额：</td>
+                    <td>{{ formatPurchaseMoney(getPurchasePrintTotalAmount()) }}</td>
+                    <td />
+                  </template>
+                  <template v-else-if="isCountPrintTemplate()">
+                    <td colspan="4" class="text-right">{{ getPurchasePrintTotalQtyLabel() }}</td>
+                    <td>{{ formatPurchaseMoney(getPurchasePrintTotalQty()) }}</td>
+                    <td class="text-right">金额：</td>
+                    <td>{{ formatPurchaseMoney(getPurchasePrintTotalAmount()) }}</td>
+                    <td />
+                  </template>
+                  <template v-else-if="isChemicalPrintTemplate()">
+                    <td colspan="5" class="text-right">{{ getPurchasePrintTotalQtyLabel() }}</td>
+                    <td>{{ formatPurchaseMoney(getPurchasePrintTotalQty()) }}</td>
+                    <td class="text-right">金额：</td>
+                    <td>{{ formatPurchaseMoney(getPurchasePrintTotalAmount()) }}</td>
+                    <td />
+                  </template>
+                  <template v-else>
+                    <td colspan="4" class="text-right">{{ getPurchasePrintTotalQtyLabel() }}</td>
+                    <td>{{ formatPurchaseMoney(getPurchasePrintTotalQty()) }}</td>
+                    <td class="text-right">金额：</td>
+                    <td>{{ formatPurchaseMoney(getPurchasePrintTotalAmount()) }}</td>
+                    <td />
+                  </template>
+                </tr>
+                <tr class="purchase-print-remark-row">
+                  <td :colspan="getPurchasePrintColumnCount()" class="text-left">备注：{{ getPurchasePrintHeaderRemark() || purchasePrintDefaultRemark }}</td>
+                </tr>
+              </tbody>
+            </table>
 
-          <div class="purchase-print-terms">
-            <div>一.质量标准：按供方提供的样品和参数。</div>
-            <div>二.问题处理：供方产品如有品质问题，应在需方提出后的三天内补发合格货物，并作出相应补偿，具体以双方协商的处理方式为准。</div>
-            <div>三.运输方式及费用负担：由供方负责运输及相关费用。</div>
-            <div>四.结算方式：{{ getPurchaseSettlementText(currentPrint) }}。</div>
-            <div>五.本合同一式两份，双方各执一份。订单请于下达后的24小时内盖章回传。</div>
-            <div>六.争议解决：对于本合同执行过程中产生的争议，由双方友好协商解决。</div>
-          </div>
+            <div class="purchase-print-terms">
+              <div>一.质量标准：按供方提供的样品和参数。</div>
+              <div>二.问题处理：供方产品如有品质问题，应在需方提出后的三天内补发合格货物，并作出相应补偿，具体以双方协商的处理方式为准。</div>
+              <div>三.运输方式及费用负担：由供方负责运输及相关费用。</div>
+              <div>四.结算方式：{{ getPurchaseSettlementText(currentPrint) }}。</div>
+              <div>五.本合同一式两份，双方各执一份。订单请于下达后的24小时内盖章回传。</div>
+              <div>六.争议解决：对于本合同执行过程中产生的争议，由双方友好协商解决。</div>
+            </div>
 
-          <div class="purchase-print-signature">
-            <div>制单人：{{ currentPrint.createdBy || '' }}</div>
-            <div>审批人：{{ currentPrint.updatedBy || currentPrint.approvedBy || '' }}</div>
-            <div>确认人：</div>
-          </div>
-          <div class="purchase-print-footer">第1页 共1页</div>
+            <div class="purchase-print-signature">
+              <div>制单人：{{ currentPrint.createdBy || '' }}</div>
+              <div>审批人：{{ currentPrint.updatedBy || currentPrint.approvedBy || '' }}</div>
+              <div>确认人：</div>
+            </div>
+            <div class="purchase-print-footer">第1页 共1页</div>
           </div>
         </div>
         <span slot="footer">
@@ -2799,8 +2799,8 @@ export default {
           const qty = item.priceQty !== undefined && item.priceQty !== null && item.priceQty !== ''
             ? item.priceQty
             : (item.purchaseQty !== undefined && item.purchaseQty !== null && item.purchaseQty !== ''
-                ? item.purchaseQty
-                : item.sqm)
+              ? item.purchaseQty
+              : item.sqm)
           return this.formatPurchaseMoney(qty)
         }
         return this.formatPurchaseMoney(item.sqm !== undefined && item.sqm !== null ? item.sqm : this.calcSqm(item))
@@ -2830,8 +2830,8 @@ export default {
           const qty = Number(item.priceQty !== undefined && item.priceQty !== null && item.priceQty !== ''
             ? item.priceQty
             : (item.purchaseQty !== undefined && item.purchaseQty !== null && item.purchaseQty !== ''
-                ? item.purchaseQty
-                : item.sqm))
+              ? item.purchaseQty
+              : item.sqm))
           return sum + (Number.isFinite(qty) ? qty : 0)
         }, 0)
       }

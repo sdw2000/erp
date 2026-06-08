@@ -664,12 +664,10 @@
         <div class="slitting-print-row">
           <el-form-item label="数字号">
             <div class="slitting-required-wrap">
-              <el-checkbox v-model="reportForm.slittingDigitalNoEnabled">启用</el-checkbox>
               <el-checkbox v-model="reportForm.slittingDigitalNoRequired">必填</el-checkbox>
               <el-input
                 v-model.trim="reportForm.slittingDigitalNo"
                 size="small"
-                :disabled="!reportForm.slittingDigitalNoEnabled"
                 style="width: 130px"
                 placeholder="如 001"
               />
@@ -762,11 +760,11 @@
         </div>
 
         <div class="slitting-print-row">
-          <el-form-item label="规格类型">
+          <el-form-item label="规格类型" class="slitting-biz-type-item">
             <el-select
               v-model="reportForm.slittingQrRuleBizType"
               size="small"
-              style="width: 160px"
+              style="width: 120px"
               @change="handleSlittingQrRuleBizTypeChanged"
             >
               <el-option label="管芯标签" value="SLITTING_CORE_LABEL" />
@@ -779,25 +777,32 @@
           <el-form-item label="二维码模板" class="slitting-qr-template-item">
             <el-input
               v-model="reportForm.qrTemplate"
+              :disabled="!reportForm.qrTemplateEditable"
               size="small"
-              style="width: 480px"
+              class="slitting-qr-text"
+              style="width: 530px"
               :placeholder="'支持 {{field}} 或 {field}，例如 {{orderNo}}|{{batchNo}}|{{boxRollCount}}'"
             />
           </el-form-item>
-          <el-form-item>
+          <el-form-item class="slitting-qr-action-item">
+            <el-button
+              size="mini"
+              type="primary"
+              @click="enableQrTemplateEdit"
+            >编辑</el-button>
             <el-button
               size="mini"
               type="success"
-              plain
+              :disabled="!reportForm.qrTemplateEditable"
               :loading="qrRuleSaving"
               @click="saveCurrentCustomerQrRule(reportForm.slittingQrRuleBizType || 'SLITTING_OUTER_LABEL')"
-            >保存当前客户该类型二维码规则</el-button>
+            >保存</el-button>
           </el-form-item>
         </div>
 
         <div class="slitting-print-row">
           <el-form-item label="二维码预览" class="slitting-qr-preview-item">
-            <el-input :value="buildSlittingQrPreview()" size="small" readonly style="width: 760px" />
+            <el-input :value="buildSlittingQrPreview()" size="small" readonly class="slitting-qr-text slitting-qr-preview" style="width: 530px" />
           </el-form-item>
         </div>
 
@@ -1356,6 +1361,10 @@ export default {
         orderNo: '',
         customerOrderNo: '',
         customerCode: '',
+        customerShortName: '',
+        myCompanyName: '东莞市方恩电子材料科技有限公司',
+        myCompanyAddress: '广东省东莞市桥头镇东新路13号2号楼102室',
+        myCompanyPhone: '0769-82551118',
         orderDetailRemark: '',
         lineNo: '',
         materialCode: '',
@@ -1381,7 +1390,6 @@ export default {
         slittingTubeRollCount: 0,
         slittingCoreLabelBizType: 'SLITTING_CORE_LABEL',
         slittingQrRuleBizType: 'SLITTING_OUTER_LABEL',
-        slittingDigitalNoEnabled: true,
         slittingDigitalNoRequired: true,
         slittingDigitalNo: '',
         slittingCorePrintCount: 0,
@@ -1394,6 +1402,7 @@ export default {
         deliveryNoteNo: '',
         shelfLifeDays: 365,
         qrTemplate: '',
+        qrTemplateEditable: true,
         startTime: '',
         endTime: '',
         enableSegment: true,
@@ -1435,6 +1444,11 @@ export default {
       detailOrderCustomerOrderNoCache: {},
       detailOrderRemarkCache: {},
       deliveryNoticeNoCache: {},
+      companyInfoCache: {
+        companyName: '',
+        address: '',
+        phone: ''
+      },
       detailResolveCache: {},
       cartonPresetOptions: [],
       slittingPackingPreview: {
@@ -2562,7 +2576,10 @@ export default {
               lengthM: Number.isFinite(length) ? length : '-'
             })
             const printTime = this.toDateTimeString(new Date())
-            const productionDate = this.toDateString(String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() || this.toDateString((this.reportForm && this.reportForm.startTime) || printTime))
+            const productionDateText = String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() || this.toDateString((this.reportForm && this.reportForm.startTime) || printTime)
+            const productionDate = this.toDateString(productionDateText)
+            const productionDate8 = this.toCompactDateStringStrict(productionDateText)
+            const productionDate6 = this.toCompactDateYYMMDD(productionDateText)
             const groupNo = this.currentUserTeamName
             const labelOrderNo = this.resolveLabelOrderNo(this.reportForm)
 
@@ -2576,8 +2593,11 @@ export default {
               widthMm: Number.isFinite(width) ? width : 0,
               lengthM: Number.isFinite(length) ? length : 0,
               areaM2: Number(this.formatAreaNum(area)),
-              productionDate,
-              produtionDate: productionDate,
+              productionDate: productionDate6,
+              productionDate8,
+              productionDate6,
+              productionDateText: productionDate,
+              produtionDate: productionDate6,
               scheduleId: this.reportForm.scheduleId || '',
               orderNo: labelOrderNo,
               internalOrderNo: this.reportForm.orderNo || '',
@@ -2609,10 +2629,11 @@ export default {
             const printTime = this.toDateTimeString(new Date())
             const serialNo = Number(source && source.serialNo)
             const rollSerialCode = this.buildRewindingRollSerialCode(serialNo)
-            const productionDate = this.toDateString(
-              String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() ||
+            const productionDateText = String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() ||
               this.toDateString((this.reportForm && this.reportForm.startTime) || printTime)
-            )
+            const productionDate = this.toDateString(productionDateText)
+            const productionDate8 = this.toCompactDateStringStrict(productionDateText)
+            const productionDate6 = this.toCompactDateYYMMDD(productionDateText)
             const groupNo = this.currentUserTeamName
             const labelOrderNo = this.resolveLabelOrderNo(this.reportForm)
             const srcWidth = Number(source && source.widthMm)
@@ -2622,13 +2643,13 @@ export default {
             const widthMm = Number.isFinite(srcWidth) && srcWidth > 0
               ? srcWidth
               : (Number.isFinite(motherWidth) && motherWidth > 0
-                  ? motherWidth
-                  : Number((this.reportForm && this.reportForm.widthMm) || 0))
+                ? motherWidth
+                : Number((this.reportForm && this.reportForm.widthMm) || 0))
             const lengthM = Number.isFinite(srcLength) && srcLength > 0
               ? srcLength
               : (Number.isFinite(formLength) && formLength > 0
-                  ? formLength
-                  : Number((this.reportForm && this.reportForm.lengthM) || 0))
+                ? formLength
+                : Number((this.reportForm && this.reportForm.lengthM) || 0))
 
             const payload = {
               spec,
@@ -2640,9 +2661,12 @@ export default {
               groupNo,
               workGroup: groupNo,
               teamName: groupNo,
-              productionDate,
-              produtionDate: productionDate,
-              printDate: productionDate,
+              productionDate: productionDate6,
+              productionDate8,
+              productionDate6,
+              productionDateText: productionDate,
+              produtionDate: productionDate6,
+              printDate: productionDate6,
               scheduleId: this.reportForm.scheduleId || '',
               orderNo: labelOrderNo,
               internalOrderNo: this.reportForm.orderNo || '',
@@ -2698,13 +2722,14 @@ export default {
             const tubePerBoxCount = Math.max(0, Math.trunc(Number((this.reportForm && this.reportForm.slittingTubePerBoxCount) || 0) || 0))
             const quantityPerLabel = Math.max(1, Math.trunc(Number(source && source.quantityOverride) || 0) || tubeRollCount || rollPerTube)
             const serialStart = Number.isFinite(serialNo) ? serialNo : 1
-            const copies = Math.max(1, Math.trunc(Number((source && source.copies) || 1) || 1))
             const serialNoText = this.formatSerialNoRange(serialStart, 1)
             const serialNoEnd = serialStart
             const perBoxRolls = (tubeRollCount > 0 && tubePerBoxCount > 0) ? (tubeRollCount * tubePerBoxCount) : 0
             const isOuterLabel = sceneType === 'slitting-outer-label'
+            const isInnerLabel = sceneType === 'slitting-inner-label' || sceneType === 'slitting-core-label'
             const quantityUnit = isOuterLabel ? '卷/箱' : '卷/筒'
-            const currentBoxRollCount = isOuterLabel ? quantityPerLabel : perBoxRolls
+            // 关键修复：当前标签数量应当使用 quantityPerLabel，而不是固定的 perBoxRolls，否则尾卷/尾箱的数量和米数会计算错误
+            const currentBoxRollCount = quantityPerLabel
             const packageQty = this.calcPackagingQtyByLength((this.reportForm && this.reportForm.lengthM), currentBoxRollCount)
             const packageQtyValue = this.formatPackagingQtyByLength((this.reportForm && this.reportForm.lengthM), currentBoxRollCount)
             const coreOuterDiameterMm = Number((this.reportForm && this.reportForm.coreOuterDiameterMm) || 0)
@@ -2726,11 +2751,18 @@ export default {
             const shipDate = this.toCompactDateStringStrict(shipDateText)
             const deliveryNoteNo = String((this.reportForm && this.reportForm.deliveryNoteNo) || '').trim()
             const shelfLifeDays = Math.max(0, Math.trunc(Number((this.reportForm && this.reportForm.shelfLifeDays) || 0) || 0))
-            const expiryDate = this.calcExpiryDate(productionDate, shelfLifeDays)
+            const expiryDate = this.calcExpiryDate(productionDate8 || productionDate, shelfLifeDays)
+            const expiryDate8 = expiryDate && expiryDate !== '-' ? expiryDate.replace(/\./g, '') : ''
+            const expiryDate6 = expiryDate8.length === 8 ? expiryDate8.slice(2) : ''
+            const expiryDateText = expiryDate8.length === 8 ? `${expiryDate8.slice(0, 4)}-${expiryDate8.slice(4, 6)}-${expiryDate8.slice(6, 8)}` : ''
+
+            const customerShortName = String((this.reportForm && this.reportForm.customerShortName) || '').trim()
+            const myCompanyName = String((this.reportForm && this.reportForm.myCompanyName) || '东莞市方恩电子材料科技有限公司').trim()
+            const myCompanyAddress = String((this.reportForm && this.reportForm.myCompanyAddress) || '广东省东莞市桥头镇东新路13号2号楼102室').trim()
+            const myCompanyPhone = String((this.reportForm && this.reportForm.myCompanyPhone) || '0769-82551118').trim()
             const boxWeightKg = Number((this.reportForm && this.reportForm.boxWeightKg) || 0)
             const boxWeightValue = Number.isFinite(boxWeightKg) && boxWeightKg > 0 ? Number(boxWeightKg.toFixed(2)) : null
-            const digitalNoEnabled = !!(this.reportForm && this.reportForm.slittingDigitalNoEnabled)
-            const digitalNo = digitalNoEnabled ? String((this.reportForm && this.reportForm.slittingDigitalNo) || '').trim() : ''
+            const digitalNo = String((this.reportForm && this.reportForm.slittingDigitalNo) || '').trim()
             const labelOrderNo = this.resolveLabelOrderNo(this.reportForm)
             const qtyOrWeight = this.resolveQtyOrWeightText({
               grossWeightKg: boxWeightValue,
@@ -2792,6 +2824,7 @@ export default {
               shuliangzhgongliang: packageQtyValue,
               productionDate: productionDate,
               productionDate8,
+              productionDate6: productionDate8.length === 8 ? productionDate8.slice(2) : '',
               productionDateText,
               productionDateCompact: productionDate,
               production_date: productionDate,
@@ -2800,6 +2833,8 @@ export default {
               shengchanriqi: productionDate,
               shengchanriqiText: productionDateText,
               shipDate: shipDate,
+              shipDate8: shipDate,
+              shipDate6: shipDate.length === 8 ? shipDate.slice(2) : '',
               shipDateText,
               shipDateCompact: shipDate,
               ship_date: shipDate,
@@ -2811,7 +2846,20 @@ export default {
               chuhuoriqiText: shipDateText,
               shelfLifeDays,
               shelfLifeText,
-              expiryDate,
+              expiryDate, // YYYY.MM.DD
+              expiryDate8: expiryDate8, // YYYYMMDD
+              expiryDate6: expiryDate6, // YYMMDD
+              expiryDateText: expiryDateText, // YYYY-MM-DD
+              expiryDateCompact: expiryDate8,
+              expiry_date: expiryDate,
+              youxiaoqi: expiryDate,
+              customerShortName,
+              customerShort: customerShortName,
+              myCompanyName,
+              myCompanyAddress,
+              myCompanyPhone,
+              companyName: myCompanyName,
+              companyAddress: myCompanyAddress,
               digitalNo,
               digitalNumber: digitalNo,
               sequenceNo: digitalNo,
@@ -3486,17 +3534,23 @@ export default {
     },
     calcExpiryDate(productionDate, shelfLifeDays) {
       const base = String(productionDate || '').trim()
-      const days = Math.max(0, Math.trunc(Number(shelfLifeDays || 0) || 0))
-      if (!base || !(days > 0)) return ''
+      const days = Math.trunc(Number(shelfLifeDays))
+      // 这里的 base 可能是 2024-05-20, 20240520, 或 240520
+      if (!base || isNaN(days) || days < 0) return ''
       let d = null
       if (/^\d{8}$/.test(base)) {
         d = new Date(`${base.slice(0, 4)}-${base.slice(4, 6)}-${base.slice(6, 8)}`)
+      } else if (/^\d{6}$/.test(base)) {
+        const yy = Number(base.slice(0, 2))
+        const year = yy >= 70 ? (1900 + yy) : (2000 + yy)
+        d = new Date(`${year}-${base.slice(2, 4)}-${base.slice(4, 6)}`)
       } else {
         d = new Date(base)
       }
       if (!d || Number.isNaN(d.getTime())) return ''
       d.setDate(d.getDate() + days)
-      return this.toCompactDateString(d)
+      const pad = n => String(n).padStart(2, '0')
+      return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`
     },
     buildDynamicQrContent(template, data = {}) {
       const source = data || {}
@@ -3563,7 +3617,11 @@ export default {
       const productionDate8 = this.toCompactDateStringStrict(productionDateText)
       const shipDate = this.toCompactDateStringStrict(shipDateText)
       const shelfLifeDays = Math.max(0, Math.trunc(Number(form.shelfLifeDays || 0) || 0))
-      const expiryDate = this.calcExpiryDate(productionDate, shelfLifeDays)
+      const expiryDate = this.calcExpiryDate(productionDate8 || productionDate, shelfLifeDays)
+      const expiryDate8 = expiryDate && expiryDate !== '-' ? expiryDate.replace(/\./g, '') : ''
+      const expiryDate6 = expiryDate8.length === 8 ? expiryDate8.slice(2) : ''
+      const expiryDateText = expiryDate8.length === 8 ? `${expiryDate8.slice(0, 4)}-${expiryDate8.slice(4, 6)}-${expiryDate8.slice(6, 8)}` : ''
+
       const grossWeightKg = Number(form.boxWeightKg || 0)
       const grossWeightValue = Number.isFinite(grossWeightKg) && grossWeightKg > 0 ? Number(grossWeightKg.toFixed(2)) : ''
       const qtyOrWeight = this.resolveQtyOrWeightText({
@@ -3572,8 +3630,7 @@ export default {
         quantityUnit: '卷/箱'
       })
       const shelfLifeText = shelfLifeDays > 0 ? String(shelfLifeDays) : ''
-      const digitalNoEnabled = !!form.slittingDigitalNoEnabled
-      const digitalNo = digitalNoEnabled ? String(form.slittingDigitalNo || '').trim() : ''
+      const digitalNo = String(form.slittingDigitalNo || '').trim()
       const serialNo = '001'
       return this.buildDynamicQrContent(form.qrTemplate, {
         orderNo,
@@ -3605,6 +3662,7 @@ export default {
         tubeRollCount: rollPerTube,
         productionDate,
         productionDate8,
+        productionDate6: productionDate8.length === 8 ? productionDate8.slice(2) : '',
         productionDateText,
         productionDateCompact: productionDate,
         production_date: productionDate,
@@ -3614,6 +3672,8 @@ export default {
         serialNoStart: '001',
         serialNoEnd: '001',
         shipDate,
+        shipDate8: shipDate,
+        shipDate6: shipDate.length === 8 ? shipDate.slice(2) : '',
         shipDateText,
         shipDateCompact: shipDate,
         ship_date: shipDate,
@@ -3624,6 +3684,19 @@ export default {
         shelfLifeDays,
         shelfLifeText,
         expiryDate,
+        expiryDate8,
+        expiryDate6,
+        expiryDateText,
+        expiryDateCompact: expiryDate8,
+        expiry_date: expiryDate,
+        youxiaoqi: expiryDate,
+        customerShortName: String((form && form.customerShortName) || '').trim(),
+        customerShort: String((form && form.customerShortName) || '').trim(),
+        myCompanyName: String((form && form.myCompanyName) || '东莞市方恩电子材料科技有限公司').trim(),
+        myCompanyAddress: String((form && form.myCompanyAddress) || '广东省东莞市桥头镇东新路13号2号楼102室').trim(),
+        myCompanyPhone: String((form && form.myCompanyPhone) || '0769-82551118').trim(),
+        companyName: String((form && form.myCompanyName) || '东莞市方恩电子材料科技有限公司').trim(),
+        companyAddress: String((form && form.myCompanyAddress) || '广东省东莞市桥头镇东新路13号2号楼102室').trim(),
         digitalNo,
         digitalNumber: digitalNo,
         sequenceNo: digitalNo,
@@ -3650,11 +3723,40 @@ export default {
           this.reportForm.qrTemplate = String(res.data.qrTemplate || '').trim() || this.getDefaultSlittingQrTemplate()
           if (this.reportForm) {
             this.reportForm.slittingQrRuleBizType = safeBizType
+            this.reportForm.qrTemplateEditable = false
           }
+        }
+        if (res && (res.code === 200 || res.code === 20000) && res.data && this.reportForm) {
+          this.reportForm.customerShortName = String(res.data.customerShortName || this.reportForm.customerShortName || '').trim()
+          this.reportForm.myCompanyName = String(res.data.myCompanyName || this.reportForm.myCompanyName || '东莞市方恩电子材料科技有限公司').trim()
+          this.reportForm.myCompanyAddress = String(res.data.myCompanyAddress || this.reportForm.myCompanyAddress || '广东省东莞市桥头镇东新路13号2号楼102室').trim()
+          this.reportForm.myCompanyPhone = String(res.data.myCompanyPhone || this.reportForm.myCompanyPhone || '0769-82551118').trim()
         }
       } catch (e) {
         // 忽略加载失败，保持本地默认模板
       }
+    },
+    async loadCompanyInfoForLabel() {
+      try {
+        const res = await request({ url: '/config/company', method: 'get' })
+        if (res && (res.code === 200 || res.code === 20000) && res.data) {
+          const companyName = String((res.data && res.data.companyName) || '').trim()
+          const address = String((res.data && res.data.address) || '').trim()
+          const phone = String((res.data && res.data.phone) || '').trim()
+          this.companyInfoCache = { companyName, address, phone }
+          if (this.reportForm) {
+            if (companyName) this.reportForm.myCompanyName = companyName
+            if (address) this.reportForm.myCompanyAddress = address
+            if (phone) this.reportForm.myCompanyPhone = phone
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    },
+    enableQrTemplateEdit() {
+      if (!this.reportForm) return
+      this.reportForm.qrTemplateEditable = true
     },
     async handleSlittingQrRuleBizTypeChanged(value) {
       if (!this.reportForm || this.reportForm.processType !== 'SLITTING') return
@@ -3689,6 +3791,9 @@ export default {
           enabled: 1
         })
         if (res && (res.code === 200 || res.code === 20000)) {
+          if (this.reportForm) {
+            this.reportForm.qrTemplateEditable = false
+          }
           if (!silent) this.$message.success('二维码规则已保存')
           return true
         }
@@ -4206,10 +4311,9 @@ export default {
         this.$message.warning('批次号已设置为必填，请先选择或填写批次号后再打印')
         return
       }
-      const digitalNoEnabled = !!(this.reportForm && this.reportForm.slittingDigitalNoEnabled)
       const digitalNoRequired = !!(this.reportForm && this.reportForm.slittingDigitalNoRequired)
       const digitalNoRaw = String((this.reportForm && this.reportForm.slittingDigitalNo) || '').trim()
-      if (digitalNoEnabled && digitalNoRequired && !digitalNoRaw) {
+      if (digitalNoRequired && !digitalNoRaw) {
         this.$message.warning('数字号已设置为必填，请先填写后再打印')
         return
       }
@@ -4272,20 +4376,27 @@ export default {
       const quantities = this.buildSlittingInnerLabelQuantities(producedQty, tubeRollCount, tubePerBoxCount, printCount, sceneType)
       const mergedItems = this.buildMergedSlittingPrintItems(quantities)
       const standardBoxRollCount = (tubeRollCount > 0 && tubePerBoxCount > 0) ? (tubeRollCount * tubePerBoxCount) : 0
-      const productionDate = this.toCompactDateYYMMDD(String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() || this.toDateString((this.reportForm && this.reportForm.startTime) || new Date())) || '-'
+      const productionDateText = String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() || this.toDateString((this.reportForm && this.reportForm.startTime) || new Date())
+      const productionDate = this.toCompactDateYYMMDD(productionDateText) || '-'
+      const productionDate8 = this.toCompactDateStringStrict(productionDateText) || ''
       const shipDate = this.toCompactDateStringStrict(String((this.reportForm && this.reportForm.labelShipDate) || '').trim()) || '-'
       const deliveryNoteNo = String((this.reportForm && this.reportForm.deliveryNoteNo) || '').trim() || '-'
       const shelfLifeDays = Math.max(0, Math.trunc(Number((this.reportForm && this.reportForm.shelfLifeDays) || 0) || 0))
-      const expiryDate = this.calcExpiryDate(productionDate, shelfLifeDays) || '-'
+      const expiryDate = this.calcExpiryDate(productionDate8 || productionDate, shelfLifeDays) || '-'
+      const customerShortName = String((this.reportForm && this.reportForm.customerShortName) || '').trim() || '-'
+      const myCompanyName = String((this.reportForm && this.reportForm.myCompanyName) || '东莞市方恩电子材料科技有限公司').trim() || '-'
+      const myCompanyAddress = String((this.reportForm && this.reportForm.myCompanyAddress) || '广东省东莞市桥头镇东新路13号2号楼102室').trim() || '-'
       const boxWeightKg = Number((this.reportForm && this.reportForm.boxWeightKg) || 0)
       const boxWeightText = Number.isFinite(boxWeightKg) && boxWeightKg > 0 ? `${Number(boxWeightKg.toFixed(2))}kg` : '-'
       const packageQtyValue = this.formatPackagingQtyByLength((this.reportForm && this.reportForm.lengthM), Number(quantities && quantities.length ? quantities[0] : 0)) || '-'
-      const digitalNo = this.reportForm && this.reportForm.slittingDigitalNoEnabled
-        ? (digitalNoRaw || '-')
-        : '-'
+      const digitalNo = digitalNoRaw || '-'
+
       const ok = await this.confirmPrintPreview(labelName, [
         { label: '订单号', value: this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo), field: 'orderNo | orderNoDisplay' },
         { label: '客户订单号', value: this.reportForm.customerOrderNo || '-', field: 'customerOrderNo' },
+        { label: '客户简称', value: customerShortName, field: 'customerShortName | customerShort' },
+        { label: '我司名称', value: myCompanyName, field: 'myCompanyName | companyName' },
+        { label: '我司地址', value: myCompanyAddress, field: 'myCompanyAddress | companyAddress' },
         { label: '任务号', value: this.reportForm.taskNo || '-', field: 'taskNo' },
         { label: '批次号', value: this.reportForm.batchNo || '-', field: 'batchNo | issueBatchNo | slittingBatchNo' },
         { label: '物料代码', value: (alias && alias.customerMaterialCode) || materialCode || '-', field: 'materialCode' },
@@ -4295,13 +4406,13 @@ export default {
         { label: '本箱卷数', value: (quantities && quantities.length) ? quantities.join(' / ') : '-', field: 'boxRollCount | currentBoxRollCount | cartonRollCount | rollsPerBox | rollsInBox | slittingQty' },
         { label: '包装数量(米)', value: packageQtyValue, field: 'packageQtyValue | packageQty | packageQtyM | baozhuangshuliang | shuliangzhongliang | shuliangzhgongliang' },
         { label: '满箱卷数', value: standardBoxRollCount || '-', field: 'standardBoxRollCount | boxRollCountCapacity' },
-        { label: '生产日期', value: productionDate || '-', field: 'productionDate | shengchanriqi | printDate' },
-        { label: '出货日期', value: shipDate, field: 'shipDate | deliveryDate | chuhuoriqi' },
+        { label: '生产日期', value: productionDate || '-', field: 'productionDate | productionDate8 | productionDate6 | shengchanriqi | printDate' },
+        { label: '出货日期', value: shipDate, field: 'shipDate | shipDate8 | shipDate6 | deliveryDate | chuhuoriqi' },
         { label: '送货单号', value: deliveryNoteNo, field: 'deliveryNoteNo' },
         { label: '数字号', value: digitalNo, field: 'digitalNo | digitalNumber | sequenceNo' },
         { label: '本箱重量', value: boxWeightText, field: 'grossWeightKg | boxWeightKg | currentBoxWeightKg | netWeightKg | boxWeightText' },
         { label: '保质期(天)', value: shelfLifeDays || '-', field: 'shelfLifeDays' },
-        { label: '保质期至', value: expiryDate, field: 'expiryDate' },
+        { label: '保质期至', value: expiryDate, field: 'expiryDate | expiryDate8 | expiryDate6 | expiryDateText | youxiaoqi' },
         { label: '备注', value: String((this.reportForm && this.reportForm.remark) || '').trim() || '-', field: 'remark' },
         { label: '二维码内容', value: this.buildSlittingQrPreview(alias) || '-', field: 'qrContent | qrCode' },
         { label: '每张卷数序列', value: (quantities && quantities.length) ? quantities.join(' / ') : '-', field: 'quantityOverride -> quantityPerLabel' },
@@ -4342,8 +4453,8 @@ export default {
             alias
           }))
         }
-        const batchSize = this.getAdaptivePrintBatchSize(mergedItems.length)
-        await this.runPrintJobsInBatches(jobs, batchSize)
+        // 顺序提交，保证标签序号和打印顺序一致，减少并发导致的网关超时
+        await this.runPrintJobsInBatches(jobs, 1)
         this.$message.success(`已提交BarTender打印任务（${labelName}）${printCount}张`)
       } catch (e) {
         const msg = (e && e.message) || '未知错误'
@@ -4372,10 +4483,15 @@ export default {
         if (res && (res.code === 200 || res.code === 20000)) {
           return true
         }
-        this.$message.error((res && res.msg) || '保存送货单批次号失败，已取消打印')
-        return false
+        this.$message.warning((res && res.msg) || '保存送货单批次号失败，已跳过该步骤继续打印')
+        return true
       } catch (e) {
         const status = e && e.response ? Number(e.response.status) : 0
+        // 权限不足或认证问题时，不阻断打印主流程
+        if (status === 401 || status === 403) {
+          this.$message.warning('当前账号无送货单批次回写权限，已跳过回写继续打印')
+          return true
+        }
         if (status === 405) {
           try {
             const fallbackRes = await request({
@@ -4395,8 +4511,8 @@ export default {
           }
         }
         const msg = (e && e.message) || '未知错误'
-        this.$message.error(`保存送货单批次号失败，已取消打印：${msg}`)
-        return false
+        this.$message.warning(`保存送货单批次号失败，已跳过该步骤继续打印：${msg}`)
+        return true
       }
     },
     getAdaptivePrintBatchSize(printCount) {
@@ -4678,20 +4794,37 @@ export default {
         return Array.from({ length: count }, () => 1)
       }
 
-      const remainder = qty % unitQty
-      return Array.from({ length: count }, (_, idx) => {
-        if (idx === count - 1 && remainder > 0) return remainder
-        return unitQty
-      })
+      const result = []
+      let remaining = qty
+      for (let i = 0; i < count; i++) {
+        if (i === count - 1) {
+          // 最后一张标签承担所有剩余数量（可能是尾数，也可能是超出的余量）
+          result.push(Math.max(0, remaining))
+        } else {
+          const v = Math.min(remaining, unitQty)
+          result.push(Math.max(0, v))
+          remaining -= v
+        }
+      }
+      return result
     },
     buildMergedSlittingPrintItems(quantities = []) {
       const list = Array.isArray(quantities) ? quantities : []
       if (!list.length) return []
-      return list.map((qty, idx) => ({
-        serialNo: idx + 1,
-        quantityOverride: Math.max(1, Math.trunc(Number(qty) || 1)),
-        copies: 1
-      }))
+      // 过滤掉数量为0的任务，并重新生成连续的流水号，解决“跳序号”问题
+      const result = []
+      let validSerial = 1
+      for (let i = 0; i < list.length; i++) {
+        const qty = Math.max(0, Math.trunc(Number(list[i]) || 0))
+        if (qty <= 0) continue
+
+        result.push({
+          serialNo: validSerial++, // 使用独立计数器，确保序号连续
+          quantityOverride: qty,
+          copies: 1
+        })
+      }
+      return result
     },
     handleSlittingTubePerBoxChanged(value) {
       if (!this.reportForm) return
@@ -4822,8 +4955,8 @@ export default {
           : row.reported_area != null ? row.reported_area
             : row.produced_area != null ? row.produced_area
               : row.producedArea != null ? row.producedArea
-            : row.output_sqm != null ? row.output_sqm
-              : row.outputSqm
+                : row.output_sqm != null ? row.output_sqm
+                  : row.outputSqm
       )) || 0)
       if (Number.isFinite(reportAreaDirect) && reportAreaDirect > 0) {
         return Number(reportAreaDirect.toFixed(2))
@@ -5330,6 +5463,7 @@ export default {
           taskNo: row.taskNo || row.task_no || '',
           orderNo: normalizedOrderNo || rawOrderNo,
           customerOrderNo: customerOrderNo || row.customerOrderNo || row.customer_order_no || row.customerOrderNumber || '',
+          customerShortName: String((row && (row.customerShortName || row.shortName || row.customer_name || row.customerName || row.customer || '')) || '').trim(),
           materialCode,
           materialName: row.materialName || row.material_name || row.productName || row.product_name || row.name || '',
           customerCode: customerCode || '',
@@ -5358,7 +5492,6 @@ export default {
           slittingTubeRollCount: defaultTubeRollCount,
           slittingCoreLabelBizType: 'SLITTING_CORE_LABEL',
           slittingQrRuleBizType: 'SLITTING_OUTER_LABEL',
-          slittingDigitalNoEnabled: true,
           slittingDigitalNoRequired: true,
           slittingDigitalNo: '',
           slittingCorePrintCount: defaultProducedQty,
@@ -5371,6 +5504,10 @@ export default {
           deliveryNoteNo: processType === 'SLITTING' ? deliveryNoteNo : '',
           shelfLifeDays: processType === 'SLITTING' ? shelfLifeDays : 365,
           qrTemplate: processType === 'SLITTING' ? this.getDefaultSlittingQrTemplate() : '',
+          qrTemplateEditable: true,
+          myCompanyName: '东莞市方恩电子材料科技有限公司',
+          myCompanyAddress: '广东省东莞市桥头镇东新路13号2号楼102室',
+          myCompanyPhone: '0769-82551118',
           startTime: now,
           endTime: now,
           enableSegment: true,
@@ -5392,6 +5529,7 @@ export default {
           })
         }
         if (this.reportDialogMode === 'print' && processType === 'SLITTING') {
+          await this.loadCompanyInfoForLabel()
           await this.loadCustomerQrRuleForSlitting(this.reportForm.customerCode, this.reportForm.slittingQrRuleBizType || 'SLITTING_OUTER_LABEL')
         }
         this.slittingTubePerBoxManual = false
@@ -6399,7 +6537,6 @@ export default {
         slittingTubeRollCount: 0,
         slittingCoreLabelBizType: 'SLITTING_CORE_LABEL',
         slittingQrRuleBizType: 'SLITTING_OUTER_LABEL',
-        slittingDigitalNoEnabled: true,
         slittingDigitalNoRequired: true,
         slittingDigitalNo: '',
         slittingCorePrintCount: 0,
@@ -6412,6 +6549,7 @@ export default {
         deliveryNoteNo: '',
         shelfLifeDays: 365,
         qrTemplate: this.getDefaultSlittingQrTemplate(),
+        qrTemplateEditable: true,
         startTime: '',
         endTime: '',
         enableSegment: true,
@@ -8166,6 +8304,35 @@ export default {
 .slitting-print-form .slitting-qr-template-item,
 .slitting-print-form .slitting-qr-preview-item {
   margin-right: 8px;
+}
+
+.slitting-print-form .slitting-biz-type-item {
+  width: 230px;
+}
+.slitting-print-form .slitting-qr-template-item {
+  width: 630px;
+}
+.slitting-print-form .slitting-qr-preview-item {
+  width: 630px;
+  margin-left: 0;
+  margin-top: 0;
+}
+.slitting-print-form .slitting-qr-action-item {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.slitting-qr-text {
+  font-family: Consolas, 'Courier New', monospace;
+}
+
+::v-deep .slitting-qr-text .el-input__inner {
+  background: #f8fafc;
+  border-color: #dbe6f3;
+}
+
+::v-deep .slitting-qr-preview .el-input__inner {
+  color: #303133;
 }
 
 ::v-deep .slitting-print-dialog .el-dialog__body {

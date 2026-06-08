@@ -34,7 +34,7 @@
         <el-col :span="6"><el-card shadow="never"><div class="mini">当月折旧</div><div class="val">{{ summary.monthDepreciationAmount || 0 }}</div></el-card></el-col>
       </el-row>
 
-      <el-table :data="assets" stripe border size="small" v-loading="loading">
+      <el-table v-loading="loading" :data="assets" stripe border size="small">
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column prop="assetCode" label="资产编码" min-width="150" />
         <el-table-column prop="assetName" label="资产名称" min-width="180" />

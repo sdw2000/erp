@@ -42,7 +42,7 @@ export default {
       if (res && (res.code === 200 || res.code === 20000)) this.$message.success('已清理')
     },
     async diagnose() {
-      const res = await request({ url: '/sales/reconciliation/admin/diagnose-deleted-confirms', method: 'get', params: { ids: this.ids } })
+      const res = await request({ url: '/sales/reconciliation/admin/diagnose-deleted-confirms', method: 'get', params: { ids: this.ids }})
       if (res && (res.code === 200 || res.code === 20000)) {
         this.rows = res.data.rows || []
       }

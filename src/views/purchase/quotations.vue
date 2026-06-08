@@ -18,13 +18,13 @@
             <el-button size="small" @click="handleReset">重置</el-button>
           </div>
           <div class="header-right">
-          <el-button type="success" icon="el-icon-download" size="small" @click="handleDownloadTemplate">下载模板</el-button>
-          <el-button type="success" plain icon="el-icon-download" size="small" @click="handleDownloadPriceSheetTemplate">初始化模板</el-button>
-          <el-button type="primary" icon="el-icon-upload" size="small" @click="triggerImport('init')">报价初始化</el-button>
-          <el-button type="warning" icon="el-icon-upload2" size="small" @click="triggerImport('normal')">导入</el-button>
-          <el-button type="info" icon="el-icon-download" size="small" @click="handleExport">导出</el-button>
-          <el-button type="primary" icon="el-icon-plus" size="small" @click="openCreate">新增报价</el-button>
-          <input ref="importFile" type="file" accept=".xlsx,.xls" style="display:none" @change="handleImportChange">
+            <el-button type="success" icon="el-icon-download" size="small" @click="handleDownloadTemplate">下载模板</el-button>
+            <el-button type="success" plain icon="el-icon-download" size="small" @click="handleDownloadPriceSheetTemplate">初始化模板</el-button>
+            <el-button type="primary" icon="el-icon-upload" size="small" @click="triggerImport('init')">报价初始化</el-button>
+            <el-button type="warning" icon="el-icon-upload2" size="small" @click="triggerImport('normal')">导入</el-button>
+            <el-button type="info" icon="el-icon-download" size="small" @click="handleExport">导出</el-button>
+            <el-button type="primary" icon="el-icon-plus" size="small" @click="openCreate">新增报价</el-button>
+            <input ref="importFile" type="file" accept=".xlsx,.xls" style="display:none" @change="handleImportChange">
           </div>
         </div>
       </div>
@@ -492,7 +492,7 @@ export default {
             '示例物料C',
             'pcs',
             '1.65',
-            '140*140*580' 
+            '140*140*580'
           ]]
         }
       }

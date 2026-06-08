@@ -508,7 +508,7 @@ export default {
             message += `，跳过 ${result.skipCount} 条数据`
           }
           this.$message.success(message)
-          
+
           // 如果有跳过数据，提供下载选项
           if (result.skipCount > 0 && result.skippedExcel) {
             this.$confirm('有数据被跳过，是否下载跳过数据Excel？', '提示', {
@@ -522,7 +522,7 @@ export default {
               // 用户取消下载
             })
           }
-          
+
           this.pagination.current = 1
           this.loadChemicalStock()
         } else {

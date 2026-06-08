@@ -4,39 +4,39 @@
   "defaultTimeoutSeconds": 30,
   "templates": {
     "COATING_ROLL_LABEL": {
-      "formatPath": "C:\\Users\\<Windows用户名>\\AppData\\Local\\MES-BarTender-Gateway\\templates\\coating.btw",
+      "formatPath": "D:\\MES\\BarTender\\Templates\\coating.btw",
       "printer": "<你的打印机名称>"
     },
     "COATING_INBOUND_SHEET": {
-      "formatPath": "C:\\Users\\<Windows用户名>\\AppData\\Local\\MES-BarTender-Gateway\\templates\\coating.btw",
+      "formatPath": "D:\\MES\\BarTender\\Templates\\coating.btw",
       "printer": "<你的打印机名称>"
     },
     "REWINDING_ROLL_LABEL": {
-      "formatPath": "C:\\Users\\<Windows用户名>\\AppData\\Local\\MES-BarTender-Gateway\\templates\\coating.btw",
+      "formatPath": "D:\\MES\\BarTender\\Templates\\coating.btw",
       "printer": "<你的打印机名称>"
     },
     "SLITTING_CORE_LABEL": {
-      "formatPath": "C:\\Users\\<Windows用户名>\\AppData\\Local\\MES-BarTender-Gateway\\templates\\coating.btw",
+      "formatPath": "D:\\MES\\BarTender\\Templates\\coating.btw",
       "printer": "<你的打印机名称>"
     },
     "SLITTING_INNER_LABEL": {
-      "formatPath": "C:\\Users\\<Windows用户名>\\AppData\\Local\\MES-BarTender-Gateway\\templates\\coating.btw",
+      "formatPath": "D:\\MES\\BarTender\\Templates\\coating.btw",
       "printer": "<你的打印机名称>"
     },
     "SLITTING_OUTER_LABEL": {
-      "formatPath": "C:\\Users\\<Windows用户名>\\AppData\\Local\\MES-BarTender-Gateway\\templates\\coating.btw",
+      "formatPath": "D:\\MES\\BarTender\\Templates\\coating.btw",
       "printer": "<你的打印机名称>"
     },
     "SLITTING_PALLET_LABEL": {
-      "formatPath": "C:\\Users\\<Windows用户名>\\AppData\\Local\\MES-BarTender-Gateway\\templates\\coating.btw",
+      "formatPath": "D:\\MES\\BarTender\\Templates\\coating.btw",
       "printer": "<你的打印机名称>"
     },
     "RUIPU_PUTONG_GUANXIN": {
-      "formatPath": "C:\\Users\\<Windows用户名>\\AppData\\Local\\MES-BarTender-Gateway\\templates\\ruipu_putong_guanxin.btw",
+      "formatPath": "D:\\MES\\BarTender\\Templates\\ruipu_putong_guanxin.btw",
       "printer": "<你的打印机名称>"
     },
     "RP01_fenqie_neibiao": {
-      "formatPath": "C:\\Users\\<Windows用户名>\\AppData\\Local\\MES-BarTender-Gateway\\templates\\RP01_fenqie_neibiao.btw",
+      "formatPath": "D:\\MES\\BarTender\\Templates\\RP01_fenqie_neibiao.btw",
       "printer": "<你的打印机名称>"
     }
   }

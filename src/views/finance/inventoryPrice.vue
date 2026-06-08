@@ -60,7 +60,7 @@
             <el-table-column prop="version" label="版本" width="80" align="center" sortable="custom" />
             <el-table-column prop="lastRecalcTime" label="最近重算时间" min-width="160" sortable="custom" />
           </el-table>
-          <input ref="latestImportFile" type="file" accept=".csv,text/csv" style="display:none" @change="handleLatestImportChange" />
+          <input ref="latestImportFile" type="file" accept=".csv,text/csv" style="display:none" @change="handleLatestImportChange">
           <div class="mt12" style="text-align:right">
             <el-pagination
               background
@@ -110,7 +110,7 @@
             <el-table-column prop="newStockAmount" label="新库存金额" width="120" align="right" sortable="custom"><template slot-scope="scope">{{ formatMoney(scope.row.newStockAmount, 2) }}</template></el-table-column>
             <el-table-column prop="recalcTime" label="重算时间" min-width="160" sortable="custom" />
           </el-table>
-          <input ref="changeImportFile" type="file" accept=".csv,text/csv" style="display:none" @change="handleChangeImportChange" />
+          <input ref="changeImportFile" type="file" accept=".csv,text/csv" style="display:none" @change="handleChangeImportChange">
           <div class="mt12" style="text-align:right">
             <el-pagination
               background

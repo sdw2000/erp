@@ -199,7 +199,7 @@ export default {
       })
     },
     handleDelete(row) {
-      this.$confirm(`确认删除材质【${row.materialEnName}】吗？`, '提示', { type: 'warning' }).then(async () => {
+      this.$confirm(`确认删除材质【${row.materialEnName}】吗？`, '提示', { type: 'warning' }).then(async() => {
         const res = await deleteMaterialDensity(row.id)
         if (!this.isSuccess(res.code)) {
           this.$message.error(res.message || '删除失败')

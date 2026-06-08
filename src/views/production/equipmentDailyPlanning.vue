@@ -22,34 +22,34 @@
         :closable="false"
         style="margin-bottom: 12px;"
       />
-        <div class="summary-grid">
-          <el-card shadow="hover" class="summary-card total-card">
-            <div class="summary-label">设备总数</div>
-            <div class="summary-value">{{ summary.total }}</div>
-          </el-card>
-          <el-card shadow="hover" class="summary-card ok-card">
-            <div class="summary-label">可排设备</div>
-            <div class="summary-value">{{ summary.schedulable }}</div>
-          </el-card>
-          <el-card shadow="hover" class="summary-card danger-card">
-            <div class="summary-label">不可排设备</div>
-            <div class="summary-value">{{ summary.unschedulable }}</div>
-          </el-card>
-          <el-card shadow="hover" class="summary-card breakdown-card">
-            <div class="summary-label">不可排分布</div>
-            <div class="summary-tags">
-              <el-tag
-                v-for="item in summary.breakdown.filter(x => !x.canSchedule)"
-                :key="item.code"
-                type="danger"
-                effect="plain"
-              >
-                {{ item.code }}：{{ item.count }}
-              </el-tag>
-              <span v-if="!summary.breakdown.some(x => !x.canSchedule)" class="summary-empty">暂无</span>
-            </div>
-          </el-card>
-        </div>
+      <div class="summary-grid">
+        <el-card shadow="hover" class="summary-card total-card">
+          <div class="summary-label">设备总数</div>
+          <div class="summary-value">{{ summary.total }}</div>
+        </el-card>
+        <el-card shadow="hover" class="summary-card ok-card">
+          <div class="summary-label">可排设备</div>
+          <div class="summary-value">{{ summary.schedulable }}</div>
+        </el-card>
+        <el-card shadow="hover" class="summary-card danger-card">
+          <div class="summary-label">不可排设备</div>
+          <div class="summary-value">{{ summary.unschedulable }}</div>
+        </el-card>
+        <el-card shadow="hover" class="summary-card breakdown-card">
+          <div class="summary-label">不可排分布</div>
+          <div class="summary-tags">
+            <el-tag
+              v-for="item in summary.breakdown.filter(x => !x.canSchedule)"
+              :key="item.code"
+              type="danger"
+              effect="plain"
+            >
+              {{ item.code }}：{{ item.count }}
+            </el-tag>
+            <span v-if="!summary.breakdown.some(x => !x.canSchedule)" class="summary-empty">暂无</span>
+          </div>
+        </el-card>
+      </div>
 
       <el-form :inline="true" :model="query" class="search-form">
         <el-form-item label="计划周数">
@@ -156,8 +156,8 @@
       <div slot="header" class="clearfix">
         <span>设备人员排班（{{ assignmentTitle }}）</span>
         <div class="header-actions">
-          <el-button type="primary" size="small" icon="el-icon-plus" @click="addAssignmentRow" :disabled="!assignment.equipmentId">新增</el-button>
-          <el-button type="success" size="small" icon="el-icon-check" :loading="savingAssignment" @click="saveAssignments" :disabled="!assignment.equipmentId">保存排班</el-button>
+          <el-button type="primary" size="small" icon="el-icon-plus" :disabled="!assignment.equipmentId" @click="addAssignmentRow">新增</el-button>
+          <el-button type="success" size="small" icon="el-icon-check" :loading="savingAssignment" :disabled="!assignment.equipmentId" @click="saveAssignments">保存排班</el-button>
         </div>
       </div>
 
@@ -191,7 +191,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button icon="el-icon-refresh" size="small" @click="loadAssignments" :disabled="!assignment.equipmentId">刷新排班</el-button>
+          <el-button icon="el-icon-refresh" size="small" :disabled="!assignment.equipmentId" @click="loadAssignments">刷新排班</el-button>
         </el-form-item>
       </el-form>
 
@@ -398,12 +398,12 @@ export default {
       loadingStatus: false,
       savingStatus: false,
       dailyStatusList: [],
-        summary: {
-          total: 0,
-          schedulable: 0,
-          unschedulable: 0,
-          breakdown: []
-        },
+      summary: {
+        total: 0,
+        schedulable: 0,
+        unschedulable: 0,
+        breakdown: []
+      },
       equipmentTypes: [],
 
       assignment: {
@@ -481,11 +481,11 @@ export default {
       this.syncQueryPlanDate()
       this.loadingStatus = true
       try {
-          const [listRes, summaryRes] = await Promise.all([
-            getEquipmentDailyStatusList(this.query),
-            getEquipmentDailyStatusSummary(this.query)
-          ])
-          const res = listRes
+        const [listRes, summaryRes] = await Promise.all([
+          getEquipmentDailyStatusList(this.query),
+          getEquipmentDailyStatusSummary(this.query)
+        ])
+        const res = listRes
         if (res.code === 200 || res.code === 20000) {
           this.dailyStatusList = (res.data || []).map(item => normalizeStatusRow(item, this.query.planDate))
           const range = this.query.planDateRange || []
@@ -576,7 +576,7 @@ export default {
         const results = await Promise.all(tasks)
         const failed = results.filter(res => !(res.code === 200 || res.code === 20000))
         if (!failed.length) {
-          this.$message.success(`保存成功，已写入 ${dateList.length} 天`) 
+          this.$message.success(`保存成功，已写入 ${dateList.length} 天`)
           this.fetchDailyStatusList()
         } else {
           this.$message.error(`保存完成，但有 ${failed.length} 天失败`)
@@ -598,17 +598,17 @@ export default {
       this.assignment.equipmentLabel = ''
       this.assignment.list = []
       this.staffOptions = []
-        this.resetSummary()
+      this.resetSummary()
       this.fetchDailyStatusList()
     },
-      resetSummary() {
-        this.summary = {
-          total: 0,
-          schedulable: 0,
-          unschedulable: 0,
-          breakdown: []
-        }
-      },
+    resetSummary() {
+      this.summary = {
+        total: 0,
+        schedulable: 0,
+        unschedulable: 0,
+        breakdown: []
+      }
+    },
 
     openAssignmentPanel(row) {
       const config = this.scheduleConfigMap[String(row.equipmentId)] || {}
@@ -840,7 +840,7 @@ export default {
         const results = await Promise.all(tasks)
         const failed = results.filter(res => !(res.code === 200 || res.code === 20000))
         if (!failed.length) {
-          this.$message.success(`保存成功，已写入 ${periodDates.length} 天`) 
+          this.$message.success(`保存成功，已写入 ${periodDates.length} 天`)
           this.loadAssignments()
           this.fetchDailyStatusList()
         } else {

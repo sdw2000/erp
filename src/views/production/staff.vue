@@ -913,17 +913,17 @@ export default {
       activeStaffList: []
     }
   },
+  watch: {
+    '$route.name'() {
+      this.syncTabByRoute()
+    }
+  },
   created() {
     this.loadBaseData()
     this.loadStaffList()
     this.loadLeaveData()
     this.loadOvertimeData()
     this.syncTabByRoute()
-  },
-  watch: {
-    '$route.name'() {
-      this.syncTabByRoute()
-    }
   },
   methods: {
     syncTabByRoute() {

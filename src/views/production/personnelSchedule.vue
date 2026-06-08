@@ -146,7 +146,7 @@
         </el-table-column>
       </el-table>
 
-      <div class="validation-box" v-if="validationMessages.length">
+      <div v-if="validationMessages.length" class="validation-box">
         <el-alert
           v-for="(msg, idx) in validationMessages"
           :key="idx"
@@ -486,7 +486,7 @@ export default {
         const results = await Promise.all(tasks)
         const failed = results.filter(x => !(x.code === 200 || x.code === 20000))
         if (failed.length) {
-          this.$message.error(`保存完成，但有 ${failed.length} 台机台失败`) 
+          this.$message.error(`保存完成，但有 ${failed.length} 台机台失败`)
           return
         }
         this.$message.success('保存成功')

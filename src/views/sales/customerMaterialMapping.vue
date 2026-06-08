@@ -99,7 +99,7 @@
     </el-card>
 
     <el-dialog :title="form.id ? '编辑映射' : '新增映射'" :visible.sync="dialogVisible" width="860px" @close="resetForm">
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="120px" size="small">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="120px" size="small">
         <el-form-item label="客户代码" prop="customerCode">
           <el-select
             v-model="form.customerCode"

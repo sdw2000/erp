@@ -166,13 +166,13 @@ export default {
       }
     }
   },
-  created() {
-    this.fetchData()
-  },
   computed: {
     showPackagingPlaceholder() {
       return this.filterForm.category === '包材' && this.filteredRows.length === 0
     }
+  },
+  created() {
+    this.fetchData()
   },
   methods: {
     async fetchData() {

@@ -462,7 +462,7 @@ export default {
 
       const merged = []
       const addRows = (records, sourceType) => {
-        ;(records || []).forEach(item => {
+        (records || []).forEach(item => {
           const batchNo = String(item.batchNo || '').trim()
           if (!batchNo) return
           merged.push({ ...item, sourceType })

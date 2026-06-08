@@ -1,7 +1,7 @@
 <template>
   <div class="login-container">
     <div class="brand-container">
-      <img class="brand-logo" :src="brandLogo" alt="FINECHEM" />
+      <img class="brand-logo" :src="brandLogo" alt="FINECHEM">
       <div class="brand-text-wrap">
         <h3 class="brand-title-cn">方恩电子管理系统</h3>
         <div class="brand-divider" />

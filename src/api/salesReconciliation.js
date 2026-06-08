@@ -110,3 +110,11 @@ export function initializeSalesReconciliationHistory(data) {
     data
   })
 }
+
+export function rollbackSalesReconciliationFinanceConfirm(params) {
+  return request({
+    url: '/sales/reconciliation/rollback-finance-confirm',
+    method: 'post',
+    params
+  })
+}

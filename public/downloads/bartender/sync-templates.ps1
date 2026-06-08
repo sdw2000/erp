@@ -23,7 +23,7 @@ try { $scriptRoot = $PSScriptRoot } catch {}
 if (Is-Blank $scriptRoot) {
   $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 }
-if (Is-Blank $TemplateDir) { $TemplateDir = Join-Path $scriptRoot 'templates' }
+if (Is-Blank $TemplateDir) { $TemplateDir = 'D:\MES\BarTender\Templates' }
 if (Is-Blank $LocalManifestPath) { $LocalManifestPath = Join-Path $scriptRoot 'template-manifest.local.json' }
 if (Is-Blank $ConfigPath) { $ConfigPath = Join-Path $scriptRoot 'config.json' }
 

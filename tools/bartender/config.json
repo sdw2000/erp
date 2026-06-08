@@ -3,125 +3,97 @@
     "barTenderExe":  "C:\\Program Files (x86)\\Seagull\\BarTender Suite\\bartend.exe",
     "defaultTimeoutSeconds":  30,
     "templates":  {
+                      "COATING":  {
+                                      "formatPath":  "",
+                                      "printer":  "Gprinter GP-1324D"
+                                  },
+                      "COATING_INBOUND_SHEET":  {
+                                                    "formatPath":  "D:\\MES\\BarTender\\Templates\\coating.btw",
+                                                    "printer":  "Gprinter GP-1324D"
+                                                },
                       "COATING_ROLL_LABEL":  {
                                                  "formatPath":  "D:\\MES\\BarTender\\Templates\\coating.btw",
                                                  "printer":  "Gprinter GP-1324D"
                                              },
+                      "GSDC001_OUT_LABEL":  {
+                                                "formatPath":  "D:\\MES\\BarTender\\Templates\\GSDC001_OUT_LABEL.btw",
+                                                "printer":  "Gprinter GP-1324D"
+                                            },
+                      "INCOMINGLABEL":  {
+                                            "formatPath":  "D:\\MES\\BarTender\\Templates\\IncomingLabel.btw",
+                                            "printer":  "Gprinter GP-1324D"
+                                        },
+                      "jianghai_waibiao":  {
+                                               "formatPath":  "",
+                                               "printer":  "Gprinter GP-1324D"
+                                           },
                       "REWINDING_ROLL_LABEL":  {
                                                    "formatPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw",
+                                                   "printer":  "Gprinter GP-1324D"
+                                               },
+                      "RP01_fenqie_neibiao":  {
+                                                  "formatPath":  "D:\\MES\\BarTender\\Templates\\RP01_fenqie_neibiao.btw",
+                                                  "printer":  "Gprinter GP-1324D"
+                                              },
+                      "RUIPU_PUTONG_GUANXIN":  {
+                                                   "formatPath":  "D:\\MES\\BarTender\\Templates\\ruipu_putong_guanxin.btw",
                                                    "printer":  "Gprinter GP-1324D"
                                                },
                       "SLITTING_CORE_LABEL":  {
                                                   "formatPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw",
                                                   "printer":  "Gprinter GP-1324D"
                                               },
-                      "SLITTING_INNER_LABEL":  {
-                                                   "formatPath":  "D:\\MES\\BarTender\\Templates\\fengqiieneibiao.btw",
-                                                   "printer":  "Gprinter GP-1324D"
-                                               },
-                      "SLITTING_OUTER_LABEL":  {
-                                                   "formatPath":  "D:\\MES\\BarTender\\Templates\\fenqiewaibiao.btw",
-                                                   "printer":  "Gprinter GP-1324D"
-                                               },
-                      "RUIPU_PUTONG_GUANXIN":  {
-                                                   "formatPath":  "D:\\MES\\BarTender\\Templates\\ruipu_putong_guanxin.btw",
-                                                   "printer":  "Gprinter GP-1324D"
-                                               },
-                      "fenqie_neibiao_RP001":  {
-                                                   "formatPath":  "D:\\MES\\BarTender\\Templates\\fenqie_neibiao_RP001.btw",
-                                                   "printer":  "Gprinter GP-1324D"
-                                               },
-                      "COATING_INBOUND_SHEET":  {
-                                                    "formatPath":  "D:\\MES\\BarTender\\Templates\\coating.btw",
-                                                    "printer":  "Gprinter GP-1324D"
-                                                },
-                      "SLITTING_PALLET_LABEL":  {
-                                                    "formatPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw",
-                                                    "printer":  "Gprinter GP-1324D"
-                                                },
-                      "GSDC001_OUT_LABEL":  {
-                                                "formatPath":  "D:\\MES\\BarTender\\Templates\\GSDC001_waibiao.btw",
-                                                "printer":  "Gprinter GP-1324D"
-                                            },
-                      "RP01_fenqie_neibiao":  {
-                                                  "formatPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw",
-                                                  "printer":  "Gprinter GP-1324D"
-                                              },
-                      "fenqiewaibiao_Z1001":  {
-                                                  "formatPath":  "D:\\MES\\BarTender\\Templates\\fenqiewaibiao_Z1001.btw",
-                                                  "printer":  "Gprinter GP-1324D"
-                                              },
-                      "fengqiieneibiao_Z1001":  {
-                                                    "formatPath":  "D:\\MES\\BarTender\\Templates\\fengqiieneibiao_Z1001.btw",
-                                                    "printer":  "Gprinter GP-1324D"
-                                                },
-                      "ruipu_putong_guanxin_GDRP001":  {
-                                                           "formatPath":  "D:\\MES\\BarTender\\Templates\\ruipu_putong_guanxin_GDRP001.btw",
-                                                           "printer":  "Gprinter GP-1324D"
-                                                       },
-                      "SLITTING_CORE_LABEL_NARROW":  {
-                                                         "formatPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw",
-                                                         "printer":  "Gprinter GP-1324D"
-                                                     },
-                      "ruipu_putong_guanxin_GDRP01":  {
-                                                          "formatPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw",
+                      "SLITTING_CORE_LABEL_GDRP001":  {
+                                                          "formatPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_CORE_LABEL_GDRP001.btw",
                                                           "printer":  "Gprinter GP-1324D"
                                                       },
-                      "ruipu_putong_xiaoguanxin_GDRP001":  {
-                                                               "formatPath":  "D:\\MES\\BarTender\\Templates\\ruipu_putong_xiaoguanxin_GDRP001.btw",
+                      "SLITTING_CORE_LABEL_NARROW":  {
+                                                         "formatPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_CORE_LABEL_NARROW.btw",
+                                                         "printer":  "Gprinter GP-1324D"
+                                                     },
+                      "SLITTING_CORE_LABEL_NARROW_GDRP001":  {
+                                                                 "formatPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_CORE_LABEL_NARROW_GDRP001.btw",
+                                                                 "printer":  "Gprinter GP-1324D"
+                                                             },
+                      "SLITTING_CORE_LABEL_NARROW_RP001":  {
+                                                               "formatPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_CORE_LABEL_NARROW_RP001.btw",
                                                                "printer":  "Gprinter GP-1324D"
                                                            },
-                      "ruipu_putong_xiaoguanxin":  {
-                                                       "formatPath":  "D:\\MES\\BarTender\\Templates\\ruipu_putong_xiaoguanxin.btw",
-                                                       "printer":  "Gprinter GP-1324D"
-                                                   },
-                      "jianghai_waibiao":  {
-                                               "formatPath":  "D:\\MES\\BarTender\\Templates\\jianghai_waibiao.btw",
-                                               "printer":  "Gprinter GP-1324D"
-                                           },
+                      "SLITTING_CORE_LABEL_RP001":  {
+                                                        "formatPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_CORE_LABEL_RP001.btw",
+                                                        "printer":  "Gprinter GP-1324D"
+                                                    },
+                      "SLITTING_INNER_LABEL":  {
+                                                   "formatPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_INNER_LABEL.btw",
+                                                   "printer":  "Gprinter GP-1324D"
+                                               },
                       "SLITTING_INNER_LABEL_GF001":  {
                                                          "formatPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_INNER_LABEL_GF001.btw",
                                                          "printer":  "Gprinter GP-1324D"
                                                      },
+                      "SLITTING_INNER_LABEL_RP001":  {
+                                                         "formatPath":  "",
+                                                         "printer":  "Gprinter GP-1324D"
+                                                     },
+                      "SLITTING_INNER_LABEL_YH001":  {
+                                                         "formatPath":  "",
+                                                         "printer":  "Gprinter GP-1324D"
+                                                     },
+                      "SLITTING_OUTER_LABEL":  {
+                                                   "formatPath":  "D:\\MES\\BarTender\\Templates\\fenqiewaibiao_Z1001.btw",
+                                                   "printer":  "Gprinter GP-1324D"
+                                               },
                       "SLITTING_OUTER_LABEL_GF001":  {
                                                          "formatPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_OUTER_LABEL_GF001.btw",
                                                          "printer":  "Gprinter GP-1324D"
                                                      },
-                      "INCOMINGLABEL":  {
-                                            "formatPath":  "D:\\MES\\BarTender\\Templates\\coating.btw",
-                                            "printer":  "Gprinter GP-1324D"
-                                        },
-                      "COATING":  {
-                                      "formatPath":  "D:\\MES\\BarTender\\Templates\\coating.btw",
-                                      "printer":  "Gprinter GP-1324D"
-                                  },
-                      "SLITTING_INNER_LABEL_RP001":  {
-                                                         "formatPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw",
-                                                         "printer":  "Gprinter GP-1324D"
-                                                     },
-                      "SLITTING_CORE_LABEL_RP001":  {
-                                                        "formatPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw",
-                                                        "printer":  "Gprinter GP-1324D"
-                                                    },
-                      "SLITTING_CORE_LABEL_NARROW_RP001":  {
-                                                               "formatPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw",
-                                                               "printer":  "Gprinter GP-1324D"
-                                                           },
-                      "SLITTING_INNER_LABEL_YH001":  {
-                                                         "formatPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw",
-                                                         "printer":  "Gprinter GP-1324D"
-                                                     },
                       "SLITTING_OUTER_LABEL_YH001":  {
-                                                         "formatPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw",
+                                                         "formatPath":  "",
                                                          "printer":  "Gprinter GP-1324D"
                                                      },
-                      "SLITTING_CORE_LABEL_NARROW_GDRP001":  {
-                                                                 "formatPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw",
-                                                                 "printer":  "Gprinter GP-1324D"
-                                                             },
-                      "SLITTING_CORE_LABEL_GDRP001":  {
-                                                          "formatPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw",
-                                                          "printer":  "Gprinter GP-1324D"
-                                                      }
+                      "SLITTING_PALLET_LABEL":  {
+                                                    "formatPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw",
+                                                    "printer":  "Gprinter GP-1324D"
+                                                }
                   }
 }

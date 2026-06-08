@@ -10,7 +10,7 @@
         </div>
       </div>
 
-      <el-tabs v-model="activeProcessType" @tab-click="handleProcessTabChange" style="margin-bottom: 10px">
+      <el-tabs v-model="activeProcessType" style="margin-bottom: 10px" @tab-click="handleProcessTabChange">
         <el-tab-pane label="涂布工艺参数表" name="COATING" />
         <el-tab-pane label="复卷工艺参数表" name="REWINDING" />
         <el-tab-pane label="分切工艺参数表" name="SLITTING" />
@@ -365,9 +365,6 @@ export default {
       materialOptions: []
     }
   },
-  created() {
-    this.loadList()
-  },
   computed: {
     activeProcessLabel() {
       const map = { COATING: '涂布', REWINDING: '复卷', SLITTING: '分切', STRIPPING: '分条', ALL: '工艺' }
@@ -376,6 +373,9 @@ export default {
     tableTitle() {
       return `${this.activeProcessLabel}工艺参数管理`
     }
+  },
+  created() {
+    this.loadList()
   },
   methods: {
     getEmptyForm() {

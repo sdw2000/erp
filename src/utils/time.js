@@ -16,21 +16,21 @@ function formatParts(input, withTime = true) {
   const date = toDate(input)
   const options = withTime
     ? {
-        timeZone: SHANGHAI_TIME_ZONE,
-        hour12: false,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      }
+      timeZone: SHANGHAI_TIME_ZONE,
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    }
     : {
-        timeZone: SHANGHAI_TIME_ZONE,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      }
+      timeZone: SHANGHAI_TIME_ZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }
   const parts = new Intl.DateTimeFormat('zh-CN', options).formatToParts(date)
   const map = {}
   parts.forEach(p => {

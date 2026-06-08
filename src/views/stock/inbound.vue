@@ -444,17 +444,17 @@ export default {
   computed: {
     ...mapGetters(['name'])
   },
-  created() {
-    this.applyArrivalQueryFilterFromRoute()
-    this.fetchData()
-    this.handleArrivalMessageHint()
-  },
   watch: {
     '$route.query.msgId'() {
       this.applyArrivalQueryFilterFromRoute()
       this.fetchData()
       this.handleArrivalMessageHint()
     }
+  },
+  created() {
+    this.applyArrivalQueryFilterFromRoute()
+    this.fetchData()
+    this.handleArrivalMessageHint()
   },
   methods: {
     handleTableSortChange({ prop, order }) {

@@ -15,33 +15,33 @@
 
       <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="物料编码">
-          <el-input v-model="searchForm.materialCode" clearable placeholder="请输入物料编码" style="width:180px"/>
+          <el-input v-model="searchForm.materialCode" clearable placeholder="请输入物料编码" style="width:180px" />
         </el-form-item>
         <el-form-item label="物料名称">
-          <el-input v-model="searchForm.materialName" clearable placeholder="请输入物料名称" style="width:180px"/>
+          <el-input v-model="searchForm.materialName" clearable placeholder="请输入物料名称" style="width:180px" />
         </el-form-item>
         <el-form-item label="物料类别">
           <el-select v-model="searchForm.materialCategory" clearable placeholder="全部" style="width:130px">
-            <el-option label="薄膜" value="film"/>
-            <el-option label="化工物料" value="chemical"/>
+            <el-option label="薄膜" value="film" />
+            <el-option label="化工物料" value="chemical" />
           </el-select>
         </el-form-item>
         <el-form-item label="物料类型">
           <el-select v-model="searchForm.materialType" clearable placeholder="全部" style="width:130px">
-            <el-option v-for="item in materialTypeSearchOptions()" :key="item.value" :label="item.label" :value="item.value"/>
+            <el-option v-for="item in materialTypeSearchOptions()" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" clearable placeholder="全部" style="width:110px">
-            <el-option label="启用" :value="1"/>
-            <el-option label="禁用" :value="0"/>
+            <el-option label="启用" :value="1" />
+            <el-option label="禁用" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item label="离型力A">
-          <el-input v-model="searchForm.releaseForceA" clearable placeholder="请输入离型力A" style="width:150px"/>
+          <el-input v-model="searchForm.releaseForceA" clearable placeholder="请输入离型力A" style="width:150px" />
         </el-form-item>
         <el-form-item label="离型力B">
-          <el-input v-model="searchForm.releaseForceB" clearable placeholder="请输入离型力B" style="width:150px"/>
+          <el-input v-model="searchForm.releaseForceB" clearable placeholder="请输入离型力B" style="width:150px" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="el-icon-search" @click="handleSearch">搜 索</el-button>
@@ -50,9 +50,9 @@
       </el-form>
 
       <el-table v-loading="loading" :data="list" border stripe size="small" style="margin-top: 15px; width: 100%">
-        <el-table-column type="index" label="序号" width="60" align="center" :index="indexMethod"/>
-        <el-table-column prop="materialCode" label="物料编码" min-width="160" show-overflow-tooltip/>
-        <el-table-column prop="materialName" label="物料名称" min-width="170" show-overflow-tooltip/>
+        <el-table-column type="index" label="序号" width="60" align="center" :index="indexMethod" />
+        <el-table-column prop="materialCode" label="物料编码" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="materialName" label="物料名称" min-width="170" show-overflow-tooltip />
         <el-table-column prop="materialCategory" label="物料类别" width="100" align="center">
           <template slot-scope="scope">
             <el-tag :type="scope.row.materialCategory === 'film' ? 'success' : 'warning'" size="small">
@@ -65,8 +65,8 @@
             <el-tag size="small">{{ formatType(scope.row.materialType) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="unit" label="单位" width="80" align="center"/>
-        <el-table-column prop="spec" label="规格说明" min-width="180" show-overflow-tooltip/>
+        <el-table-column prop="unit" label="单位" width="80" align="center" />
+        <el-table-column prop="spec" label="规格说明" min-width="180" show-overflow-tooltip />
         <el-table-column label="厚度" min-width="110" show-overflow-tooltip>
           <template slot-scope="scope">{{ getPerfCell(scope.row, 'thickness') }}</template>
         </el-table-column>
@@ -144,17 +144,17 @@
           <el-col :span="12">
             <el-form-item label="物料类别" prop="materialCategory">
               <el-select v-model="form.materialCategory" style="width:100%" placeholder="请选择/可输入" filterable allow-create default-first-option @change="onCategoryChange">
-                <el-option label="原膜" value="原膜"/>
-                <el-option label="离型材料" value="离型材料"/>
-                <el-option label="管芯" value="管芯"/>
-                <el-option label="化工料" value="化工料"/>
+                <el-option label="原膜" value="原膜" />
+                <el-option label="离型材料" value="离型材料" />
+                <el-option label="管芯" value="管芯" />
+                <el-option label="化工料" value="化工料" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="物料类型" prop="materialType">
               <el-select v-model="form.materialType" style="width:100%" placeholder="请选择/可输入" filterable allow-create default-first-option>
-                <el-option v-for="item in materialTypeOptionsForCategory()" :key="item.value" :label="item.label" :value="item.value"/>
+                <el-option v-for="item in materialTypeOptionsForCategory()" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -169,7 +169,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="规格说明">
-              <el-input v-model="form.spec" type="textarea" :rows="3" :placeholder="specPlaceholder()"/>
+              <el-input v-model="form.spec" type="textarea" :rows="3" :placeholder="specPlaceholder()" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -183,7 +183,7 @@
           title="按字段分别维护：厚度、电晕值、抗拉强度、伸长率、颜色、外观、固含量、粘度、剥离强度、离型力A、离型力B（后台仍以JSON兼容存储）。"
         />
         <el-row :gutter="20">
-          <el-col :span="8" v-for="item in getCurrentInspectionFields()" :key="item.key">
+          <el-col v-for="item in getCurrentInspectionFields()" :key="item.key" :span="8">
             <el-form-item :label="item.label">
               <el-input
                 v-model="performanceForm[item.key]"
@@ -195,7 +195,7 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="状态">
-              <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="禁用"/>
+              <el-switch v-model="form.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="禁用" />
             </el-form-item>
           </el-col>
         </el-row>

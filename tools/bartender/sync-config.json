@@ -1,9 +1,9 @@
 ﻿{
-    "manifestUrl":  "http://localhost:8090/api/print-template/manifest",
+    "manifestUrl":  "http://192.168.0.138:8080/api/print-template/manifest",
     "templateDir":  "D:\\MES\\BarTender\\Templates",
-    "localManifestPath":  "e:\\vue\\ERP\\tools\\bartender\\template-manifest.local.json",
-    "configPath":  "e:\\vue\\ERP\\tools\\bartender\\config.json",
+    "localManifestPath":  "E:\\vue\\ERP\\tools\\bartender\\template-manifest.local.json",
+    "configPath":  "E:\\vue\\ERP\\tools\\bartender\\config.json",
     "defaultPrinter":  "",
     "apiKey":  "",
-    "authToken":  ""
+    "authToken":  "eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiI4ODkyZGQ2MDVhOTc0MTg5OGVkYWZkYzQxNWFiZWFlZCIsInN1YiI6IjEiLCJpc3MiOiJzZyIsImlhdCI6MTc4MDkwNjc1MywiZXhwIjoxNzgxMjY2NzUzfQ.ZVk1jZxW4MH56Aeq9dS5QBHuhDZbLBh88cERQ36e7TE"
 }

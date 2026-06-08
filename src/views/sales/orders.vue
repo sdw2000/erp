@@ -72,49 +72,49 @@
       </el-row>
     </div>
     <div class="orders-table-wrapper">
-    <el-table
-      ref="ordersTable"
-      class="orders-table"
-      :data="pagedOrders"
-      style="width:100%"
-      stripe
-      :default-sort="{ prop: 'orderDate', order: 'descending' }"
-      @sort-change="handleSortChange"
-    >
-      <el-table-column type="index" label="序号" width="60" align="center" :index="indexMethod" />
-      <el-table-column prop="customerDisplay" label="客户名称" min-width="91" sortable="custom" />
-      <el-table-column prop="orderNo" label="订单编号" min-width="120" class-name="order-no-col" sortable="custom" show-overflow-tooltip />
-      <el-table-column prop="totalAmount" label="总金额" width="97" class-name="amount-col" sortable="custom" />
-      <el-table-column prop="totalArea" label="总面积(㎡)" width="97" class-name="area-col" sortable="custom" />
-      <el-table-column label="欠卷总数" width="90" align="center">
-        <template slot-scope="scope">{{ formatOrderRemainingRolls(scope.row) }}</template>
-      </el-table-column>
-      <el-table-column prop="orderDate" label="订单日期" width="98" sortable="custom">
-        <template slot-scope="scope">{{ formatMonthDay(scope.row.orderDate) }}</template>
-      </el-table-column>
-      <el-table-column prop="deliveryDate" label="交货日期" width="98" sortable="custom">
-        <template slot-scope="scope">{{ formatMonthDay(scope.row.deliveryDate) }}</template>
-      </el-table-column>
-      <el-table-column label="生命周期" width="110" align="center">
-        <template slot-scope="scope">
-          <el-tag size="mini" :type="getLifecycleStatusType(scope.row && scope.row.status)">{{ getLifecycleStatusText(scope.row && scope.row.status) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column v-if="isAdminUser" prop="salesUserName" label="销售" width="72" />
-      <el-table-column v-if="isAdminUser" prop="documentationPersonUserName" label="跟单员" width="72" />
-      <el-table-column label="操作" width="268" align="center">
-        <template slot-scope="scope">
-          <div class="op-btns">
-            <el-button type="text" size="mini" @click="viewDetail(scope.row)">详情</el-button>
-            <el-button type="text" size="mini" class="op-print" @click="handlePrint(scope.row)">打印</el-button>
-            <el-button v-if="canGoDelivery" type="text" size="mini" @click="goDelivery(scope.row)">发货</el-button>
-            <el-button type="text" size="mini" @click="openEdit(scope.row)">编辑</el-button>
-            <el-button v-if="!isOrderCancelled(scope.row)" type="text" size="mini" class="op-danger" @click="confirmCancelOrder(scope.row)">取消订单</el-button>
-            <el-button type="text" size="mini" class="op-danger" @click="confirmDelete(scope.row)">删除</el-button>
-          </div>
-        </template>
-      </el-table-column>
-    </el-table>
+      <el-table
+        ref="ordersTable"
+        class="orders-table"
+        :data="pagedOrders"
+        style="width:100%"
+        stripe
+        :default-sort="{ prop: 'orderDate', order: 'descending' }"
+        @sort-change="handleSortChange"
+      >
+        <el-table-column type="index" label="序号" width="60" align="center" :index="indexMethod" />
+        <el-table-column prop="customerDisplay" label="客户名称" min-width="91" sortable="custom" />
+        <el-table-column prop="orderNo" label="订单编号" min-width="120" class-name="order-no-col" sortable="custom" show-overflow-tooltip />
+        <el-table-column prop="totalAmount" label="总金额" width="97" class-name="amount-col" sortable="custom" />
+        <el-table-column prop="totalArea" label="总面积(㎡)" width="97" class-name="area-col" sortable="custom" />
+        <el-table-column label="欠卷总数" width="90" align="center">
+          <template slot-scope="scope">{{ formatOrderRemainingRolls(scope.row) }}</template>
+        </el-table-column>
+        <el-table-column prop="orderDate" label="订单日期" width="98" sortable="custom">
+          <template slot-scope="scope">{{ formatMonthDay(scope.row.orderDate) }}</template>
+        </el-table-column>
+        <el-table-column prop="deliveryDate" label="交货日期" width="98" sortable="custom">
+          <template slot-scope="scope">{{ formatMonthDay(scope.row.deliveryDate) }}</template>
+        </el-table-column>
+        <el-table-column label="生命周期" width="110" align="center">
+          <template slot-scope="scope">
+            <el-tag size="mini" :type="getLifecycleStatusType(scope.row && scope.row.status)">{{ getLifecycleStatusText(scope.row && scope.row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column v-if="isAdminUser" prop="salesUserName" label="销售" width="72" />
+        <el-table-column v-if="isAdminUser" prop="documentationPersonUserName" label="跟单员" width="72" />
+        <el-table-column label="操作" width="268" align="center">
+          <template slot-scope="scope">
+            <div class="op-btns">
+              <el-button type="text" size="mini" @click="viewDetail(scope.row)">详情</el-button>
+              <el-button type="text" size="mini" class="op-print" @click="handlePrint(scope.row)">打印</el-button>
+              <el-button v-if="canGoDelivery" type="text" size="mini" @click="goDelivery(scope.row)">发货</el-button>
+              <el-button type="text" size="mini" @click="openEdit(scope.row)">编辑</el-button>
+              <el-button v-if="!isOrderCancelled(scope.row)" type="text" size="mini" class="op-danger" @click="confirmCancelOrder(scope.row)">取消订单</el-button>
+              <el-button type="text" size="mini" class="op-danger" @click="confirmDelete(scope.row)">删除</el-button>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
     </div>
 
     <div class="orders-pagination-wrapper">

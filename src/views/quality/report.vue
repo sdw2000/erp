@@ -30,7 +30,7 @@
       </el-form>
     </el-card>
 
-    <el-card shadow="never" class="mb-12" v-loading="loading">
+    <el-card v-loading="loading" shadow="never" class="mb-12">
       <div slot="header" class="card-header">
         <span>班组产量总览（当日 / 当月 / 当年）</span>
       </div>
@@ -58,7 +58,7 @@
       </el-row>
     </el-card>
 
-    <el-row :gutter="12" class="mb-12" v-loading="loading">
+    <el-row v-loading="loading" :gutter="12" class="mb-12">
       <el-col :xs="24" :lg="12">
         <el-card shadow="never" class="h-300">
           <div slot="header" class="card-header">
@@ -102,7 +102,7 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="12" class="mb-12" v-loading="loading">
+    <el-row v-loading="loading" :gutter="12" class="mb-12">
       <el-col :xs="24" :lg="14">
         <el-card shadow="never" class="h-420">
           <div slot="header" class="card-header">
@@ -129,7 +129,7 @@
       </el-col>
     </el-row>
 
-    <el-card shadow="never" class="mb-12" v-loading="loading">
+    <el-card v-loading="loading" shadow="never" class="mb-12">
       <div slot="header" class="card-header">
         <span>异常预警（良率低于 {{ formatFloat(filters.yieldWarnPercent) }}%）</span>
         <span class="warn-count">共 {{ warningRows.length }} 天</span>
@@ -150,7 +150,7 @@
       </el-table>
     </el-card>
 
-    <el-card shadow="never" v-loading="loading">
+    <el-card v-loading="loading" shadow="never">
       <div slot="header" class="card-header">
         <span>当月每日报废数量与良率</span>
       </div>

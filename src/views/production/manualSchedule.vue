@@ -707,7 +707,7 @@
                 <div class="op-actions">
                   <el-button
                     class="op-main-btn"
-                  :fit="false"
+                    :fit="false"
                     size="mini"
                     :disabled="scope.row.__editing && (!scope.row.coating_equipment || (scope.row.insert_mode === 'AFTER_ORDER' && !scope.row.anchor_schedule_id))"
                     @click="handleCoatingEditAction(scope.row)"
@@ -1882,7 +1882,7 @@ export default {
       this.materialSuggestionTimer = null
     }
 
-    ;['coatingTable', 'rewindingTable', 'slittingTable', 'manualSlittingOrderTable', 'pendingTable'].forEach((refName) => {
+    ['coatingTable', 'rewindingTable', 'slittingTable', 'manualSlittingOrderTable', 'pendingTable'].forEach((refName) => {
       const table = this.$refs[refName]
       if (!table || !table.$el) return
       const body = table.$el.querySelector('.el-table__body-wrapper')
@@ -2142,7 +2142,7 @@ export default {
         width: row.width,
         thickness: row.thickness,
         requiredQty: scheduleQty,
-        includeReturnWarehouse: false  // 批量锁料默认不含退货专仓
+        includeReturnWarehouse: false // 批量锁料默认不含退货专仓
       })
       if (!(matchRes.code === 200 || matchRes.code === 20000)) {
         return { ok: false, reason: '库存匹配失败' }
@@ -4796,9 +4796,9 @@ export default {
           date.setHours(startParts.hours, startParts.minutes, startParts.seconds, 0)
           continue
         }
-        if ((Number(config && config.weekendRest) === 1 || Number(config && config.sundayDisabled) === 1)
-          && day === 1
-          && (date.getHours() < startParts.hours || (date.getHours() === startParts.hours && date.getMinutes() < startParts.minutes))) {
+        if ((Number(config && config.weekendRest) === 1 || Number(config && config.sundayDisabled) === 1) &&
+          day === 1 &&
+          (date.getHours() < startParts.hours || (date.getHours() === startParts.hours && date.getMinutes() < startParts.minutes))) {
           date.setHours(startParts.hours, startParts.minutes, startParts.seconds, 0)
         }
         return date

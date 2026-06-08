@@ -18,7 +18,8 @@ const DEFAULT_CONFIG = {
   enabled: true,
   endpoint: 'http://127.0.0.1:9123/print',
   apiKey: '',
-  timeoutMs: 30000,
+  // 将默认超时显式提高到 60s
+  timeoutMs: 60000,
   printConcurrency: 3,
   allowBrowserFallback: false
 }
@@ -44,8 +45,8 @@ export function getBarTenderConfig(baseConfig = {}) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     merged.timeoutMs = DEFAULT_CONFIG.timeoutMs
   } else {
-    // 兼容历史配置的 8s 超时：BarTender 首次加载模板可能超过 8s，统一抬高到 30s
-    merged.timeoutMs = Math.max(30000, Math.trunc(timeoutMs))
+    // 兼容历史配置：由于 BarTender 首次开模板可能极慢，最低改为 60s
+    merged.timeoutMs = Math.max(60000, Math.trunc(timeoutMs))
   }
 
   const printConcurrency = Number(merged.printConcurrency)
@@ -304,7 +305,12 @@ async function reportPrintRecord({ payload = {}, trace = {}, result = null, erro
     const token = getToken()
     if (token) headers['X-Token'] = token
 
-    const apiBase = String(process.env.VUE_APP_BASE_API || '/dev-api').replace(/\/$/, '')
+    // 修正：使用相对路径通过 webpack proxy 转发，解决客户端访问 localhost:8090 连接被拒绝的问题
+    // 开发模式下必须添加 /api-proxy 前缀，以便 vue.config.js 中的代理能正确识别并转发到后端
+    const apiBase = process.env.NODE_ENV === 'development'
+      ? '/api-proxy'
+      : String(process.env.VUE_APP_BASE_API || '').replace(/\/$/, '')
+
     await fetch(`${apiBase}/production/label-print-record/save`, {
       method: 'POST',
       headers,
@@ -352,8 +358,15 @@ export async function sendBarTenderPrint(payload, config = {}, trace = {}) {
     throw new Error('BarTender endpoint 未配置')
   }
 
+  // 如果 payload 是数组，说明是批量任务
+  const isBatch = Array.isArray(payload)
+
   const controller = new AbortController()
-  const timeoutMs = Number(cfg.timeoutMs || 30000)
+  // 批量打印的任务可能需要更长时间处理，将超时时间进一步抬高
+  const configuredTimeoutMs = Number(cfg.timeoutMs || 60000)
+  const timeoutMs = isBatch
+    ? Math.max(120000, configuredTimeoutMs)
+    : Math.max(60000, configuredTimeoutMs)
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   let failureReported = false
 

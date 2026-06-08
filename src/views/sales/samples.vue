@@ -548,12 +548,6 @@ export default {
       }
     }
   },
-  created() {
-    this.editForm = this.emptyForm()
-    this.fetchSamples()
-    this.fetchCustomers()
-    this.fetchSpecs()
-  },
   computed: {
     filteredCustomers() {
       const keyword = this.customerSearchKeyword
@@ -565,6 +559,12 @@ export default {
       if (!keyword) return this.specs
       return (this.specs || []).filter(item => this.matchSpecOption(item, keyword))
     }
+  },
+  created() {
+    this.editForm = this.emptyForm()
+    this.fetchSamples()
+    this.fetchCustomers()
+    this.fetchSpecs()
   },
   methods: {
     normalizeSearchText(value) {

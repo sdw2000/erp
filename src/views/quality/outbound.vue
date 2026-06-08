@@ -642,7 +642,7 @@ export default {
       })
       if (changed) {
         this.syncMeasuredParamsFromRows()
-        if (showMsg) this.$message.success(`已按宽度 ${target}±${tol} 应用判定`) 
+        if (showMsg) this.$message.success(`已按宽度 ${target}±${tol} 应用判定`)
       } else if (showMsg) {
         this.$message.warning('当前检测项目中未找到“宽度”项')
       }
@@ -949,8 +949,8 @@ export default {
         return
       }
 
-      const orderItem = (this.orderItems || []).find(item => Number(item.id) === Number(this.selectedOrderItemId))
-        || (this.orderItems || []).find(item => item.materialCode === code)
+      const orderItem = (this.orderItems || []).find(item => Number(item.id) === Number(this.selectedOrderItemId)) ||
+        (this.orderItems || []).find(item => item.materialCode === code)
       if (orderItem) {
         this.form.materialName = orderItem.materialName || this.form.materialName
         this.form.materialSpec = orderItem.materialSpec || this.form.materialSpec
@@ -1837,7 +1837,7 @@ export default {
       try {
         const response = await fetch(url, { cache: 'no-store' })
         if (!response.ok) {
-          this.$message.error(`未找到Excel报告模板：${normalizedCode}（${url}）`) 
+          this.$message.error(`未找到Excel报告模板：${normalizedCode}（${url}）`)
           return 'hard-fail'
         }
         const buffer = await response.arrayBuffer()

@@ -23,440 +23,488 @@
     <el-tabs v-model="activeTab" type="border-card" class="print-config-tabs" @tab-click="onActiveTabChange">
       <el-tab-pane label="一键部署" name="deploy">
 
-    <el-card shadow="never" style="margin-bottom: 16px;">
-      <div slot="header" class="card-header">
-        <span>客户端一键部署（标签打印网关）</span>
-        <div>
-          <el-button size="mini" @click="downloadClientDeploy('README-客户端一键部署.txt')">下载说明</el-button>
-          <el-button size="mini" @click="downloadClientDeploy('config.latest.generic.json')">下载最新通用配置</el-button>
-          <el-button size="mini" @click="downloadClientDeploy('bootstrap-install.ps1')">下载引导脚本(PS1)</el-button>
-          <el-button size="mini" @click="downloadClientDeploy('client-oneclick-setup.ps1')">下载一键部署(PS1)</el-button>
-          <el-button size="mini" type="primary" @click="copyBootstrapCommand">复制在线安装命令(单行)</el-button>
-        </div>
-      </div>
-      <el-alert
-        title="最终一键配置（已验证）：使用“复制在线安装命令(单行)”在管理员 PowerShell 执行。安装会自动清残留重建 + 注册登录自启动 + 启用守护。若出现 manifest 401 会自动跳过模板同步，不影响网关启动与打印。"
-        type="warning"
-        :closable="false"
-      />
-    </el-card>
+        <el-card shadow="never" style="margin-bottom: 16px;">
+          <div slot="header" class="card-header">
+            <span>客户端一键部署（标签打印网关）</span>
+            <div>
+              <el-button size="mini" type="primary" @click="copyBootstrapCommand">复制最新在线安装命令(单行)</el-button>
+              <el-button size="mini" type="warning" plain @click="copyCleanupLegacyTemplateCommand">复制清理旧C盘模板命令</el-button>
+            </div>
+          </div>
+          <el-alert
+            title="仅保留最终安装入口：使用“复制最新在线安装命令(单行)”在管理员 PowerShell 执行即可自动更新到最新网关。若出现 manifest 401 会自动跳过模板同步，不影响网关启动与打印。"
+            type="warning"
+            :closable="false"
+          />
+        </el-card>
 
       </el-tab-pane>
 
       <el-tab-pane label="状态看板" name="dashboard">
 
-    <el-card shadow="never" style="margin-bottom: 16px;">
-      <div slot="header" class="card-header">
-        <span>状态看板（本机网关）</span>
-        <div>
-          <el-button size="mini" :loading="syncTemplateLoading" @click="syncTemplatesFromServer">服务端同步模板</el-button>
-          <el-button size="mini" :loading="dashboardLoading" @click="loadGatewayDashboard">刷新状态</el-button>
-        </div>
-      </div>
-      <el-row :gutter="12" style="margin-bottom: 12px;">
-        <el-col :span="6">
-          <div class="dashboard-metric-card">
-            <div class="dashboard-metric-title">网关状态</div>
-            <div class="dashboard-metric-value">
-              <el-tag :type="dashboardOnline ? 'success' : 'danger'" size="small">{{ dashboardOnline ? '在线' : '离线' }}</el-tag>
+        <el-card shadow="never" style="margin-bottom: 16px;">
+          <div slot="header" class="card-header">
+            <span>状态看板（本机网关）</span>
+            <div>
+              <el-button size="mini" :loading="syncTemplateLoading" @click="syncTemplatesFromServer">服务端同步模板</el-button>
+              <el-button size="mini" :loading="dashboardLoading" @click="loadGatewayDashboard">刷新状态</el-button>
             </div>
           </div>
-        </el-col>
-        <el-col :span="6">
-          <div class="dashboard-metric-card">
-            <div class="dashboard-metric-title">运行时长</div>
-            <div class="dashboard-metric-value">{{ formatUptime(dashboardUptimeSeconds) }}</div>
-          </div>
-        </el-col>
-        <el-col :span="6">
-          <div class="dashboard-metric-card">
-            <div class="dashboard-metric-title">模板同步</div>
-            <div class="dashboard-metric-value">{{ dashboardSyncedCount }}/{{ dashboardTemplateCount }}</div>
-          </div>
-        </el-col>
-        <el-col :span="6">
-          <div class="dashboard-metric-card">
-            <div class="dashboard-metric-title">打印机数量</div>
-            <div class="dashboard-metric-value">{{ dashboardPrinterCount }}</div>
-          </div>
-        </el-col>
-      </el-row>
-      <el-input
-        v-model="dashboardText"
-        type="textarea"
-        :rows="10"
-        readonly
-        placeholder="点击“刷新状态”读取本机网关状态看板"
-      />
-    </el-card>
+          <el-row :gutter="12" style="margin-bottom: 12px;">
+            <el-col :span="6">
+              <div class="dashboard-metric-card">
+                <div class="dashboard-metric-title">网关状态</div>
+                <div class="dashboard-metric-value">
+                  <el-tag :type="dashboardOnline ? 'success' : 'danger'" size="small">{{ dashboardOnline ? '在线' : '离线' }}</el-tag>
+                </div>
+              </div>
+            </el-col>
+            <el-col :span="6">
+              <div class="dashboard-metric-card">
+                <div class="dashboard-metric-title">运行时长</div>
+                <div class="dashboard-metric-value">{{ formatUptime(dashboardUptimeSeconds) }}</div>
+              </div>
+            </el-col>
+            <el-col :span="6">
+              <div class="dashboard-metric-card">
+                <div class="dashboard-metric-title">模板同步</div>
+                <div class="dashboard-metric-value">{{ dashboardSyncedCount }}/{{ dashboardTemplateCount }}</div>
+              </div>
+            </el-col>
+            <el-col :span="6">
+              <div class="dashboard-metric-card">
+                <div class="dashboard-metric-title">打印机数量</div>
+                <div class="dashboard-metric-value">{{ dashboardPrinterCount }}</div>
+              </div>
+            </el-col>
+          </el-row>
+          <el-input
+            v-model="dashboardText"
+            type="textarea"
+            :rows="10"
+            readonly
+            placeholder="点击“刷新状态”读取本机网关状态看板"
+          />
+        </el-card>
 
       </el-tab-pane>
 
       <el-tab-pane label="网关与模板映射" name="config">
 
-    <el-row :gutter="16">
-      <el-col :span="12">
-        <el-card shadow="never">
-          <div slot="header" class="card-header">
-            <span>前端网关配置</span>
-            <div>
-              <el-button size="mini" @click="loadLocalConfig">重新加载</el-button>
-              <el-button size="mini" type="primary" @click="saveLocalConfigAction">保存前端配置</el-button>
-            </div>
-          </div>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-card shadow="never">
+              <div slot="header" class="card-header">
+                <span>前端网关配置</span>
+                <div>
+                  <el-button size="mini" @click="loadLocalConfig">重新加载</el-button>
+                  <el-button size="mini" type="primary" @click="saveLocalConfigAction">保存前端配置</el-button>
+                </div>
+              </div>
 
-          <el-form :model="localConfig" label-width="120px" size="small">
-            <el-form-item label="启用打印">
-              <el-switch v-model="localConfig.enabled" />
-            </el-form-item>
-            <el-form-item label="网关地址">
-              <el-input v-model="localConfig.endpoint" placeholder="http://127.0.0.1:9123/print" />
-            </el-form-item>
-            <el-form-item label="API Key">
-              <el-input v-model="localConfig.apiKey" placeholder="如未启用可留空" />
-            </el-form-item>
-            <el-form-item label="超时毫秒">
-              <el-input-number v-model="localConfig.timeoutMs" :min="1000" :step="1000" style="width: 100%;" />
-            </el-form-item>
-            <el-form-item label="允许网页回退">
-              <el-switch v-model="localConfig.allowBrowserFallback" />
-            </el-form-item>
-          </el-form>
-        </el-card>
-      </el-col>
+              <el-form :model="localConfig" label-width="120px" size="small">
+                <el-form-item label="启用打印">
+                  <el-switch v-model="localConfig.enabled" />
+                </el-form-item>
+                <el-form-item label="网关地址">
+                  <el-input v-model="localConfig.endpoint" placeholder="http://127.0.0.1:9123/print" />
+                </el-form-item>
+                <el-form-item label="API Key">
+                  <el-input v-model="localConfig.apiKey" placeholder="如未启用可留空" />
+                </el-form-item>
+                <el-form-item label="超时毫秒">
+                  <el-input-number v-model="localConfig.timeoutMs" :min="1000" :step="1000" style="width: 100%;" />
+                </el-form-item>
+                <el-form-item label="允许网页回退">
+                  <el-switch v-model="localConfig.allowBrowserFallback" />
+                </el-form-item>
+              </el-form>
+            </el-card>
+          </el-col>
 
-      <el-col :span="12">
-        <el-card shadow="never">
-          <div slot="header" class="card-header">
-            <span>本机 BarTender 配置</span>
-            <div>
-              <el-button size="mini" :loading="gatewayLoading" @click="loadGatewayConfig">读取本机配置</el-button>
-              <el-button size="mini" :loading="printerLoading" @click="loadPrinters">刷新打印机</el-button>
-              <el-button size="mini" type="primary" :loading="gatewaySaving" @click="saveGatewayConfigAction">保存到本机</el-button>
-            </div>
-          </div>
+          <el-col :span="12">
+            <el-card shadow="never">
+              <div slot="header" class="card-header">
+                <span>本机 BarTender 配置</span>
+                <div>
+                  <el-button size="mini" :loading="gatewayLoading" @click="loadGatewayConfig">读取本机配置</el-button>
+                  <el-button size="mini" :loading="printerLoading" @click="loadPrinters">刷新打印机</el-button>
+                  <el-button size="mini" type="primary" :loading="gatewaySaving" @click="saveGatewayConfigAction">保存（数据库+本机）</el-button>
+                </div>
+              </div>
 
-          <el-form :model="gatewayConfig" label-width="130px" size="small">
-            <el-form-item label="监听地址">
-              <el-input v-model="gatewayConfig.listenPrefix" placeholder="http://127.0.0.1:9123/" />
-            </el-form-item>
-            <el-form-item label="BarTender 路径">
-              <el-input v-model="gatewayConfig.barTenderExe" placeholder="C:\Program Files (x86)\Seagull\BarTender Suite\bartend.exe" />
-            </el-form-item>
-            <el-form-item label="默认超时(秒)">
-              <el-input-number v-model="gatewayConfig.defaultTimeoutSeconds" :min="5" :step="5" style="width: 100%;" />
-            </el-form-item>
-            <el-form-item label="已发现打印机">
-              <el-select v-model="printerPreview" placeholder="仅用于查看本机打印机" filterable clearable style="width: 100%;">
-                <el-option
-                  v-for="item in printers"
-                  :key="item.Name || item.name"
-                  :label="item.Name || item.name"
-                  :value="item.Name || item.name"
+              <el-form :model="gatewayConfig" label-width="130px" size="small">
+                <el-form-item label="监听地址">
+                  <el-input v-model="gatewayConfig.listenPrefix" placeholder="http://127.0.0.1:9123/" />
+                </el-form-item>
+                <el-form-item label="BarTender 路径">
+                  <el-input v-model="gatewayConfig.barTenderExe" placeholder="C:\Program Files (x86)\Seagull\BarTender Suite\bartend.exe" />
+                </el-form-item>
+                <el-form-item label="默认超时(秒)">
+                  <el-input-number v-model="gatewayConfig.defaultTimeoutSeconds" :min="5" :step="5" style="width: 100%;" />
+                </el-form-item>
+                <el-form-item label="已发现打印机">
+                  <el-select v-model="printerPreview" placeholder="仅用于查看本机打印机" filterable clearable style="width: 100%;">
+                    <el-option
+                      v-for="item in printers"
+                      :key="item.Name || item.name"
+                      :label="item.Name || item.name"
+                      :value="item.Name || item.name"
+                    />
+                  </el-select>
+                </el-form-item>
+              </el-form>
+            </el-card>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="16" style="margin-top: 16px;">
+          <el-col :span="24">
+            <el-card shadow="never">
+              <div slot="header" class="card-header">
+                <span>模板映射</span>
+                <div>
+                  <el-button size="mini" @click="addTemplateRow">新增模板</el-button>
+                </div>
+              </div>
+
+              <el-form :inline="true" size="small" style="margin-bottom: 8px;">
+                <el-form-item label="搜索">
+                  <el-input v-model="gatewayTemplateKeyword" clearable placeholder="模板键/路径/打印机" style="width: 280px;" @input="onGatewayTemplateFilterChange" />
+                </el-form-item>
+              </el-form>
+
+              <el-table :data="pagedGatewayTemplates" border stripe size="small" @sort-change="onGatewayTemplateSortChange">
+                <el-table-column prop="templateKey" sortable="custom" label="模板键" min-width="160">
+                  <template slot-scope="scope">
+                    <el-input v-if="scope.row.__editing" v-model="scope.row.templateKey" placeholder="如 coating_label" />
+                    <span v-else>{{ scope.row.templateKey || '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="formatPath" sortable="custom" label="模板文件路径" min-width="360">
+                  <template slot-scope="scope">
+                    <el-input v-if="scope.row.__editing" v-model="scope.row.formatPath" placeholder="D:\\xxx\\template.btw" />
+                    <span v-else>{{ scope.row.formatPath || '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="printer" sortable="custom" label="打印机" min-width="220">
+                  <template slot-scope="scope">
+                    <el-select v-if="scope.row.__editing" v-model="scope.row.printer" filterable allow-create default-first-option placeholder="选择或输入打印机" style="width: 100%;">
+                      <el-option
+                        v-for="item in printers"
+                        :key="`${scope.$index}_${item.Name || item.name}`"
+                        :label="item.Name || item.name"
+                        :value="item.Name || item.name"
+                      />
+                    </el-select>
+                    <span v-else>{{ scope.row.printer || '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="170" fixed="right">
+                  <template slot-scope="scope">
+                    <el-button
+                      v-if="!scope.row.__editing"
+                      type="text"
+                      size="small"
+                      @click="startEditRow(scope.row)"
+                    >编辑</el-button>
+                    <el-button
+                      v-else
+                      type="text"
+                      size="small"
+                      @click="saveEditRow(scope.row, ['templateKey', 'formatPath', 'printer'])"
+                    >完成</el-button>
+                    <el-button
+                      v-if="scope.row.__editing"
+                      type="text"
+                      size="small"
+                      @click="cancelEditRow(gatewayTemplates, scope.row)"
+                    >取消</el-button>
+                    <el-button type="text" size="small" @click="removeTemplateRow(resolveOriginalIndex(gatewayTemplates, scope.row))">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+
+              <div style="margin-top: 10px; text-align: right;">
+                <el-pagination
+                  :current-page="gatewayTemplatePage"
+                  :page-size="gatewayTemplatePageSize"
+                  :page-sizes="[5, 10, 20, 50]"
+                  layout="total, sizes, prev, pager, next"
+                  :total="filteredGatewayTemplates.length"
+                  @size-change="onGatewayTemplatePageSizeChange"
+                  @current-change="onGatewayTemplatePageChange"
                 />
-              </el-select>
-            </el-form-item>
-          </el-form>
-        </el-card>
-      </el-col>
-    </el-row>
+              </div>
+            </el-card>
+          </el-col>
+        </el-row>
 
-    <el-row :gutter="16" style="margin-top: 16px;">
-      <el-col :span="24">
-        <el-card shadow="never">
-          <div slot="header" class="card-header">
-            <span>模板映射</span>
-            <div>
-              <el-button size="mini" @click="addTemplateRow">新增模板</el-button>
-            </div>
-          </div>
-
-          <el-form :inline="true" size="small" style="margin-bottom: 8px;">
-            <el-form-item label="搜索">
-              <el-input v-model="gatewayTemplateKeyword" clearable placeholder="模板键/路径/打印机" style="width: 280px;" @input="onGatewayTemplateFilterChange" />
-            </el-form-item>
-          </el-form>
-
-          <el-table :data="pagedGatewayTemplates" border stripe size="small" @sort-change="onGatewayTemplateSortChange">
-            <el-table-column prop="templateKey" sortable="custom" label="模板键" min-width="160">
-              <template slot-scope="scope">
-                <el-input v-model="scope.row.templateKey" placeholder="如 coating_label" />
-              </template>
-            </el-table-column>
-            <el-table-column prop="formatPath" sortable="custom" label="模板文件路径" min-width="360">
-              <template slot-scope="scope">
-                <el-input v-model="scope.row.formatPath" placeholder="D:\\xxx\\template.btw" />
-              </template>
-            </el-table-column>
-            <el-table-column prop="printer" sortable="custom" label="打印机" min-width="220">
-              <template slot-scope="scope">
-                <el-select v-model="scope.row.printer" filterable allow-create default-first-option placeholder="选择或输入打印机" style="width: 100%;">
-                  <el-option
-                    v-for="item in printers"
-                    :key="`${scope.$index}_${item.Name || item.name}`"
-                    :label="item.Name || item.name"
-                    :value="item.Name || item.name"
-                  />
-                </el-select>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="100" fixed="right">
-              <template slot-scope="scope">
-                <el-button type="text" size="small" @click="removeTemplateRow(resolveOriginalIndex(gatewayTemplates, scope.row))">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-
-          <div style="margin-top: 10px; text-align: right;">
-            <el-pagination
-              :current-page="gatewayTemplatePage"
-              :page-size="gatewayTemplatePageSize"
-              :page-sizes="[5, 10, 20, 50]"
-              layout="total, sizes, prev, pager, next"
-              :total="filteredGatewayTemplates.length"
-              @size-change="onGatewayTemplatePageSizeChange"
-              @current-change="onGatewayTemplatePageChange"
-            />
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+        <el-row :gutter="16" style="margin-top: 16px;">
+          <el-col :span="24">
+            <el-card shadow="never">
+              <div slot="header" class="card-header">
+                <span>业务类型规则统计（来自数据库）</span>
+              </div>
+              <el-table :data="ruleBizTypeStats" border stripe size="small" max-height="280">
+                <el-table-column prop="bizType" label="业务类型" min-width="260" />
+                <el-table-column prop="count" label="条数" width="120" />
+              </el-table>
+            </el-card>
+          </el-col>
+        </el-row>
 
       </el-tab-pane>
 
       <el-tab-pane label="模板规则配置" name="rules">
 
-    <el-row :gutter="16" style="margin-top: 16px;">
-      <el-col :span="12">
-        <el-card shadow="never">
-          <div slot="header" class="card-header">
-            <span>全局标签模板规则</span>
-            <el-button size="mini" :loading="ruleLoading" @click="addBizRuleRow">新增规则</el-button>
-          </div>
-          <el-form :inline="true" size="small" style="margin-bottom: 8px;">
-            <el-form-item label="搜索">
-              <el-input v-model="bizRuleKeyword" clearable placeholder="业务类型/模板键" style="width: 260px;" @input="onBizRuleFilterChange" />
-            </el-form-item>
-          </el-form>
-          <el-table :data="pagedBizRuleRows" border stripe size="small">
-            <el-table-column label="业务类型" min-width="180">
-              <template slot-scope="scope">
-                <el-input v-model="scope.row.bizType" placeholder="如 COATING_ROLL_LABEL" />
-              </template>
-            </el-table-column>
-            <el-table-column label="模板键" min-width="180">
-              <template slot-scope="scope">
-                <el-input v-model="scope.row.templateKey" placeholder="如 coating_label" />
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="100">
-              <template slot-scope="scope">
-                <el-button type="text" size="small" @click="removeBizRuleRow(resolveOriginalIndex(bizRuleRows, scope.row))">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div style="margin-top: 10px; text-align: right;">
-            <el-pagination
-              :current-page="bizRulePage"
-              :page-size="bizRulePageSize"
-              :page-sizes="[5, 10, 20, 50]"
-              layout="total, sizes, prev, pager, next"
-              :total="filteredBizRuleRows.length"
-              @size-change="onBizRulePageSizeChange"
-              @current-change="onBizRulePageChange"
-            />
-          </div>
-        </el-card>
-      </el-col>
+        <el-row :gutter="16" style="margin-top: 16px;">
+          <el-col :span="12">
+            <el-card shadow="never">
+              <div slot="header" class="card-header">
+                <span>全局标签模板规则</span>
+                <el-button size="mini" :loading="ruleLoading" @click="addBizRuleRow">新增规则</el-button>
+              </div>
+              <el-form :inline="true" size="small" style="margin-bottom: 8px;">
+                <el-form-item label="搜索">
+                  <el-input v-model="bizRuleKeyword" clearable placeholder="业务类型/模板键" style="width: 260px;" @input="onBizRuleFilterChange" />
+                </el-form-item>
+              </el-form>
+              <el-table :data="pagedBizRuleRows" border stripe size="small">
+                <el-table-column label="业务类型" min-width="180">
+                  <template slot-scope="scope">
+                    <el-input v-if="scope.row.__editing" v-model="scope.row.bizType" placeholder="如 COATING_ROLL_LABEL" />
+                    <span v-else>{{ scope.row.bizType || '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="模板键" min-width="180">
+                  <template slot-scope="scope">
+                    <el-input v-if="scope.row.__editing" v-model="scope.row.templateKey" placeholder="如 coating_label" />
+                    <span v-else>{{ scope.row.templateKey || '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="170">
+                  <template slot-scope="scope">
+                    <el-button v-if="!scope.row.__editing" type="text" size="small" @click="startEditRow(scope.row)">编辑</el-button>
+                    <el-button v-else type="text" size="small" @click="saveEditRow(scope.row, ['bizType', 'templateKey'])">完成</el-button>
+                    <el-button v-if="scope.row.__editing" type="text" size="small" @click="cancelEditRow(bizRuleRows, scope.row)">取消</el-button>
+                    <el-button type="text" size="small" @click="removeBizRuleRow(resolveOriginalIndex(bizRuleRows, scope.row))">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div style="margin-top: 10px; text-align: right;">
+                <el-pagination
+                  :current-page="bizRulePage"
+                  :page-size="bizRulePageSize"
+                  :page-sizes="[5, 10, 20, 50]"
+                  layout="total, sizes, prev, pager, next"
+                  :total="filteredBizRuleRows.length"
+                  @size-change="onBizRulePageSizeChange"
+                  @current-change="onBizRulePageChange"
+                />
+              </div>
+            </el-card>
+          </el-col>
 
-      <el-col :span="12">
-        <el-card shadow="never">
-          <div slot="header" class="card-header">
-            <span>客户默认标签模板</span>
-            <el-button size="mini" :loading="ruleLoading" @click="addCustomerDefaultRow">新增规则</el-button>
-          </div>
-          <el-form :inline="true" size="small" style="margin-bottom: 8px;">
-            <el-form-item label="搜索">
-              <el-input v-model="customerDefaultKeyword" clearable placeholder="客户编码/模板键" style="width: 260px;" @input="onCustomerDefaultFilterChange" />
-            </el-form-item>
-          </el-form>
-          <el-table :data="pagedCustomerDefaultRows" border stripe size="small">
-            <el-table-column label="客户编码" min-width="160">
-              <template slot-scope="scope">
-                <el-input v-model="scope.row.customerCode" placeholder="如 CUST001" />
-              </template>
-            </el-table-column>
-            <el-table-column label="默认模板键" min-width="180">
-              <template slot-scope="scope">
-                <el-input v-model="scope.row.defaultTemplate" placeholder="如 coating_label" />
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="100">
-              <template slot-scope="scope">
-                <el-button type="text" size="small" @click="removeCustomerDefaultRow(resolveOriginalIndex(customerDefaultRows, scope.row))">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div style="margin-top: 10px; text-align: right;">
-            <el-pagination
-              :current-page="customerDefaultPage"
-              :page-size="customerDefaultPageSize"
-              :page-sizes="[5, 10, 20, 50]"
-              layout="total, sizes, prev, pager, next"
-              :total="filteredCustomerDefaultRows.length"
-              @size-change="onCustomerDefaultPageSizeChange"
-              @current-change="onCustomerDefaultPageChange"
-            />
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+          <el-col :span="12">
+            <el-card shadow="never">
+              <div slot="header" class="card-header">
+                <span>客户默认标签模板</span>
+                <el-button size="mini" :loading="ruleLoading" @click="addCustomerDefaultRow">新增规则</el-button>
+              </div>
+              <el-form :inline="true" size="small" style="margin-bottom: 8px;">
+                <el-form-item label="搜索">
+                  <el-input v-model="customerDefaultKeyword" clearable placeholder="客户编码/模板键" style="width: 260px;" @input="onCustomerDefaultFilterChange" />
+                </el-form-item>
+              </el-form>
+              <el-table :data="pagedCustomerDefaultRows" border stripe size="small">
+                <el-table-column label="客户编码" min-width="160">
+                  <template slot-scope="scope">
+                    <el-input v-if="scope.row.__editing" v-model="scope.row.customerCode" placeholder="如 CUST001" />
+                    <span v-else>{{ scope.row.customerCode || '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="默认模板键" min-width="180">
+                  <template slot-scope="scope">
+                    <el-input v-if="scope.row.__editing" v-model="scope.row.defaultTemplate" placeholder="如 coating_label" />
+                    <span v-else>{{ scope.row.defaultTemplate || '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="170">
+                  <template slot-scope="scope">
+                    <el-button v-if="!scope.row.__editing" type="text" size="small" @click="startEditRow(scope.row)">编辑</el-button>
+                    <el-button v-else type="text" size="small" @click="saveEditRow(scope.row, ['customerCode', 'defaultTemplate'])">完成</el-button>
+                    <el-button v-if="scope.row.__editing" type="text" size="small" @click="cancelEditRow(customerDefaultRows, scope.row)">取消</el-button>
+                    <el-button type="text" size="small" @click="removeCustomerDefaultRow(resolveOriginalIndex(customerDefaultRows, scope.row))">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div style="margin-top: 10px; text-align: right;">
+                <el-pagination
+                  :current-page="customerDefaultPage"
+                  :page-size="customerDefaultPageSize"
+                  :page-sizes="[5, 10, 20, 50]"
+                  layout="total, sizes, prev, pager, next"
+                  :total="filteredCustomerDefaultRows.length"
+                  @size-change="onCustomerDefaultPageSizeChange"
+                  @current-change="onCustomerDefaultPageChange"
+                />
+              </div>
+            </el-card>
+          </el-col>
+        </el-row>
 
-    <el-row :gutter="16" style="margin-top: 16px;">
-      <el-col :span="24">
-        <el-card shadow="never">
-          <div slot="header" class="card-header">
-            <span>客户 + 业务专用标签模板</span>
-            <div>
-              <input
-                ref="ruleImportInput"
-                type="file"
-                accept=".json,.csv"
-                style="display: none;"
-                @change="handleRuleImportChange"
-              >
-              <el-button size="mini" :loading="ruleLoading" @click="addCustomerBizRuleRow">新增规则</el-button>
-              <el-button size="mini" :loading="ruleLoading" @click="downloadRuleImportTemplate">下载导入模板</el-button>
-              <el-button size="mini" :loading="ruleLoading" @click="downloadCsvImportTemplate">下载CSV模板</el-button>
-              <el-button size="mini" :loading="ruleLoading" @click="triggerRuleImport">导入规则(JSON/CSV)</el-button>
-              <el-button size="mini" :loading="ruleLoading" @click="exportRuleConfigAction">导出JSON</el-button>
-              <el-button size="mini" :loading="ruleLoading" @click="exportRuleCsvAction">导出CSV</el-button>
-              <el-checkbox v-model="autoSaveAfterImport" style="margin: 0 8px;">导入后自动保存</el-checkbox>
-              <el-button size="mini" type="primary" :loading="ruleSaving" @click="saveRuleConfigAction">保存规则到数据库</el-button>
-            </div>
-          </div>
-          <el-form :inline="true" size="small" style="margin-bottom: 8px;">
-            <el-form-item label="搜索">
-              <el-input v-model="customerBizRuleKeyword" clearable placeholder="客户编码/业务类型/模板键" style="width: 320px;" @input="onCustomerBizRuleFilterChange" />
-            </el-form-item>
-          </el-form>
-          <el-table :data="pagedCustomerBizRuleRows" border stripe size="small">
-            <el-table-column label="客户编码" min-width="160">
-              <template slot-scope="scope">
-                <el-input v-model="scope.row.customerCode" placeholder="如 CUST001" />
-              </template>
-            </el-table-column>
-            <el-table-column label="业务类型" min-width="180">
-              <template slot-scope="scope">
-                <el-input v-model="scope.row.bizType" placeholder="如 COATING_INBOUND" />
-              </template>
-            </el-table-column>
-            <el-table-column label="模板键" min-width="180">
-              <template slot-scope="scope">
-                <el-input v-model="scope.row.templateKey" placeholder="如 coating_inbound" />
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="100">
-              <template slot-scope="scope">
-                <el-button type="text" size="small" @click="removeCustomerBizRuleRow(resolveOriginalIndex(customerBizRuleRows, scope.row))">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div style="margin-top: 10px; text-align: right;">
-            <el-pagination
-              :current-page="customerBizRulePage"
-              :page-size="customerBizRulePageSize"
-              :page-sizes="[5, 10, 20, 50]"
-              layout="total, sizes, prev, pager, next"
-              :total="filteredCustomerBizRuleRows.length"
-              @size-change="onCustomerBizRulePageSizeChange"
-              @current-change="onCustomerBizRulePageChange"
-            />
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+        <el-row :gutter="16" style="margin-top: 16px;">
+          <el-col :span="24">
+            <el-card shadow="never">
+              <div slot="header" class="card-header">
+                <span>客户 + 业务专用标签模板</span>
+                <div>
+                  <input
+                    ref="ruleImportInput"
+                    type="file"
+                    accept=".json,.csv"
+                    style="display: none;"
+                    @change="handleRuleImportChange"
+                  >
+                  <el-button size="mini" :loading="ruleLoading" @click="addCustomerBizRuleRow">新增规则</el-button>
+                  <el-button size="mini" :loading="ruleLoading" @click="downloadRuleImportTemplate">下载导入模板</el-button>
+                  <el-button size="mini" :loading="ruleLoading" @click="downloadCsvImportTemplate">下载CSV模板</el-button>
+                  <el-button size="mini" :loading="ruleLoading" @click="triggerRuleImport">导入规则(JSON/CSV)</el-button>
+                  <el-button size="mini" :loading="ruleLoading" @click="exportRuleConfigAction">导出JSON</el-button>
+                  <el-button size="mini" :loading="ruleLoading" @click="exportRuleCsvAction">导出CSV</el-button>
+                  <el-checkbox v-model="autoSaveAfterImport" style="margin: 0 8px;">导入后自动保存</el-checkbox>
+                  <el-button size="mini" type="primary" :loading="ruleSaving" @click="saveRuleConfigAction">保存规则到数据库</el-button>
+                </div>
+              </div>
+              <el-form :inline="true" size="small" style="margin-bottom: 8px;">
+                <el-form-item label="搜索">
+                  <el-input v-model="customerBizRuleKeyword" clearable placeholder="客户编码/业务类型/模板键" style="width: 320px;" @input="onCustomerBizRuleFilterChange" />
+                </el-form-item>
+              </el-form>
+              <el-table :data="pagedCustomerBizRuleRows" border stripe size="small">
+                <el-table-column label="客户编码" min-width="160">
+                  <template slot-scope="scope">
+                    <el-input v-if="scope.row.__editing" v-model="scope.row.customerCode" placeholder="如 CUST001" />
+                    <span v-else>{{ scope.row.customerCode || '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="业务类型" min-width="180">
+                  <template slot-scope="scope">
+                    <el-input v-if="scope.row.__editing" v-model="scope.row.bizType" placeholder="如 COATING_INBOUND" />
+                    <span v-else>{{ scope.row.bizType || '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="模板键" min-width="180">
+                  <template slot-scope="scope">
+                    <el-input v-if="scope.row.__editing" v-model="scope.row.templateKey" placeholder="如 coating_inbound" />
+                    <span v-else>{{ scope.row.templateKey || '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="170">
+                  <template slot-scope="scope">
+                    <el-button v-if="!scope.row.__editing" type="text" size="small" @click="startEditRow(scope.row)">编辑</el-button>
+                    <el-button v-else type="text" size="small" @click="saveEditRow(scope.row, ['customerCode', 'bizType', 'templateKey'])">完成</el-button>
+                    <el-button v-if="scope.row.__editing" type="text" size="small" @click="cancelEditRow(customerBizRuleRows, scope.row)">取消</el-button>
+                    <el-button type="text" size="small" @click="removeCustomerBizRuleRow(resolveOriginalIndex(customerBizRuleRows, scope.row))">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div style="margin-top: 10px; text-align: right;">
+                <el-pagination
+                  :current-page="customerBizRulePage"
+                  :page-size="customerBizRulePageSize"
+                  :page-sizes="[5, 10, 20, 50]"
+                  layout="total, sizes, prev, pager, next"
+                  :total="filteredCustomerBizRuleRows.length"
+                  @size-change="onCustomerBizRulePageSizeChange"
+                  @current-change="onCustomerBizRulePageChange"
+                />
+              </div>
+            </el-card>
+          </el-col>
+        </el-row>
 
       </el-tab-pane>
 
       <el-tab-pane label="测试与预览" name="test">
 
-    <el-row :gutter="16" style="margin-top: 16px; margin-bottom: 24px;">
-      <el-col :span="24">
-        <el-card shadow="never">
-          <div slot="header" class="card-header">
-            <span>测试打印</span>
-            <div>
-              <el-button size="mini" :loading="lastPrintLoading" @click="loadLastPrintRequest">查看最近请求</el-button>
-              <el-button size="mini" :loading="previewLoading" @click="handleTemplatePreview">模板预览</el-button>
-              <el-button size="mini" type="primary" :loading="testPrinting" @click="handleTestPrint">发送测试打印</el-button>
-            </div>
-          </div>
+        <el-row :gutter="16" style="margin-top: 16px; margin-bottom: 24px;">
+          <el-col :span="24">
+            <el-card shadow="never">
+              <div slot="header" class="card-header">
+                <span>测试打印</span>
+                <div>
+                  <el-button size="mini" :loading="lastPrintLoading" @click="loadLastPrintRequest">查看最近请求</el-button>
+                  <el-button size="mini" :loading="previewLoading" @click="handleTemplatePreview">模板预览</el-button>
+                  <el-button size="mini" type="primary" :loading="testPrinting" @click="handleTestPrint">发送测试打印</el-button>
+                </div>
+              </div>
 
-          <el-form :model="testForm" label-width="120px" size="small">
-            <el-row :gutter="16">
-              <el-col :span="8">
-                <el-form-item label="模板键">
-                  <el-select v-model="testForm.template" filterable allow-create default-first-option placeholder="选择模板键" style="width: 100%;" @change="handleTestTemplateChange">
-                    <el-option v-for="item in gatewayTemplates" :key="item.templateKey" :label="item.templateKey" :value="item.templateKey" />
-                  </el-select>
+              <el-form :model="testForm" label-width="120px" size="small">
+                <el-row :gutter="16">
+                  <el-col :span="8">
+                    <el-form-item label="模板键">
+                      <el-select v-model="testForm.template" filterable allow-create default-first-option placeholder="选择模板键" style="width: 100%;" @change="handleTestTemplateChange">
+                        <el-option v-for="item in gatewayTemplates" :key="item.templateKey" :label="item.templateKey" :value="item.templateKey" />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8">
+                    <el-form-item label="份数">
+                      <el-input-number v-model="testForm.copies" :min="1" :step="1" style="width: 100%;" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8">
+                    <el-form-item label="任务名称">
+                      <el-input v-model="testForm.jobName" placeholder="可留空自动生成" />
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+                <el-form-item label="测试数据(JSON)">
+                  <el-input v-model="testForm.dataText" type="textarea" :rows="8" />
                 </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="份数">
-                  <el-input-number v-model="testForm.copies" :min="1" :step="1" style="width: 100%;" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="任务名称">
-                  <el-input v-model="testForm.jobName" placeholder="可留空自动生成" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-form-item label="测试数据(JSON)">
-              <el-input v-model="testForm.dataText" type="textarea" :rows="8" />
-            </el-form-item>
-          </el-form>
+              </el-form>
 
-          <el-divider content-position="left">最近一次打印请求（字段名与传值）</el-divider>
-          <el-input
-            v-model="lastPrintText"
-            type="textarea"
-            :rows="12"
-            readonly
-            placeholder="点击“查看最近请求”后，这里会显示完整的 payload JSON（含字段名和值）"
-          />
-        </el-card>
-      </el-col>
-    </el-row>
+              <el-divider content-position="left">最近一次打印请求（字段名与传值）</el-divider>
+              <el-input
+                v-model="lastPrintText"
+                type="textarea"
+                :rows="12"
+                readonly
+                placeholder="点击“查看最近请求”后，这里会显示完整的 payload JSON（含字段名和值）"
+              />
+            </el-card>
+          </el-col>
+        </el-row>
 
-    <el-row :gutter="16" style="margin-bottom: 24px;">
-      <el-col :span="24">
-        <el-card shadow="never">
-          <div slot="header" class="card-header">
-            <span>模板预览示例数据</span>
-            <div>
-              <el-button size="mini" @click="resetTemplatePreviewConfig">恢复默认示例</el-button>
-              <el-button size="mini" type="primary" @click="saveTemplatePreviewConfig">保存示例配置</el-button>
-            </div>
-          </div>
+        <el-row :gutter="16" style="margin-bottom: 24px;">
+          <el-col :span="24">
+            <el-card shadow="never">
+              <div slot="header" class="card-header">
+                <span>模板预览示例数据</span>
+                <div>
+                  <el-button size="mini" @click="resetTemplatePreviewConfig">恢复默认示例</el-button>
+                  <el-button size="mini" type="primary" @click="saveTemplatePreviewConfig">保存示例配置</el-button>
+                </div>
+              </div>
 
-          <el-alert
-            title="这里保存的是模板预览/测试打印使用的示例数据，按模板键维护即可。预览时会优先使用这里的配置。"
-            type="info"
-            :closable="false"
-            style="margin-bottom: 12px;"
-          />
+              <el-alert
+                title="这里保存的是模板预览/测试打印使用的示例数据，按模板键维护即可。预览时会优先使用这里的配置。"
+                type="info"
+                :closable="false"
+                style="margin-bottom: 12px;"
+              />
 
-          <el-input
-            v-model="previewDataText"
-            type="textarea"
-            :rows="14"
-            placeholder='例如：{ "COATING_ROLL_LABEL": { "materialCode": "..." } }'
-          />
-        </el-card>
-      </el-col>
-    </el-row>
+              <el-input
+                v-model="previewDataText"
+                type="textarea"
+                :rows="14"
+                placeholder="例如：{ 'COATING_ROLL_LABEL': { 'materialCode': '...' }}"
+              />
+            </el-card>
+          </el-col>
+        </el-row>
 
       </el-tab-pane>
     </el-tabs>
@@ -505,25 +553,58 @@ import {
   saveTemplateRules
 } from '@/utils/printService'
 
+const DEFAULT_GATEWAY_PRINTER = 'Gprinter GP-1324D'
+const UNIFIED_TEMPLATE_DIR = 'D:\\MES\\BarTender\\Templates'
+
+function normalizeGatewayTemplatePath(pathText) {
+  const raw = String(pathText || '').trim()
+  if (!raw) return ''
+  let normalized = raw.replace(/\//g, '\\').trim()
+
+  const fileName = normalized.split('\\').pop() || ''
+  if (!fileName) return normalized
+
+  // 统一历史路径：
+  // 1) C:\Users\xxx\AppData\Local\MES-BarTender-Gateway\templates\*.btw
+  // 2) D:\MES\BarTenderTemplates\*.btw
+  const isLegacyUserTemplatePath = /MES-BarTender-Gateway\\templates\\/i.test(normalized)
+  const isLegacyDPath = /^D:\\MES\\BarTenderTemplates\\/i.test(normalized)
+
+  if (isLegacyUserTemplatePath || isLegacyDPath) {
+    return `${UNIFIED_TEMPLATE_DIR}\\${fileName}`
+  }
+
+  return normalized
+}
+
 function createTemplateRow() {
   return {
     templateKey: '',
     formatPath: '',
-    printer: ''
+    printer: DEFAULT_GATEWAY_PRINTER,
+    __editing: true,
+    __isNew: true,
+    __backup: null
   }
 }
 
 function createBizRuleRow() {
   return {
     bizType: '',
-    templateKey: ''
+    templateKey: '',
+    __editing: true,
+    __isNew: true,
+    __backup: null
   }
 }
 
 function createCustomerDefaultRow() {
   return {
     customerCode: '',
-    defaultTemplate: ''
+    defaultTemplate: '',
+    __editing: true,
+    __isNew: true,
+    __backup: null
   }
 }
 
@@ -531,7 +612,10 @@ function createCustomerBizRuleRow() {
   return {
     customerCode: '',
     bizType: '',
-    templateKey: ''
+    templateKey: '',
+    __editing: true,
+    __isNew: true,
+    __backup: null
   }
 }
 
@@ -547,15 +631,24 @@ function normalizeGatewayConfig(data = {}) {
 function mapTemplatesToRows(templates = {}) {
   return Object.keys(templates || {}).map(key => ({
     templateKey: key,
-    formatPath: templates[key] && templates[key].formatPath ? templates[key].formatPath : '',
-    printer: templates[key] && templates[key].printer ? templates[key].printer : ''
+    formatPath: normalizeGatewayTemplatePath(templates[key] && templates[key].formatPath ? templates[key].formatPath : ''),
+    printer: templates[key] && templates[key].printer ? templates[key].printer : DEFAULT_GATEWAY_PRINTER,
+    __editing: false,
+    __isNew: false,
+    __backup: null
   }))
 }
 
 function mapRulesToRows(rules = {}) {
   const byBizType = rules.byBizType || {}
   const byCustomer = rules.byCustomer || {}
-  const bizRuleRows = Object.keys(byBizType).map(key => ({ bizType: key, templateKey: byBizType[key] }))
+  const bizRuleRows = Object.keys(byBizType).map(key => ({
+    bizType: key,
+    templateKey: byBizType[key],
+    __editing: false,
+    __isNew: false,
+    __backup: null
+  }))
   const customerDefaultRows = []
   const customerBizRuleRows = []
 
@@ -563,22 +656,76 @@ function mapRulesToRows(rules = {}) {
     const customerRule = byCustomer[customerCode] || {}
     customerDefaultRows.push({
       customerCode,
-      defaultTemplate: customerRule.default || ''
+      defaultTemplate: customerRule.default || '',
+      __editing: false,
+      __isNew: false,
+      __backup: null
     })
     const childBizType = customerRule.byBizType || {}
     Object.keys(childBizType).forEach(bizType => {
       customerBizRuleRows.push({
         customerCode,
         bizType,
-        templateKey: childBizType[bizType] || ''
+        templateKey: childBizType[bizType] || '',
+        __editing: false,
+        __isNew: false,
+        __backup: null
       })
     })
   })
 
   return {
-    bizRuleRows: bizRuleRows.length ? bizRuleRows : [createBizRuleRow()],
-    customerDefaultRows: customerDefaultRows.length ? customerDefaultRows : [createCustomerDefaultRow()],
-    customerBizRuleRows: customerBizRuleRows.length ? customerBizRuleRows : [createCustomerBizRuleRow()]
+    bizRuleRows,
+    customerDefaultRows,
+    customerBizRuleRows
+  }
+}
+
+function mapRuleRecordsToRows(records = []) {
+  const bizRuleRows = []
+  const customerDefaultRows = []
+  const customerBizRuleRows = []
+
+  ;(records || []).forEach(item => {
+    const bizType = normalizeBizTypeValue((item && item.bizType) || '')
+    const templateKey = String((item && item.templateKey) || '').trim()
+    const customerCode = String((item && item.customerCode) || '').trim()
+    if (!bizType || !templateKey) return
+
+    if (customerCode) {
+      if (bizType === LABEL_PRINT_DEFAULT_BIZ_TYPE) {
+        customerDefaultRows.push({
+          customerCode,
+          defaultTemplate: templateKey,
+          __editing: false,
+          __isNew: false,
+          __backup: null
+        })
+      } else {
+        customerBizRuleRows.push({
+          customerCode,
+          bizType,
+          templateKey,
+          __editing: false,
+          __isNew: false,
+          __backup: null
+        })
+      }
+    } else if (bizType !== LABEL_PRINT_DEFAULT_BIZ_TYPE) {
+      bizRuleRows.push({
+        bizType,
+        templateKey,
+        __editing: false,
+        __isNew: false,
+        __backup: null
+      })
+    }
+  })
+
+  return {
+    bizRuleRows,
+    customerDefaultRows,
+    customerBizRuleRows
   }
 }
 
@@ -595,7 +742,7 @@ function normalizeRulesFromRecords(records = []) {
     if (!bizType || !templateKey) return
 
     if (customerCode) {
-      if (!normalized.byCustomer[customerCode]) normalized.byCustomer[customerCode] = { byBizType: {} }
+      if (!normalized.byCustomer[customerCode]) normalized.byCustomer[customerCode] = { byBizType: {}}
       if (bizType === LABEL_PRINT_DEFAULT_BIZ_TYPE) {
         normalized.byCustomer[customerCode].default = templateKey
       } else {
@@ -739,7 +886,7 @@ export default {
       activeTab: 'deploy',
       localConfig: getBarTenderConfig(),
       gatewayConfig: normalizeGatewayConfig(),
-      gatewayTemplates: [createTemplateRow()],
+      gatewayTemplates: [],
       gatewayTemplateKeyword: '',
       gatewayTemplatePage: 1,
       gatewayTemplatePageSize: 10,
@@ -747,15 +894,16 @@ export default {
       gatewayTemplateSortOrder: '',
       printers: [],
       printerPreview: '',
-      bizRuleRows: [createBizRuleRow()],
+      bizRuleRows: [],
       bizRuleKeyword: '',
       bizRulePage: 1,
       bizRulePageSize: 10,
-      customerDefaultRows: [createCustomerDefaultRow()],
+      customerDefaultRows: [],
       customerDefaultKeyword: '',
       customerDefaultPage: 1,
       customerDefaultPageSize: 10,
-      customerBizRuleRows: [createCustomerBizRuleRow()],
+      customerBizRuleRows: [],
+      ruleDetailRows: [],
       customerBizRuleKeyword: '',
       customerBizRulePage: 1,
       customerBizRulePageSize: 10,
@@ -827,7 +975,16 @@ export default {
     dashboardSyncedCount() {
       const sync = (this.dashboardData && this.dashboardData.sync) || {}
       const n = Number(sync.syncedCount)
-      if (Number.isFinite(n) && n >= 0) return Math.trunc(n)
+      if (Number.isFinite(n) && n >= 0) {
+        const count = Math.trunc(n)
+        const total = Number(this.dashboardTemplateCount || 0)
+        // 本机可能缓存了历史/客户专用模板，syncedCount 会大于 configuredCount，
+        // 看板展示按“当前配置可用模板”口径，避免出现 24/16 这类误导。
+        if (Number.isFinite(total) && total > 0) {
+          return Math.min(count, Math.trunc(total))
+        }
+        return count
+      }
       return this.dashboardTemplateCount
     },
     dashboardPrinterCount() {
@@ -901,6 +1058,21 @@ export default {
     pagedCustomerBizRuleRows() {
       const start = (this.customerBizRulePage - 1) * this.customerBizRulePageSize
       return this.filteredCustomerBizRuleRows.slice(start, start + this.customerBizRulePageSize)
+    },
+    ruleBizTypeStats() {
+      const rows = Array.isArray(this.ruleDetailRows) ? this.ruleDetailRows : []
+      const counter = {}
+      rows.forEach(item => {
+        const bizType = normalizeBizTypeValue((item && item.bizType) || '')
+        if (!bizType) return
+        counter[bizType] = (counter[bizType] || 0) + 1
+      })
+      return Object.keys(counter)
+        .map(key => ({ bizType: key, count: counter[key] }))
+        .sort((a, b) => {
+          if (b.count !== a.count) return b.count - a.count
+          return String(a.bizType || '').localeCompare(String(b.bizType || ''), 'zh-CN', { numeric: true, sensitivity: 'base' })
+        })
     }
   },
   created() {
@@ -1080,6 +1252,19 @@ export default {
       }
       this.$alert(cmd, '请复制以下单行脚本到 PowerShell 执行', { confirmButtonText: '我知道了' })
     },
+    async copyCleanupLegacyTemplateCommand() {
+      const cmd = "$targets=@('C:\\Users\\*\\AppData\\Local\\MES-BarTender-Gateway\\templates','C:\\ProgramData\\MES-BarTender-Gateway\\templates','D:\\MES\\BarTenderTemplates'); foreach($p in $targets){ Get-ChildItem -Path $p -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }; Write-Host 'legacy template dirs cleaned';"
+      try {
+        if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(cmd)
+          this.$message.success('清理旧C盘模板命令已复制，请在“管理员 PowerShell”执行')
+          return
+        }
+      } catch (e) {
+        // fallback below
+      }
+      this.$alert(cmd, '请复制以下单行脚本到管理员 PowerShell 执行', { confirmButtonText: '我知道了' })
+    },
     applyRouteSceneContext() {
       const query = (this.$route && this.$route.query) || {}
       const bizType = String(query.bizType || '').trim()
@@ -1108,10 +1293,141 @@ export default {
       this.loadLocalConfig()
       await this.loadRuleConfig()
       await this.loadGatewayDashboard()
-      await this.loadGatewayConfig()
-      this.ensureGatewayTemplateMappingsForGlobalRules({ autoAppend: false, silent: true })
+      await this.loadGatewayConfigFromDb()
       await this.loadPrinters()
       await this.loadLastPrintRequest()
+    },
+    parseGatewayTimeoutFromRemark(remark, fallback = 30) {
+      const defaultVal = Number.isFinite(Number(fallback)) ? Math.trunc(Number(fallback)) : 30
+      const raw = String(remark == null ? '' : remark).trim()
+      if (!raw) return defaultVal
+      try {
+        const parsed = JSON.parse(raw)
+        const n = Number(parsed && parsed.defaultTimeoutSeconds)
+        if (Number.isFinite(n) && n > 0) return Math.trunc(n)
+      } catch (e) {
+        const n = Number(raw)
+        if (Number.isFinite(n) && n > 0) return Math.trunc(n)
+      }
+      return defaultVal
+    },
+    async loadGatewayConfigFromDb() {
+      try {
+        const res = await getLabelPrintConfigList({ scope: 'label-gateway', isActive: 1 })
+        const rows = Array.isArray(res && res.data) ? res.data : []
+        if (!rows.length) {
+          await this.loadGatewayMappingsFromRuleDb()
+          return false
+        }
+
+        const baseRows = rows
+          .filter(item => String((item && item.bizType) || '').trim() === 'GATEWAY_BASE_CONFIG')
+          .sort((a, b) => Number((a && a.sortNo) || 0) - Number((b && b.sortNo) || 0))
+        const base = baseRows.length ? baseRows[0] : null
+
+        const timeout = this.parseGatewayTimeoutFromRemark(base && base.remark, 30)
+        this.gatewayConfig = normalizeGatewayConfig({
+          listenPrefix: String((base && base.templateKey) || '').trim() || 'http://127.0.0.1:9123/',
+          barTenderExe: String((base && base.sceneName) || '').trim(),
+          defaultTimeoutSeconds: timeout,
+          templates: {}
+        })
+
+        const templateRows = rows
+          .filter(item => String((item && item.bizType) || '').trim() === 'GATEWAY_TEMPLATE_MAPPING')
+          .sort((a, b) => {
+            const sa = Number((a && a.sortNo) || 0)
+            const sb = Number((b && b.sortNo) || 0)
+            if (sa !== sb) return sa - sb
+            return String((a && a.templateKey) || '').localeCompare(String((b && b.templateKey) || ''), 'zh-CN', { numeric: true, sensitivity: 'base' })
+          })
+
+        this.gatewayTemplates = templateRows
+          .map(item => ({
+            templateKey: String((item && item.templateKey) || '').trim(),
+            formatPath: normalizeGatewayTemplatePath(String((item && item.sceneName) || '').trim()),
+            printer: String((item && item.remark) || '').trim() || DEFAULT_GATEWAY_PRINTER,
+            __editing: false,
+            __isNew: false,
+            __backup: null
+          }))
+          .filter(item => item.templateKey)
+
+        if (!this.gatewayTemplates.length) {
+          await this.loadGatewayMappingsFromRuleDb()
+        }
+
+        return true
+      } catch (error) {
+        this.$message.warning(error.message || '读取数据库网关配置失败，已回退本机配置')
+        return false
+      }
+    },
+    async loadGatewayMappingsFromRuleDb() {
+      try {
+        const res = await getLabelPrintConfigList({ scope: 'label-rule', isActive: 1 })
+        const rows = Array.isArray(res && res.data) ? res.data : []
+        const map = new Map()
+        rows.forEach(item => {
+          const templateKey = String((item && item.templateKey) || '').trim()
+          if (!templateKey) return
+          const bizType = String((item && item.bizType) || '').trim()
+          const sceneName = String((item && item.sceneName) || '').trim()
+          const remark = String((item && item.remark) || '').trim()
+          const isPath = /:\/|\.btw$/i.test(sceneName) || /\\|\//.test(sceneName)
+          const formatPath = isPath
+            ? normalizeGatewayTemplatePath(sceneName)
+            : normalizeGatewayTemplatePath(DEFAULT_TEMPLATE_PATH_HINT[templateKey] || DEFAULT_TEMPLATE_PATH_HINT[bizType] || '')
+          const printer = /gprinter|zebra|tsc|printer/i.test(remark) ? remark : ''
+          if (!map.has(templateKey)) {
+            map.set(templateKey, {
+              templateKey,
+              formatPath,
+              printer: printer || DEFAULT_GATEWAY_PRINTER,
+              __editing: false,
+              __isNew: false,
+              __backup: null
+            })
+          }
+        })
+        this.gatewayTemplates = Array.from(map.values())
+      } catch (e) {
+        this.gatewayTemplates = []
+      }
+    },
+    buildGatewayConfigRecordsForDb() {
+      const records = []
+      const listenPrefix = this.sanitizeGatewayText(this.gatewayConfig && this.gatewayConfig.listenPrefix)
+      const barTenderExe = this.sanitizeGatewayText(this.gatewayConfig && this.gatewayConfig.barTenderExe)
+      const timeoutRaw = Number(this.gatewayConfig && this.gatewayConfig.defaultTimeoutSeconds)
+      const defaultTimeoutSeconds = Number.isFinite(timeoutRaw) && timeoutRaw > 0 ? Math.trunc(timeoutRaw) : 30
+
+      records.push({
+        bizType: 'GATEWAY_BASE_CONFIG',
+        sceneName: barTenderExe,
+        templateKey: listenPrefix,
+        customerCode: null,
+        sortNo: 1,
+        isActive: 1,
+        remark: JSON.stringify({ defaultTimeoutSeconds })
+      })
+
+      ;(this.gatewayTemplates || []).forEach((row, idx) => {
+        const templateKey = this.sanitizeGatewayText(row && row.templateKey)
+        if (!templateKey) return
+        const printer = this.sanitizeGatewayText(row && row.printer) || DEFAULT_GATEWAY_PRINTER
+        records.push({
+          bizType: 'GATEWAY_TEMPLATE_MAPPING',
+          sceneName: normalizeGatewayTemplatePath(this.sanitizeGatewayText(row && row.formatPath)),
+          templateKey,
+          customerCode: null,
+          sortNo: idx + 1,
+          isActive: 1,
+          remark: printer
+        })
+      })
+
+      return records
     },
     async loadGatewayDashboard() {
       this.dashboardLoading = true
@@ -1150,6 +1466,12 @@ export default {
         } else {
           this.$message.success('模板同步完成')
         }
+
+        // 关键：文件同步后，强制按“服务器数据库映射”回写到本机网关配置，
+        // 避免本机根据 manifest 推断出的模板键与服务器映射不一致。
+        await this.loadGatewayConfigFromDb()
+        await saveGatewayConfig(this.buildSafeGatewayConfigPayload(), this.localConfig)
+
         await this.loadGatewayConfig()
         await this.loadGatewayDashboard()
 
@@ -1228,13 +1550,34 @@ export default {
         .trim()
     },
     buildSafeGatewayConfigPayload() {
-      const templates = {}
+      const confirmedTemplates = {}
       ;(this.gatewayTemplates || []).forEach(row => {
         const templateKey = this.sanitizeGatewayText(row && row.templateKey)
         if (!templateKey) return
-        templates[templateKey] = {
-          formatPath: this.sanitizeGatewayText(row && row.formatPath),
-          printer: this.sanitizeGatewayText(row && row.printer)
+        confirmedTemplates[templateKey] = {
+          formatPath: row.formatPath || '', // 此处不再强行 normalize，因为数据库加载时已处理或用户已确认
+          printer: this.sanitizeGatewayText(row && row.printer) || DEFAULT_GATEWAY_PRINTER
+        }
+      })
+
+      // 动态合并业务规则中的模板键，确保客户端 config.json 包含所有 22+ 个（或更多）必需键
+      // 解决“服务器端映射有22个（规则），客户端只有16个（显式映射）”的不对称问题
+      const finalTemplates = { ...confirmedTemplates }
+      
+      const allRules = [
+        ...(this.bizRuleRows || []),
+        ...(this.customerDefaultRows || []).map(r => ({ templateKey: r.defaultTemplate })),
+        ...(this.customerBizRuleRows || [])
+      ]
+
+      allRules.forEach(rule => {
+        const key = String((rule && rule.templateKey) || '').trim()
+        if (key && !finalTemplates[key]) {
+          // 如果业务规则引用了某个模板，但“网关映射”中没配置，则应用默认路径规则提供给客户端
+          finalTemplates[key] = {
+            formatPath: `${UNIFIED_TEMPLATE_DIR}\\${key}.btw`,
+            printer: DEFAULT_GATEWAY_PRINTER
+          }
         }
       })
 
@@ -1269,15 +1612,22 @@ export default {
       this.ruleLoading = true
       try {
         const res = await getLabelPrintConfigList({ isActive: 1, scope: 'label-rule' })
-        const list = Array.isArray(res && res.data) ? res.data : []
+        const list = (Array.isArray(res && res.data) ? res.data : []).slice().sort((a, b) => {
+          const sa = Number((a && a.sortNo) || 0)
+          const sb = Number((b && b.sortNo) || 0)
+          if (sa !== sb) return sa - sb
+          return Number((a && a.id) || 0) - Number((b && b.id) || 0)
+        })
+        this.ruleDetailRows = list
         const normalized = normalizeRulesFromRecords(list)
 
         saveTemplateRules(normalized)
-        const rows = mapRulesToRows(normalized)
+        const rows = mapRuleRecordsToRows(list)
         this.bizRuleRows = rows.bizRuleRows
         this.customerDefaultRows = rows.customerDefaultRows
         this.customerBizRuleRows = rows.customerBizRuleRows
       } catch (error) {
+        this.ruleDetailRows = []
         const rows = mapRulesToRows(getTemplateRules())
         this.bizRuleRows = rows.bizRuleRows
         this.customerDefaultRows = rows.customerDefaultRows
@@ -1285,7 +1635,6 @@ export default {
         this.$message.warning(error.message || '数据库标签规则读取失败，已回退本地缓存')
       } finally {
         this.applyScenePresetToRules()
-        this.ensureSlittingGlobalUnifiedRules()
         this.ruleLoading = false
       }
     },
@@ -1298,12 +1647,15 @@ export default {
         if (idx === -1) {
           mergedRows.push({
             bizType,
-            templateKey: SLITTING_DEFAULT_TEMPLATE_BY_BIZ_TYPE[bizType] || bizType
+            templateKey: SLITTING_DEFAULT_TEMPLATE_BY_BIZ_TYPE[bizType] || bizType,
+            __editing: false,
+            __isNew: false,
+            __backup: null
           })
         }
       })
 
-      this.bizRuleRows = mergedRows.length ? mergedRows : [createBizRuleRow()]
+      this.bizRuleRows = mergedRows
     },
     ensureGatewayTemplateMappingsForGlobalRules(options = {}) {
       const autoAppend = !!(options && options.autoAppend)
@@ -1363,32 +1715,17 @@ export default {
         return missing
       }
 
-      const coatingSeed = existing.COATING_ROLL_LABEL || existing.COATING_INBOUND_SHEET || null
-      const rollingSeed = existing.REWINDING_ROLL_LABEL || existing.SLITTING_CORE_LABEL || existing.SLITTING_INNER_LABEL || existing.SLITTING_OUTER_LABEL || existing.SLITTING_PALLET_LABEL || null
-
       let appendedCount = 0
       missing.forEach(({ templateKey, bizType }) => {
         if (existing[templateKey]) return
 
-        const upperKey = templateKey.toUpperCase()
-        const upperBizType = String(bizType || '').trim().toUpperCase()
-        const isSlitting = SLITTING_GLOBAL_BIZ_TYPES.includes(upperBizType) ||
-          upperKey.indexOf('SLITTING_') === 0 ||
-          upperKey.includes('NEIBIAO') ||
-          upperKey.includes('WAIBIAO') ||
-          upperKey.includes('GUANXIN') ||
-          upperKey.includes('INNER') ||
-          upperKey.includes('OUTER') ||
-          upperKey.includes('CORE') ||
-          upperKey.includes('PALLET')
-        const seed = isSlitting ? rollingSeed : coatingSeed
-        const formatPath = String((seed && seed.formatPath) || DEFAULT_TEMPLATE_PATH_HINT[templateKey] || '').trim()
-        const printer = String((seed && seed.printer) || '').trim()
-
         const newRow = {
           templateKey,
-          formatPath,
-          printer
+          formatPath: '',
+          printer: DEFAULT_GATEWAY_PRINTER,
+          __editing: false,
+          __isNew: false,
+          __backup: null
         }
         rows.push(newRow)
         existing[templateKey] = newRow
@@ -1454,7 +1791,7 @@ export default {
         const customerCode = String(row.customerCode || '').trim()
         const defaultTemplate = String(row.defaultTemplate || '').trim()
         if (!customerCode) return
-        if (!byCustomer[customerCode]) byCustomer[customerCode] = { byBizType: {} }
+        if (!byCustomer[customerCode]) byCustomer[customerCode] = { byBizType: {}}
         if (defaultTemplate) {
           byCustomer[customerCode].default = defaultTemplate
           records.push({
@@ -1474,7 +1811,7 @@ export default {
         const bizType = normalizeBizTypeValue(row.bizType || '')
         const templateKey = String(row.templateKey || '').trim()
         if (!customerCode || !bizType || !templateKey) return
-        if (!byCustomer[customerCode]) byCustomer[customerCode] = { byBizType: {} }
+        if (!byCustomer[customerCode]) byCustomer[customerCode] = { byBizType: {}}
         if (!byCustomer[customerCode].byBizType) byCustomer[customerCode].byBizType = {}
         byCustomer[customerCode].byBizType[bizType] = templateKey
         records.push({
@@ -1710,7 +2047,7 @@ export default {
           records = this.parseImportedRuleData(rawData)
         }
         const normalized = normalizeRulesFromRecords(records)
-        const rows = mapRulesToRows(normalized)
+        const rows = mapRuleRecordsToRows(records)
 
         const hasValid = rows.bizRuleRows.some(row => row.bizType && row.templateKey) ||
           rows.customerDefaultRows.some(row => row.customerCode && row.defaultTemplate) ||
@@ -1754,6 +2091,7 @@ export default {
         await batchSaveLabelPrintConfigs(payload.records, { scope: 'label-rule' })
         saveTemplateRules({ byBizType: payload.byBizType, byCustomer: payload.byCustomer })
         await loadTemplateRules(true)
+        await this.loadRuleConfig()
 
         const missingMappings = this.ensureGatewayTemplateMappingsForGlobalRules({ autoAppend: true, silent: true })
         if (Array.isArray(missingMappings) && missingMappings.length) {
@@ -1779,7 +2117,6 @@ export default {
         const data = await fetchGatewayConfig(this.localConfig)
         this.gatewayConfig = normalizeGatewayConfig(data)
         this.gatewayTemplates = mapTemplatesToRows(this.gatewayConfig.templates)
-        if (!this.gatewayTemplates.length) this.gatewayTemplates = [createTemplateRow()]
       } catch (error) {
         this.$message.error(error.message || '读取本机配置失败')
       } finally {
@@ -1796,11 +2133,23 @@ export default {
         }
 
         const payload = this.buildSafeGatewayConfigPayload()
+        const dbRecords = this.buildGatewayConfigRecordsForDb()
 
-        await saveGatewayConfig(payload, this.localConfig)
-        await this.loadGatewayConfig()
-        if (!this.gatewayTemplates.length) this.gatewayTemplates = [createTemplateRow()]
-        this.$message.success('本机 BarTender 配置已保存')
+        await batchSaveLabelPrintConfigs(dbRecords, { scope: 'label-gateway' })
+
+        let localSyncError = null
+        try {
+          await saveGatewayConfig(payload, this.localConfig)
+        } catch (syncError) {
+          localSyncError = syncError
+        }
+
+        await this.loadGatewayConfigFromDb()
+        if (localSyncError) {
+          this.$message.warning('数据库已持久化成功，但同步到本机网关失败，请检查网关运行状态后重试')
+        } else {
+          this.$message.success('配置已持久化到数据库，并同步到本机网关')
+        }
       } catch (error) {
         const msg = String((error && error.message) || '').trim()
         if (/json|convertfrom-json|无法转换|deserialize/i.test(msg)) {
@@ -1828,8 +2177,8 @@ export default {
       this.persistUiStateToRoute()
     },
     removeTemplateRow(index) {
+      if (index < 0) return
       this.gatewayTemplates.splice(index, 1)
-      if (!this.gatewayTemplates.length) this.gatewayTemplates.push(createTemplateRow())
       this.persistUiStateToRoute()
     },
     addBizRuleRow() {
@@ -1838,8 +2187,8 @@ export default {
       this.persistUiStateToRoute()
     },
     removeBizRuleRow(index) {
+      if (index < 0) return
       this.bizRuleRows.splice(index, 1)
-      if (!this.bizRuleRows.length) this.bizRuleRows.push(createBizRuleRow())
       this.persistUiStateToRoute()
     },
     addCustomerDefaultRow() {
@@ -1848,8 +2197,8 @@ export default {
       this.persistUiStateToRoute()
     },
     removeCustomerDefaultRow(index) {
+      if (index < 0) return
       this.customerDefaultRows.splice(index, 1)
-      if (!this.customerDefaultRows.length) this.customerDefaultRows.push(createCustomerDefaultRow())
       this.persistUiStateToRoute()
     },
     addCustomerBizRuleRow() {
@@ -1919,9 +2268,86 @@ export default {
       this.persistUiStateToRoute()
     },
     removeCustomerBizRuleRow(index) {
+      if (index < 0) return
       this.customerBizRuleRows.splice(index, 1)
-      if (!this.customerBizRuleRows.length) this.customerBizRuleRows.push(createCustomerBizRuleRow())
       this.persistUiStateToRoute()
+    },
+    startEditRow(row) {
+      if (!row || row.__editing) return
+      const backup = {
+        templateKey: row.templateKey,
+        formatPath: row.formatPath,
+        printer: row.printer,
+        bizType: row.bizType,
+        customerCode: row.customerCode,
+        defaultTemplate: row.defaultTemplate
+      }
+      if (Object.prototype.hasOwnProperty.call(row, '__backup')) {
+        row.__backup = backup
+      } else {
+        this.$set(row, '__backup', backup)
+      }
+      if (Object.prototype.hasOwnProperty.call(row, '__editing')) {
+        row.__editing = true
+      } else {
+        this.$set(row, '__editing', true)
+      }
+    },
+    saveEditRow(row, fields = []) {
+      if (!row) return
+      const keys = Array.isArray(fields) ? fields : []
+      keys.forEach(key => {
+        if (Object.prototype.hasOwnProperty.call(row, key)) {
+          let val = String(row[key] == null ? '' : row[key]).trim()
+          // 自动修复 Windows 路径中的斜杠：将 / 转换为 \
+          // 逻辑：如果包含驱动器盘符（如 D:/）或者看起来像 Windows 路径且包含正斜杠
+          if ((key === 'formatPath') && val.includes('/') && (val.match(/^[a-zA-Z]:/) || val.startsWith('//') || val.startsWith('\\\\'))) {
+            val = val.replace(/\//g, '\\')
+          }
+          if (key === 'formatPath') {
+            val = normalizeGatewayTemplatePath(val)
+          }
+          row[key] = val
+        }
+      })
+      if (Object.prototype.hasOwnProperty.call(row, '__editing')) {
+        row.__editing = false
+      } else {
+        this.$set(row, '__editing', false)
+      }
+      if (Object.prototype.hasOwnProperty.call(row, '__isNew')) {
+        row.__isNew = false
+      } else {
+        this.$set(row, '__isNew', false)
+      }
+      if (Object.prototype.hasOwnProperty.call(row, '__backup')) {
+        row.__backup = null
+      } else {
+        this.$set(row, '__backup', null)
+      }
+    },
+    cancelEditRow(rows, row) {
+      if (!Array.isArray(rows) || !row) return
+      const idx = rows.indexOf(row)
+      if (idx < 0) return
+      if (row.__isNew) {
+        rows.splice(idx, 1)
+        return
+      }
+      const backup = row.__backup || {}
+      Object.keys(backup).forEach(key => {
+        row[key] = backup[key]
+      })
+      if (Object.prototype.hasOwnProperty.call(row, '__editing')) {
+        row.__editing = false
+      } else {
+        this.$set(row, '__editing', false)
+      }
+      if (Object.prototype.hasOwnProperty.call(row, '__backup')) {
+        row.__backup = null
+      } else {
+        this.$set(row, '__backup', null)
+      }
     },
     buildPreviewDataForTemplate(template, baseData = {}) {
       const code = String(template || '').trim().toUpperCase()

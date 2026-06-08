@@ -173,8 +173,7 @@ export const asyncRoutes = [
         component: () => import('@/views/finance/bankLedger'),
         name: 'FinanceBankLedger',
         meta: { title: '银行账目流水', icon: 'el-icon-bank-card', roles: ['finance', 'admin'] }
-      }
-      ,
+      },
       {
         path: 'ar',
         component: () => import('@/views/finance/ar'),

@@ -30,7 +30,7 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="list" border stripe size="small" v-loading="loading">
+      <el-table v-loading="loading" :data="list" border stripe size="small">
         <el-table-column prop="customerCode" label="客户编码" min-width="140" />
         <el-table-column prop="bizType" label="业务类型" min-width="190" />
         <el-table-column label="启用" width="90" align="center">

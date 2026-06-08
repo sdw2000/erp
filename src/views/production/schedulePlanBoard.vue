@@ -227,18 +227,6 @@ import { getSpecByMaterialCode } from '@/api/tapeSpec'
 
 export default {
   name: 'SchedulePlanBoard',
-  computed: {
-    selectedRows() {
-      const map = this.selectedRowsByStage || {}
-      return map[this.activeStage] || []
-    },
-    selectedTotalRolls() {
-      return this.selectedRows.reduce((sum, row) => sum + this.getRowRolls(row), 0)
-    },
-    selectedTotalArea() {
-      return this.selectedRows.reduce((sum, row) => sum + this.getRowArea(row), 0)
-    }
-  },
   data() {
     return {
       selectedDate: '',
@@ -278,6 +266,18 @@ export default {
       relationPageNum: 1,
       relationPageSize: 20,
       relationTotal: 0
+    }
+  },
+  computed: {
+    selectedRows() {
+      const map = this.selectedRowsByStage || {}
+      return map[this.activeStage] || []
+    },
+    selectedTotalRolls() {
+      return this.selectedRows.reduce((sum, row) => sum + this.getRowRolls(row), 0)
+    },
+    selectedTotalArea() {
+      return this.selectedRows.reduce((sum, row) => sum + this.getRowArea(row), 0)
     }
   },
   mounted() {

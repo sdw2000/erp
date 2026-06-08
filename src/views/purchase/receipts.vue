@@ -230,15 +230,6 @@ import PurchaseStatusTag from '@/components/PurchaseStatusTag'
 export default {
   name: 'PurchaseReceipts',
   components: { PurchaseStatusTag },
-  computed: {
-    availablePurchaseOrderOptions() {
-      // 支持“同一采购订单多次到货”：不再按已使用订单号做去重限制
-      return (this.purchaseOrderOptions || []).filter(order => {
-        const orderNo = String((order && order.orderNo) || '').trim()
-        return !!orderNo
-      })
-    }
-  },
   data() {
     return {
       loading: false,
@@ -255,6 +246,15 @@ export default {
       isEdit: false,
       current: null,
       form: this.emptyForm()
+    }
+  },
+  computed: {
+    availablePurchaseOrderOptions() {
+      // 支持“同一采购订单多次到货”：不再按已使用订单号做去重限制
+      return (this.purchaseOrderOptions || []).filter(order => {
+        const orderNo = String((order && order.orderNo) || '').trim()
+        return !!orderNo
+      })
     }
   },
   created() {

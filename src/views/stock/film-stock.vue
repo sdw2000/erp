@@ -143,7 +143,7 @@
           />
         </div>
         <div>
-        <el-button v-if="$hasRole('admin')" type="primary" size="mini" icon="el-icon-plus" @click="openCreateDetail">新增明细</el-button>
+          <el-button v-if="$hasRole('admin')" type="primary" size="mini" icon="el-icon-plus" @click="openCreateDetail">新增明细</el-button>
         </div>
       </div>
       <el-table
@@ -475,7 +475,7 @@ export default {
               type: 'warning'
             })
           }
-          
+
           // 如果有跳过数据，提供下载选项
           if (result.skipCount > 0 && result.skippedExcel) {
             this.$confirm('有数据被跳过，是否下载跳过数据Excel？', '提示', {
@@ -489,7 +489,7 @@ export default {
               // 用户取消下载
             })
           }
-          
+
           this.pagination.current = 1
           this.loadFilmStock()
         } else {

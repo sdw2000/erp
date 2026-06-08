@@ -122,12 +122,12 @@ function normalizeFilmRows(list = [], rawMetaMap = {}) {
   }))
 }
 
-  function normalizeChemicalRows(list = [], rawMetaMap = {}) {
+function normalizeChemicalRows(list = [], rawMetaMap = {}) {
   return list.map(item => ({
-      ...(rawMetaMap[normalizeMaterialCode(item.materialCode)] || {}),
+    ...(rawMetaMap[normalizeMaterialCode(item.materialCode)] || {}),
     category: resolveMaterialCategory({
       materialCode: item.materialCode,
-        explicitCategory: (rawMetaMap[normalizeMaterialCode(item.materialCode)] || {}).materialCategory
+      explicitCategory: (rawMetaMap[normalizeMaterialCode(item.materialCode)] || {}).materialCategory
     }).label,
     sourceType: 'chemical',
     sourceId: item.id,

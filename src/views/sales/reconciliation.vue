@@ -16,7 +16,7 @@
 
       <div class="search-area">
         <el-row :gutter="12">
-          <el-col :span="10" v-if="activeTab === 'detail'">
+          <el-col v-if="activeTab === 'detail'" :span="10">
             <div class="search-item">
               <span class="search-label">客户</span>
               <el-select v-model="queryForm.customerCode" filterable clearable placeholder="请选择客户" style="width:100%">
@@ -30,7 +30,7 @@
               <el-date-picker v-model="queryForm.month" type="month" value-format="yyyy-MM" placeholder="选择月份" style="width:100%" />
             </div>
           </el-col>
-          <el-col :span="10" v-if="activeTab === 'overview'">
+          <el-col v-if="activeTab === 'overview'" :span="10">
             <div class="search-item" style="display: flex; gap: 12px; align-items: center;">
               <span class="search-label">客户</span>
               <el-select v-model="queryForm.customerCode" filterable clearable placeholder="请选择客户（可选）" style="width:180px">
@@ -44,7 +44,7 @@
               </el-select>
             </div>
           </el-col>
-          <el-col :span="8" v-if="activeTab === 'detail' && statementLoaded">
+          <el-col v-if="activeTab === 'detail' && statementLoaded" :span="8">
             <div class="search-item">
               <span class="search-label status-label">状态</span>
               <el-tag :type="getStatusTagType(statement.reconciliationStatus)" size="small">{{ statement.reconciliationStatusLabel || '未对账' }}</el-tag>
@@ -56,182 +56,193 @@
       <el-tabs v-model="activeTab" class="reconciliation-tabs" @tab-click="handleTabChange">
         <el-tab-pane label="对账明细" name="detail">
 
-      <div v-if="statementLoaded" class="summary-grid">
-        <div class="summary-card">
-          <div class="summary-label">本月卷数</div>
-          <div class="summary-value">{{ formatNumber(statement.summary.totalRolls, 0) }}</div>
-        </div>
-        <div class="summary-card">
-          <div class="summary-label">本月面积</div>
-          <div class="summary-value">{{ formatNumber(statement.summary.totalArea) }} ㎡</div>
-        </div>
-        <div class="summary-card">
-          <div class="summary-label">发货金额</div>
-          <div class="summary-value">{{ formatNumber(statement.summary.deliveryAmount) }}</div>
-        </div>
-        <div class="summary-card warning-card">
-          <div class="summary-label">退货影响</div>
-          <div class="summary-value">{{ formatNumber(statement.summary.returnAmount) }}</div>
-        </div>
-        <div class="summary-card primary-card">
-          <div class="summary-label">本月对账金额</div>
-          <div class="summary-value">{{ formatNumber(statement.summary.totalAmount) }}</div>
-        </div>
-      </div>
-
-      <div class="section-block">
-        <div class="section-head">
-          <div class="section-title">当月送货明细</div>
-          <div class="section-head-actions">
-            <el-button
-              size="small"
-              icon="el-icon-plus"
-              :disabled="!statementLoaded || !queryForm.customerCode || !queryForm.month"
-              @click="openUnreconciledDialog"
-            >
-              增加未对账订单
-            </el-button>
-            <el-button
-              type="success"
-              size="small"
-              icon="el-icon-check"
-              :disabled="!statementLoaded"
-              @click="confirmCurrentStatement"
-            >
-              确认对账
-            </el-button>
+          <div v-if="statementLoaded" class="summary-grid">
+            <div class="summary-card">
+              <div class="summary-label">本月卷数</div>
+              <div class="summary-value">{{ formatNumber(statement.summary.totalRolls, 0) }}</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">本月面积</div>
+              <div class="summary-value">{{ formatNumber(statement.summary.totalArea) }} ㎡</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">发货金额</div>
+              <div class="summary-value">{{ formatNumber(statement.summary.deliveryAmount) }}</div>
+            </div>
+            <div class="summary-card warning-card">
+              <div class="summary-label">退货影响</div>
+              <div class="summary-value">{{ formatNumber(statement.summary.returnAmount) }}</div>
+            </div>
+            <div class="summary-card primary-card">
+              <div class="summary-label">本月对账金额</div>
+              <div class="summary-value">{{ formatNumber(statement.summary.totalAmount) }}</div>
+            </div>
           </div>
-        </div>
-        <el-table class="reconciliation-table" :data="statement.detailRows" border stripe style="width:100%">
-          <el-table-column label="类型" width="78" align="center">
-            <template slot-scope="scope">
-              <el-tag size="mini" :type="scope.row.bizType === 'return' ? 'warning' : 'success'">
-                {{ scope.row.bizType === 'return' ? '退货' : '发货' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="出货日期" width="100">
-            <template slot-scope="scope">{{ formatShortDate(scope.row.bizDate) }}</template>
-          </el-table-column>
-          <el-table-column prop="orderNo" label="订单号" min-width="130" show-overflow-tooltip />
-          <el-table-column label="业务单号" min-width="150" show-overflow-tooltip>
-            <template slot-scope="scope">
-              {{ scope.row.bizType === 'return' ? `退货单：${scope.row.documentNo || '-'}` : `送货单：${scope.row.documentNo || '-'}` }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="materialName" label="产品" min-width="154" show-overflow-tooltip />
-          <el-table-column prop="spec" label="规格" min-width="150" show-overflow-tooltip />
-          <el-table-column label="数量(R)" width="72" align="right">
-            <template slot-scope="scope">{{ formatNumber(scope.row.quantity, 0) }}</template>
-          </el-table-column>
-          <el-table-column label="数量/m²" width="100" align="right">
-            <template slot-scope="scope">{{ formatNumber(scope.row.areaSize) }}</template>
-          </el-table-column>
-          <el-table-column label="单价" width="110" align="right">
-            <template slot-scope="scope">{{ formatNumber(scope.row.unitPrice, 4) }} / {{ scope.row.priceUnit || '㎡' }}</template>
-          </el-table-column>
-          <el-table-column label="总金额" width="120" align="right">
-            <template slot-scope="scope">
-              <span :class="{ 'negative-amount': Number(scope.row.amount) < 0 }">{{ formatNumber(scope.row.amount) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="对账月份" width="140" align="center">
-            <template slot-scope="scope">
-              <el-select
-                v-if="scope.row.bizType === 'delivery' && !statement.rpNaturalMonthLocked"
-                v-model="scope.row.reconcileTargetMonth"
-                size="mini"
-                style="width: 120px"
-                @change="handleDetailTargetMonthChange(scope.row)"
-              >
-                <el-option :value="queryForm.month" :label="`${queryForm.month}(当月)`" />
-                <el-option :value="getNextMonth(queryForm.month)" :label="`${getNextMonth(queryForm.month)}(下月)`" />
-              </el-select>
-              <span v-else>{{ scope.row.reconcileTargetMonth || queryForm.month }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="170" align="center">
-            <template slot-scope="scope">
-              <div v-if="scope.row.bizType === 'delivery' || scope.row.bizType === 'return'" class="op-btns">
-                <el-button
-                  v-if="scope.row.bizType === 'delivery' && !statement.rpNaturalMonthLocked"
-                  type="text"
-                  size="mini"
-                  @click="openSplitDialog(scope.row)"
-                >
-                  拆分
-                </el-button>
-                <el-button
-                  v-if="scope.row._splitPairId"
-                  type="text"
-                  size="mini"
-                  @click="restoreSplitRow(scope.row)"
-                >
-                  还原
-                </el-button>
-                <el-button
-                  type="text"
-                  size="mini"
-                  class="op-danger"
-                  :disabled="statement.rpNaturalMonthLocked"
-                  @click="removeDetailRow(scope.row)"
-                >
-                  删除
-                </el-button>
-              </div>
-              <span v-else>-</span>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
 
-      <div class="section-block">
-        <div class="section-head">
-          <div class="section-title">历史欠账 / 开票台账</div>
-          <el-button type="primary" plain size="small" icon="el-icon-plus" :disabled="!queryForm.customerCode" @click="addHistoryRow">新增历史记录</el-button>
-        </div>
-        <el-table class="reconciliation-table" :data="statement.historyRows" border stripe style="width:100%">
-          <el-table-column label="对账月份" width="120">
-            <template slot-scope="scope">
-              <el-date-picker v-model="scope.row.statementMonth" :disabled="!scope.row._editing" type="month" value-format="yyyy-MM" size="mini" placeholder="月份" style="width:100%" />
-            </template>
-          </el-table-column>
-          <el-table-column label="欠账金额" width="140" align="right">
-            <template slot-scope="scope">
-              <el-input-number v-model="scope.row.unpaidAmount" :disabled="!scope.row._editing" :precision="2" :controls="false" size="mini" style="width:100%" />
-            </template>
-          </el-table-column>
-          <el-table-column label="开票金额" width="140" align="right">
-            <template slot-scope="scope">
-              <el-input-number v-model="scope.row.invoiceAmount" :disabled="!scope.row._editing" :precision="2" :controls="false" size="mini" style="width:100%" />
-            </template>
-          </el-table-column>
-          <el-table-column label="开票日期" width="140">
-            <template slot-scope="scope">
-              <el-date-picker v-model="scope.row.invoiceDate" :disabled="!scope.row._editing" type="date" value-format="yyyy-MM-dd" size="mini" placeholder="开票日期" style="width:100%" />
-            </template>
-          </el-table-column>
-          <el-table-column label="备注" min-width="180">
-            <template slot-scope="scope">
-              <el-input v-model="scope.row.remark" :disabled="!scope.row._editing" size="mini" placeholder="备注" />
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="150" align="center">
-            <template slot-scope="scope">
-              <div class="op-btns">
-                <el-button v-if="scope.row._editing" type="text" size="mini" @click="saveHistoryRow(scope.row)">保存</el-button>
-                <el-button v-else type="text" size="mini" @click="editHistoryRow(scope.row)">修改</el-button>
-                <el-button type="text" size="mini" class="op-danger" @click="deleteHistoryRow(scope.row, scope.$index)">删除</el-button>
+          <div class="section-block">
+            <div class="section-head">
+              <div class="section-title">当月送货明细</div>
+              <div class="section-head-actions">
+                <el-button
+                  size="small"
+                  icon="el-icon-plus"
+                  :disabled="!statementLoaded || !queryForm.customerCode || !queryForm.month"
+                  @click="openUnreconciledDialog"
+                >
+                  增加未对账订单
+                </el-button>
+                <el-button
+                  type="success"
+                  size="small"
+                  icon="el-icon-check"
+                  :disabled="!statementLoaded"
+                  @click="confirmCurrentStatement"
+                >
+                  确认对账
+                </el-button>
+                <el-button
+                  v-if="isAdminUser()"
+                  type="warning"
+                  plain
+                  size="small"
+                  icon="el-icon-refresh-left"
+                  :disabled="!canAdminRollbackCurrentStatement()"
+                  @click="rollbackCurrentStatementByAdmin"
+                >
+                  管理员回退
+                </el-button>
               </div>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div class="history-summary">
-          <span>历史欠账合计：{{ formatNumber(getHistoryTotalUnpaid()) }}</span>
-          <span>历史开票合计：{{ formatNumber(getHistoryTotalInvoice()) }}</span>
-          <span class="payable-amount">期末应付金额：{{ formatNumber(getFinalPayableAmount()) }}</span>
-        </div>
-      </div>
+            </div>
+            <el-table class="reconciliation-table" :data="statement.detailRows" border stripe style="width:100%">
+              <el-table-column label="类型" width="78" align="center">
+                <template slot-scope="scope">
+                  <el-tag size="mini" :type="scope.row.bizType === 'return' ? 'warning' : 'success'">
+                    {{ scope.row.bizType === 'return' ? '退货' : '发货' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="出货日期" width="100">
+                <template slot-scope="scope">{{ formatShortDate(scope.row.bizDate) }}</template>
+              </el-table-column>
+              <el-table-column prop="orderNo" label="订单号" min-width="130" show-overflow-tooltip />
+              <el-table-column label="业务单号" min-width="150" show-overflow-tooltip>
+                <template slot-scope="scope">
+                  {{ scope.row.bizType === 'return' ? `退货单：${scope.row.documentNo || '-'}` : `送货单：${scope.row.documentNo || '-'}` }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="materialName" label="产品" min-width="154" show-overflow-tooltip />
+              <el-table-column prop="spec" label="规格" min-width="150" show-overflow-tooltip />
+              <el-table-column label="数量(R)" width="72" align="right">
+                <template slot-scope="scope">{{ formatNumber(scope.row.quantity, 0) }}</template>
+              </el-table-column>
+              <el-table-column label="数量/m²" width="100" align="right">
+                <template slot-scope="scope">{{ formatNumber(scope.row.areaSize) }}</template>
+              </el-table-column>
+              <el-table-column label="单价" width="110" align="right">
+                <template slot-scope="scope">{{ formatNumber(scope.row.unitPrice, 4) }} / {{ scope.row.priceUnit || '㎡' }}</template>
+              </el-table-column>
+              <el-table-column label="总金额" width="120" align="right">
+                <template slot-scope="scope">
+                  <span :class="{ 'negative-amount': Number(scope.row.amount) < 0 }">{{ formatNumber(scope.row.amount) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="对账月份" width="140" align="center">
+                <template slot-scope="scope">
+                  <el-select
+                    v-if="scope.row.bizType === 'delivery' && !statement.rpNaturalMonthLocked"
+                    v-model="scope.row.reconcileTargetMonth"
+                    size="mini"
+                    style="width: 120px"
+                    @change="handleDetailTargetMonthChange(scope.row)"
+                  >
+                    <el-option :value="queryForm.month" :label="`${queryForm.month}(当月)`" />
+                    <el-option :value="getNextMonth(queryForm.month)" :label="`${getNextMonth(queryForm.month)}(下月)`" />
+                  </el-select>
+                  <span v-else>{{ scope.row.reconcileTargetMonth || queryForm.month }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="170" align="center">
+                <template slot-scope="scope">
+                  <div v-if="scope.row.bizType === 'delivery' || scope.row.bizType === 'return'" class="op-btns">
+                    <el-button
+                      v-if="scope.row.bizType === 'delivery' && !statement.rpNaturalMonthLocked"
+                      type="text"
+                      size="mini"
+                      @click="openSplitDialog(scope.row)"
+                    >
+                      拆分
+                    </el-button>
+                    <el-button
+                      v-if="scope.row._splitPairId"
+                      type="text"
+                      size="mini"
+                      @click="restoreSplitRow(scope.row)"
+                    >
+                      还原
+                    </el-button>
+                    <el-button
+                      type="text"
+                      size="mini"
+                      class="op-danger"
+                      :disabled="statement.rpNaturalMonthLocked"
+                      @click="removeDetailRow(scope.row)"
+                    >
+                      删除
+                    </el-button>
+                  </div>
+                  <span v-else>-</span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <div class="section-block">
+            <div class="section-head">
+              <div class="section-title">历史欠账 / 开票台账</div>
+              <el-button type="primary" plain size="small" icon="el-icon-plus" :disabled="!queryForm.customerCode" @click="addHistoryRow">新增历史记录</el-button>
+            </div>
+            <el-table class="reconciliation-table" :data="statement.historyRows" border stripe style="width:100%">
+              <el-table-column label="对账月份" width="120">
+                <template slot-scope="scope">
+                  <el-date-picker v-model="scope.row.statementMonth" :disabled="!scope.row._editing" type="month" value-format="yyyy-MM" size="mini" placeholder="月份" style="width:100%" />
+                </template>
+              </el-table-column>
+              <el-table-column label="欠账金额" width="140" align="right">
+                <template slot-scope="scope">
+                  <el-input-number v-model="scope.row.unpaidAmount" :disabled="!scope.row._editing" :precision="2" :controls="false" size="mini" style="width:100%" />
+                </template>
+              </el-table-column>
+              <el-table-column label="开票金额" width="140" align="right">
+                <template slot-scope="scope">
+                  <el-input-number v-model="scope.row.invoiceAmount" :disabled="!scope.row._editing" :precision="2" :controls="false" size="mini" style="width:100%" />
+                </template>
+              </el-table-column>
+              <el-table-column label="开票日期" width="140">
+                <template slot-scope="scope">
+                  <el-date-picker v-model="scope.row.invoiceDate" :disabled="!scope.row._editing" type="date" value-format="yyyy-MM-dd" size="mini" placeholder="开票日期" style="width:100%" />
+                </template>
+              </el-table-column>
+              <el-table-column label="备注" min-width="180">
+                <template slot-scope="scope">
+                  <el-input v-model="scope.row.remark" :disabled="!scope.row._editing" size="mini" placeholder="备注" />
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="150" align="center">
+                <template slot-scope="scope">
+                  <div class="op-btns">
+                    <el-button v-if="scope.row._editing" type="text" size="mini" @click="saveHistoryRow(scope.row)">保存</el-button>
+                    <el-button v-else type="text" size="mini" @click="editHistoryRow(scope.row)">修改</el-button>
+                    <el-button type="text" size="mini" class="op-danger" @click="deleteHistoryRow(scope.row, scope.$index)">删除</el-button>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div class="history-summary">
+              <span>历史欠账合计：{{ formatNumber(getHistoryTotalUnpaid()) }}</span>
+              <span>历史开票合计：{{ formatNumber(getHistoryTotalInvoice()) }}</span>
+              <span class="payable-amount">期末应付金额：{{ formatNumber(getFinalPayableAmount()) }}</span>
+            </div>
+          </div>
         </el-tab-pane>
 
         <el-tab-pane label="客户对账总情况" name="overview">
@@ -515,6 +526,7 @@ import {
   importSalesReconciliationHistory,
   initializeSalesReconciliationHistory,
   queryUnreconciledSalesReconciliationCandidates,
+  rollbackSalesReconciliationFinanceConfirm,
   removeSalesReconciliationDetail,
   saveSalesReconciliationHistory
 } from '@/api/salesReconciliation'
@@ -730,6 +742,16 @@ export default {
     },
     getStatusTagType(status) {
       return status === 'RECONCILED' ? 'success' : 'danger'
+    },
+    isAdminUser() {
+      const roles = (this.$store && this.$store.getters && this.$store.getters.roles) || []
+      return Array.isArray(roles) && roles.includes('admin')
+    },
+    canAdminRollbackCurrentStatement() {
+      if (!this.isAdminUser()) return false
+      if (!this.statementLoaded) return false
+      if (!this.queryForm.customerCode || !this.queryForm.month) return false
+      return String(this.statement.reconciliationStatus || '') === 'RECONCILED'
     },
     async handleOverviewSortChange({ prop, order }) {
       this.overviewSort.prop = prop || 'reconciliationStatus'
@@ -1154,6 +1176,29 @@ export default {
       }
       this.$message.success('对账确认成功')
       await this.handleSearch()
+    },
+    async rollbackCurrentStatementByAdmin() {
+      if (!this.isAdminUser()) {
+        return this.$message.warning('仅管理员可执行回退')
+      }
+      if (!this.queryForm.customerCode || !this.queryForm.month) {
+        return this.$message.warning('请先选择客户和月份')
+      }
+      if (String(this.statement.reconciliationStatus || '') !== 'RECONCILED') {
+        return this.$message.warning('当前未处于财务确认状态，无需回退')
+      }
+
+      await this.$confirm('回退后将撤销财务确认，销售可重新对账，是否继续？', '管理员回退确认', { type: 'warning' }).then(async() => {
+        const res = await rollbackSalesReconciliationFinanceConfirm({
+          customerCode: this.queryForm.customerCode,
+          month: this.queryForm.month
+        })
+        if (!res || (res.code !== 200 && res.code !== 20000)) {
+          return this.$message.error((res && (res.msg || res.message)) || '回退失败')
+        }
+        this.$message.success('回退成功，销售可重新对账')
+        await this.handleSearch()
+      }).catch(() => {})
     },
     async openUnreconciledDialog() {
       if (!this.queryForm.customerCode || !this.queryForm.month) {
