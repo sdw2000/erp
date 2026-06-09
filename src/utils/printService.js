@@ -5,6 +5,7 @@ const STORAGE_KEY = 'MES_BARTENDER_CONFIG'
 const TEMPLATE_RULES_KEY = 'MES_PRINT_TEMPLATE_RULES'
 const SLITTING_CARTON_SPECS_KEY = 'MES_SLITTING_CARTON_SPECS'
 const SLITTING_MATERIAL_CARTON_SPECS_KEY = 'MES_SLITTING_MATERIAL_CARTON_SPECS'
+const PENDING_PRINT_BATCHES_KEY = 'MES_BARTENDER_PENDING_BATCHES'
 export const LABEL_PRINT_DEFAULT_BIZ_TYPE = '__DEFAULT__'
 let templateRulesCache = null
 
@@ -278,15 +279,70 @@ function firstNotBlank(...values) {
   return ''
 }
 
+function loadPendingPrintBatches() {
+  try {
+    const raw = window.localStorage.getItem(PENDING_PRINT_BATCHES_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed : []
+  } catch (e) {
+    return []
+  }
+}
+
+function savePendingPrintBatches(items = []) {
+  const rows = Array.isArray(items) ? items : []
+  window.localStorage.setItem(PENDING_PRINT_BATCHES_KEY, JSON.stringify(rows))
+  return rows
+}
+
+function upsertPendingPrintBatch(item = {}) {
+  const batchId = String(item.batchId || '').trim()
+  if (!batchId) return
+  const rows = loadPendingPrintBatches()
+  const idx = rows.findIndex(x => String((x && x.batchId) || '').trim() === batchId)
+  if (idx >= 0) {
+    rows[idx] = {
+      ...(rows[idx] || {}),
+      ...(item || {}),
+      updatedAt: new Date().toISOString()
+    }
+  } else {
+    rows.unshift({
+      ...(item || {}),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    })
+  }
+  // 仅保留最近200个批次，避免本地无限增长
+  savePendingPrintBatches(rows.slice(0, 200))
+}
+
+function removePendingPrintBatchById(batchId = '') {
+  const id = String(batchId || '').trim()
+  if (!id) return
+  const rows = loadPendingPrintBatches().filter(x => String((x && x.batchId) || '').trim() !== id)
+  savePendingPrintBatches(rows)
+}
+
+export function getPendingPrintBatches() {
+  return loadPendingPrintBatches()
+}
+
+export function clearPendingPrintBatch(batchId = '') {
+  removePendingPrintBatchById(batchId)
+}
+
 async function reportPrintRecord({ payload = {}, trace = {}, result = null, error = null } = {}) {
   try {
-    const data = (payload && payload.data) || {}
+    const isBatchPayload = Array.isArray(payload)
+    const firstPayload = isBatchPayload ? (payload[0] || {}) : (payload || {})
+    const data = (firstPayload && firstPayload.data) || {}
     const body = {
       sceneName: firstNotBlank(trace.sceneName),
       bizType: firstNotBlank(trace.bizType),
-      templateKey: firstNotBlank(payload.template),
-      jobName: firstNotBlank(payload.jobName),
-      copies: Number(payload.copies || 1),
+      templateKey: firstNotBlank(firstPayload.template),
+      jobName: firstNotBlank(firstPayload.jobName),
+      copies: Number(firstPayload.copies || 1),
       customerCode: firstNotBlank(trace.customerCode, data.customerCode),
       customerOrderNo: firstNotBlank(trace.customerOrderNo, data.customerOrderNo),
       orderNo: firstNotBlank(trace.orderNo, data.orderNo),
@@ -298,7 +354,9 @@ async function reportPrintRecord({ payload = {}, trace = {}, result = null, erro
       resultMessage: error ? String((error && error.message) || error || '').trim() : firstNotBlank(result && (result.message || result.msg)),
       printData: data,
       printPayload: payload,
-      printResult: result || null
+      printResult: result || null,
+      batchId: firstNotBlank(trace.batchId),
+      batchCount: Number(trace.batchCount || (isBatchPayload ? payload.length : 1) || 1)
     }
 
     const headers = { 'Content-Type': 'application/json; charset=utf-8' }
@@ -360,12 +418,17 @@ export async function sendBarTenderPrint(payload, config = {}, trace = {}) {
 
   // 如果 payload 是数组，说明是批量任务
   const isBatch = Array.isArray(payload)
+  const batchId = String((trace && trace.batchId) || '').trim()
 
   const controller = new AbortController()
   // 批量打印的任务可能需要更长时间处理，将超时时间进一步抬高
   const configuredTimeoutMs = Number(cfg.timeoutMs || 60000)
+  const batchSize = isBatch ? payload.length : 1
+  const batchTimeoutBySize = isBatch
+    ? Math.min(600000, Math.max(120000, batchSize * 4000))
+    : 0
   const timeoutMs = isBatch
-    ? Math.max(120000, configuredTimeoutMs)
+    ? Math.max(configuredTimeoutMs, batchTimeoutBySize)
     : Math.max(60000, configuredTimeoutMs)
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   let failureReported = false
@@ -373,6 +436,22 @@ export async function sendBarTenderPrint(payload, config = {}, trace = {}) {
   try {
     const headers = { 'Content-Type': 'application/json; charset=utf-8' }
     if (cfg.apiKey) headers['X-Api-Key'] = cfg.apiKey
+
+    // 批量任务先落本地“待确认队列”，防止页面异常导致任务丢失
+    if (isBatch && batchId) {
+      upsertPendingPrintBatch({
+        batchId,
+        status: 'pending',
+        endpoint,
+        batchCount: payload.length,
+        trace: {
+          sceneName: trace.sceneName || '',
+          orderNo: trace.orderNo || '',
+          batchCount: trace.batchCount || payload.length
+        },
+        payload
+      })
+    }
 
     let resp
     try {
@@ -392,13 +471,30 @@ export async function sendBarTenderPrint(payload, config = {}, trace = {}) {
     const data = await resp.json().catch(() => ({}))
     if (!resp.ok) {
       const err = new Error((data && (data.message || data.msg)) || `HTTP ${resp.status}`)
+      if (isBatch && batchId) {
+        upsertPendingPrintBatch({
+          batchId,
+          status: 'failed',
+          lastError: String((err && err.message) || err || '').trim()
+        })
+      }
       reportPrintRecord({ payload, trace, result: data || null, error: err }).catch(() => {})
       failureReported = true
       throw err
     }
+    if (isBatch && batchId) {
+      removePendingPrintBatchById(batchId)
+    }
     reportPrintRecord({ payload, trace, result: data || null, error: null }).catch(() => {})
     return data || {}
   } catch (error) {
+    if (isBatch && batchId) {
+      upsertPendingPrintBatch({
+        batchId,
+        status: 'failed',
+        lastError: String((error && error.message) || error || '').trim()
+      })
+    }
     if (!failureReported) {
       reportPrintRecord({ payload, trace, result: null, error }).catch(() => {})
     }
@@ -525,6 +621,21 @@ export async function syncGatewayTemplates(config = {}, options = {}) {
 }
 
 export async function printByTemplate(template, data, options = {}, config = {}, trace = {}) {
+  // 处理数组形式的批量数据
+  if (Array.isArray(data)) {
+    const payload = data.map((item, idx) => {
+      const normalizedData = normalizePrintDataKeys(item || {})
+      const itemOptions = Array.isArray(options) ? (options[idx] || {}) : (options || {})
+      return {
+        template: template,
+        jobName: itemOptions.jobName || `${template}_${Date.now()}_${idx}`,
+        copies: Number(itemOptions.copies || 1),
+        data: normalizedData
+      }
+    })
+    return sendBarTenderPrint(payload, config, trace)
+  }
+
   const normalizedData = normalizePrintDataKeys(data || {})
   const payload = {
     template,
@@ -533,6 +644,67 @@ export async function printByTemplate(template, data, options = {}, config = {},
     data: normalizedData
   }
   return sendBarTenderPrint(payload, config, trace)
+}
+
+export async function printBySceneBatch(scene = {}, sources = [], runtime = {}) {
+  if (!Array.isArray(sources) || !sources.length) return []
+  
+  const config = runtime.config || scene.config || {}
+  const rules = runtime.rules || scene.rules || {}
+  const resolvedRules = Object.keys(rules || {}).length ? getTemplateRules(rules) : await loadTemplateRules()
+  const batchStamp = Date.now()
+  const batchId = `BT_BATCH_${batchStamp}`
+  const orderedSources = sources.map((source, idx) => ({ source, __idx: idx }))
+
+  const serialCandidates = orderedSources.map(x => Number(x && x.source && x.source.serialNo))
+  const allHaveSerial = serialCandidates.every(x => Number.isFinite(x) && x > 0)
+  if (allHaveSerial) {
+    const seen = new Set()
+    for (let i = 0; i < serialCandidates.length; i++) {
+      const n = Math.trunc(serialCandidates[i])
+      if (seen.has(n)) {
+        throw new Error(`批量打印序号重复：${n}`)
+      }
+      seen.add(n)
+    }
+  }
+  
+  const payloadBatch = orderedSources.map(({ source, __idx }) => {
+    const idx = __idx
+    const bizType = String(resolveSceneValue(scene.bizType, source, runtime) || '').trim()
+    const customerCode = String(resolveSceneValue(scene.customerCode, source, runtime) || '').trim()
+    const defaultTemplate = String(resolveSceneValue(scene.defaultTemplate, source, runtime) || '').trim()
+    
+    const template = resolveTemplateKey({ bizType, customerCode, defaultTemplate }, resolvedRules)
+    if (!template) {
+      throw new Error(`第 ${idx + 1} 个任务未找到可用模板`)
+    }
+    
+    const data = resolveSceneValue(scene.data || scene.buildData, source, runtime) || {}
+    const options = resolveSceneValue(scene.options || scene.buildOptions, source, runtime) || {}
+    
+    return {
+      template,
+      jobName: options.jobName || `${template}_${batchStamp}_${String(idx + 1).padStart(4, '0')}`,
+      copies: Number(options.copies || 1),
+      data: normalizePrintDataKeys(data),
+      sequence: idx + 1,
+      batchId
+    }
+  })
+
+  // 这里的 trace 只取第一个作为记录参考（记录服务通常只存一个摘要）
+  const firstSource = sources[0]
+  const firstData = resolveSceneValue(scene.data || scene.buildData, firstSource, runtime) || {}
+  const trace = {
+    sceneName: String(resolveSceneValue(scene.sceneName, firstSource, runtime) || '').trim(),
+    isBatch: true,
+    batchId,
+    batchCount: sources.length,
+    orderNo: (firstData && firstData.orderNo) || ''
+  }
+
+  return sendBarTenderPrint(payloadBatch, config, trace)
 }
 
 function normalizePrintDataKeys(raw) {

@@ -1,58 +1,65 @@
 ﻿{
     "SLITTING_INNER_LABEL_GF001":  {
-                                       "updatedAt":  "2026-06-08 17:20:44",
+                                       "updatedAt":  "2026-06-09 11:04:20",
                                        "fileName":  "SLITTING_INNER_LABEL_GF001.btw",
-                                       "sha256":  "259c331cc4a571702f6ef348ea003a5f9f528e84ec839b97354c622ec765fc46",
-                                       "version":  "1780910437415",
+                                       "sha256":  "0bb439cc248402723625505c2db019bade322874413be07391eb4339fd29a0b2",
+                                       "version":  "1780974151815",
                                        "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_INNER_LABEL_GF001.btw"
                                    },
     "SLITTING_CORE_LABEL_GDRP001":  {
-                                        "updatedAt":  "2026-06-08 17:20:44",
+                                        "updatedAt":  "2026-06-09 11:04:20",
                                         "fileName":  "SLITTING_CORE_LABEL_GDRP001.btw",
-                                        "sha256":  "d61673ea68d3577611c845f4eba7aca993b2726473d3a8100a5ebb9c69a48a04",
-                                        "version":  "1780910437253",
+                                        "sha256":  "5a7ac4c32c7eabc461b3c8057033e400ede325aac3dfa190c12843bd2a45e0ef",
+                                        "version":  "1780974125596",
                                         "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_CORE_LABEL_GDRP001.btw"
                                     },
     "SLITTING_OUTER_LABEL":  {
-                                 "updatedAt":  "2026-06-08 17:20:44",
+                                 "updatedAt":  "2026-06-09 11:04:20",
                                  "fileName":  "SLITTING_OUTER_LABEL.btw",
                                  "sha256":  "4991b74015cce06e65a6942dfaca46eb1ce2b1323ce982d8c6a517429d740a69",
-                                 "version":  "1780910437503",
+                                 "version":  "1780910444909",
                                  "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_OUTER_LABEL.btw"
                              },
-    "SLITTING_OUTER_LABEL_YH001":  {
-                                       "updatedAt":  "2026-06-08 17:20:44",
-                                       "fileName":  "SLITTING_OUTER_LABEL_YH001.btw",
-                                       "sha256":  "950f0416fc2ed29ad3f6a431e7ab20880260681e0dfd4a7f835200b241b3dc27",
-                                       "version":  "1780910437557",
-                                       "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_OUTER_LABEL_YH001.btw"
-                                   },
     "FENQIE_NEIBIAO_RP001":  {
-                                 "updatedAt":  "2026-06-08 17:20:44",
+                                 "updatedAt":  "2026-06-09 11:04:20",
                                  "fileName":  "fenqie_neibiao_RP001.btw",
                                  "sha256":  "9fcda86af599d94c57b962d0682cf49037c183c6c6768fc3aa54811dc3fe283e",
-                                 "version":  "1780910437035",
+                                 "version":  "1780910444425",
                                  "localPath":  "D:\\MES\\BarTender\\Templates\\fenqie_neibiao_RP001.btw"
                              },
+    "SLITTING_OUTER_LABEL_YH001":  {
+                                       "updatedAt":  "2026-06-09 11:04:20",
+                                       "fileName":  "SLITTING_OUTER_LABEL_YH001.btw",
+                                       "sha256":  "950f0416fc2ed29ad3f6a431e7ab20880260681e0dfd4a7f835200b241b3dc27",
+                                       "version":  "1780910444964",
+                                       "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_OUTER_LABEL_YH001.btw"
+                                   },
+    "SLITTING_INNER_LABEL":  {
+                                 "updatedAt":  "2026-06-09 11:04:20",
+                                 "fileName":  "SLITTING_INNER_LABEL.btw",
+                                 "sha256":  "ef7d20204583a953262e97fb6bb42f1d50ad261bfc110ad5cf9c8cfc1286b57a",
+                                 "version":  "1780910444794",
+                                 "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_INNER_LABEL.btw"
+                             },
     "SLITTING_CORE_LABEL_NARROW":  {
-                                       "updatedAt":  "2026-06-08 17:20:44",
+                                       "updatedAt":  "2026-06-09 11:04:20",
                                        "fileName":  "SLITTING_CORE_LABEL_NARROW.btw",
                                        "sha256":  "b89ebd700ed1613c47ae5d02991078370060e52987fac040940a90ff6da115ab",
-                                       "version":  "1780910437279",
+                                       "version":  "1780910444683",
                                        "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_CORE_LABEL_NARROW.btw"
                                    },
     "JIANGHAI_WAIBIAO":  {
-                             "updatedAt":  "2026-06-08 17:20:44",
+                             "updatedAt":  "2026-06-09 11:04:20",
                              "fileName":  "jianghai_waibiao.btw",
                              "sha256":  "d3a386cf7900ee0f912f2b31e4f885853c921aac87afd1b0b24d56eb967f2a8b",
-                             "version":  "1780910437172",
+                             "version":  "1780910444575",
                              "localPath":  "D:\\MES\\BarTender\\Templates\\jianghai_waibiao.btw"
                          },
     "SLITTING_PALLET_LABEL":  {
-                                  "updatedAt":  "2026-06-08 17:20:45",
+                                  "updatedAt":  "2026-06-09 11:04:20",
                                   "fileName":  "SLITTING_PALLET_LABEL.btw",
                                   "sha256":  "b89ebd700ed1613c47ae5d02991078370060e52987fac040940a90ff6da115ab",
-                                  "version":  "1780910437583",
+                                  "version":  "1780910444991",
                                   "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_PALLET_LABEL.btw"
                               },
     "RUIPU_PUTONG_GUANXIN":  {
@@ -63,73 +70,73 @@
                                  "localPath":  "D:\\MES\\BarTender\\Templates\\ruipu_putong_guanxin.btw"
                              },
     "ROLLING":  {
-                    "updatedAt":  "2026-06-08 17:20:44",
+                    "updatedAt":  "2026-06-09 11:04:20",
                     "fileName":  "rolling.btw",
                     "sha256":  "b5ef39580775aac32ff233e0360cc2bf71bf91012bde2a422373697093ce25f6",
-                    "version":  "1780910437200",
+                    "version":  "1780910444602",
                     "localPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw"
                 },
     "FUYINGWAIBIAO":  {
-                          "updatedAt":  "2026-06-08 17:20:44",
+                          "updatedAt":  "2026-06-09 11:04:20",
                           "fileName":  "fuyingwaibiao.btw",
                           "sha256":  "0ceac744db21db78ea2405c77944d5faf7a5b275dea5e082b39a47f761e874fd",
-                          "version":  "1780910437061",
+                          "version":  "1780910444453",
                           "localPath":  "D:\\MES\\BarTender\\Templates\\fuyingwaibiao.btw"
                       },
     "FENGQIIENEIBIAO_Z1001":  {
-                                  "updatedAt":  "2026-06-08 17:20:44",
+                                  "updatedAt":  "2026-06-09 11:04:20",
                                   "fileName":  "fengqiieneibiao_Z1001.btw",
                                   "sha256":  "8c8ddd80d6e7b0473712dbeea9fe7446c03b4c445cb8d5801f9bb0e9ec1b43a3",
-                                  "version":  "1780910436977",
+                                  "version":  "1780910444373",
                                   "localPath":  "D:\\MES\\BarTender\\Templates\\fengqiieneibiao_Z1001.btw"
                               },
     "SLITTING_CORE_LABEL_NARROW_RP001":  {
-                                             "updatedAt":  "2026-06-08 17:20:44",
+                                             "updatedAt":  "2026-06-09 11:04:20",
                                              "fileName":  "SLITTING_CORE_LABEL_NARROW_RP001.btw",
                                              "sha256":  "a1dcc072790b071eac52b3a368fc54a8e789aed76968b9905ac91cc6935f4dab",
-                                             "version":  "1780910437334",
+                                             "version":  "1780910444737",
                                              "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_CORE_LABEL_NARROW_RP001.btw"
                                          },
     "SLITTING_CORE_LABEL_RP001":  {
-                                      "updatedAt":  "2026-06-08 17:20:44",
+                                      "updatedAt":  "2026-06-09 11:04:20",
                                       "fileName":  "SLITTING_CORE_LABEL_RP001.btw",
                                       "sha256":  "ff5e45fcefad57b8f749861c1b38a0b3e40102a7e13860c40a25ca8fd8fdbdff",
-                                      "version":  "1780910437360",
+                                      "version":  "1780910444767",
                                       "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_CORE_LABEL_RP001.btw"
                                   },
     "GSDC001_OUT_LABEL":  {
-                              "updatedAt":  "2026-06-08 17:20:44",
+                              "updatedAt":  "2026-06-09 11:04:20",
                               "fileName":  "GSDC001_OUT_LABEL.btw",
                               "sha256":  "43fd9ef5166b028bdc68c214daf8dbf2082195a2367f844c118fa5a72eb54564",
-                              "version":  "1780910437090",
+                              "version":  "1780910444480",
                               "localPath":  "D:\\MES\\BarTender\\Templates\\GSDC001_OUT_LABEL.btw"
                           },
     "SLITTING_INNER_LABEL_RP001":  {
-                                       "updatedAt":  "2026-06-08 17:20:44",
+                                       "updatedAt":  "2026-06-09 11:04:20",
                                        "fileName":  "SLITTING_INNER_LABEL_RP001.btw",
                                        "sha256":  "a0e3777d6e0a9d6c974139d71b07e208b196bc19d2a02b3621446f2bd9cf8a04",
-                                       "version":  "1780910437442",
+                                       "version":  "1780910444849",
                                        "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_INNER_LABEL_RP001.btw"
                                    },
     "INCOMINGLABEL":  {
-                          "updatedAt":  "2026-06-08 17:20:44",
+                          "updatedAt":  "2026-06-09 11:04:20",
                           "fileName":  "IncomingLabel.btw",
                           "sha256":  "b2e49632258086ce3c537770a8e89e69fb85c2be5bdf250b588ddbb083847fc2",
-                          "version":  "1780910437146",
+                          "version":  "1780910444536",
                           "localPath":  "D:\\MES\\BarTender\\Templates\\IncomingLabel.btw"
                       },
     "SLITTING_CORE_LABEL":  {
-                                "updatedAt":  "2026-06-08 17:20:44",
+                                "updatedAt":  "2026-06-09 11:04:20",
                                 "fileName":  "SLITTING_CORE_LABEL.btw",
                                 "sha256":  "9e9427f001e111aa17d6d6a13cd08274dc7518eb325730e06cd5f66035157dae",
-                                "version":  "1780910437227",
+                                "version":  "1780910444629",
                                 "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_CORE_LABEL.btw"
                             },
     "SLITTING_OUTER_LABEL_GF001":  {
-                                       "updatedAt":  "2026-06-08 17:20:44",
+                                       "updatedAt":  "2026-06-09 11:04:20",
                                        "fileName":  "SLITTING_OUTER_LABEL_GF001.btw",
                                        "sha256":  "ba20d0003f75f388ab250648cb6819c285bf3218552489aee61f5c026e339a40",
-                                       "version":  "1780910437529",
+                                       "version":  "1780910444935",
                                        "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_OUTER_LABEL_GF001.btw"
                                    },
     "RP01_FENQIE_NEIBIAO":  {
@@ -140,31 +147,24 @@
                                 "localPath":  "D:\\MES\\BarTender\\Templates\\RP01_fenqie_neibiao.btw"
                             },
     "COATING":  {
-                    "updatedAt":  "2026-06-08 17:20:44",
+                    "updatedAt":  "2026-06-09 11:04:20",
                     "fileName":  "coating.btw",
                     "sha256":  "8e31ec2cc0f68f81ca147e498a804f2c020a571644e7c8aa3834f05a039c1030",
-                    "version":  "1780910436878",
+                    "version":  "1780910444347",
                     "localPath":  "D:\\MES\\BarTender\\Templates\\coating.btw"
                 },
-    "SLITTING_INNER_LABEL":  {
-                                 "updatedAt":  "2026-06-08 17:20:44",
-                                 "fileName":  "SLITTING_INNER_LABEL.btw",
-                                 "sha256":  "ef7d20204583a953262e97fb6bb42f1d50ad261bfc110ad5cf9c8cfc1286b57a",
-                                 "version":  "1780910437388",
-                                 "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_INNER_LABEL.btw"
-                             },
     "SLITTING_INNER_LABEL_YH001":  {
-                                       "updatedAt":  "2026-06-08 17:20:44",
+                                       "updatedAt":  "2026-06-09 11:04:20",
                                        "fileName":  "SLITTING_INNER_LABEL_YH001.btw",
                                        "sha256":  "d92238fc77f3105f4661f102861734efa16701f78cbefadcbe9c7619a1a3ad02",
-                                       "version":  "1780910437470",
+                                       "version":  "1780910444877",
                                        "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_INNER_LABEL_YH001.btw"
                                    },
     "GSDC001_WAIBIAO":  {
-                            "updatedAt":  "2026-06-08 17:20:44",
+                            "updatedAt":  "2026-06-09 11:04:20",
                             "fileName":  "GSDC001_waibiao.btw",
                             "sha256":  "43fd9ef5166b028bdc68c214daf8dbf2082195a2367f844c118fa5a72eb54564",
-                            "version":  "1780910437120",
+                            "version":  "1780910444507",
                             "localPath":  "D:\\MES\\BarTender\\Templates\\GSDC001_waibiao.btw"
                         },
     "FENQIEWAIBIAO":  {
@@ -175,17 +175,17 @@
                           "localPath":  "D:\\MES\\BarTender\\Templates\\fenqiewaibiao.btw"
                       },
     "FENQIEWAIBIAO_Z1001":  {
-                                "updatedAt":  "2026-06-08 17:20:44",
+                                "updatedAt":  "2026-06-09 11:04:20",
                                 "fileName":  "fenqiewaibiao_Z1001.btw",
                                 "sha256":  "5a182c9358819fd282fd1661d0fcc87d2575900e0c8c545804d4dedc6bd25f00",
-                                "version":  "1780910437008",
+                                "version":  "1780910444399",
                                 "localPath":  "D:\\MES\\BarTender\\Templates\\fenqiewaibiao_Z1001.btw"
                             },
     "SLITTING_CORE_LABEL_NARROW_GDRP001":  {
-                                               "updatedAt":  "2026-06-08 17:20:44",
+                                               "updatedAt":  "2026-06-09 11:04:20",
                                                "fileName":  "SLITTING_CORE_LABEL_NARROW_GDRP001.btw",
                                                "sha256":  "2e9b58e036c3e37b2189e16fdfee34804488309498e6d5c41860db7bc8de4e62",
-                                               "version":  "1780910437305",
+                                               "version":  "1780910444711",
                                                "localPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_CORE_LABEL_NARROW_GDRP001.btw"
                                            },
     "FENGQIIENEIBIAO":  {

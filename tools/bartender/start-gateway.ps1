@@ -183,7 +183,7 @@ function Write-JsonResponse {
   $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
   $Response.Headers['Access-Control-Allow-Origin'] = '*'
   $Response.Headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-  $Response.Headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Api-Key'
+  $Response.Headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Api-Key, X-Print-Batch-Id, X-PrintBatch-Id, x-print-batch-id, x-printbatch-id'
   $Response.StatusCode = $StatusCode
   $Response.ContentType = 'application/json; charset=utf-8'
   $Response.ContentEncoding = [System.Text.Encoding]::UTF8
@@ -198,7 +198,7 @@ function Write-EmptyResponse {
   )
   $Response.Headers['Access-Control-Allow-Origin'] = '*'
   $Response.Headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-  $Response.Headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Api-Key'
+  $Response.Headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Api-Key, X-Print-Batch-Id, X-PrintBatch-Id, x-print-batch-id, x-printbatch-id'
   $Response.StatusCode = $StatusCode
   $Response.OutputStream.Close()
 }
@@ -381,6 +381,96 @@ function Invoke-BarTenderPrint {
     }
   } finally {
     if ($cleanupByCaller) {
+      Remove-Item -Path $tempXml -ErrorAction SilentlyContinue
+    }
+  }
+}
+
+function Invoke-BarTenderBatchPrint {
+  param(
+    [string]$BarTenderExe,
+    [array]$Commands,
+    [int]$TimeoutSeconds,
+    [switch]$Async
+  )
+
+  if (!(Test-Path $BarTenderExe)) { throw "BarTender executable not found: $BarTenderExe" }
+  $jobs = @($Commands)
+  if ($jobs.Count -le 0) { return @{ printed = 0 } }
+
+  $commandXmlList = New-Object System.Collections.Generic.List[string]
+  $idx = 0
+  foreach ($cmd in $jobs) {
+    $idx++
+    $formatPath = [string]$cmd.formatPath
+    if ([string]::IsNullOrWhiteSpace($formatPath) -or !(Test-Path $formatPath)) {
+      throw "Template file not found: $formatPath"
+    }
+    $copies = 1
+    [int]::TryParse([string]$cmd.copies, [ref]$copies) | Out-Null
+    if ($copies -lt 1) { $copies = 1 }
+
+    $printer = [string]$cmd.printer
+    $printerEsc = Escape-Xml $printer
+    $printSetupPrinterXml = ''
+    if (-not [string]::IsNullOrWhiteSpace([string]$printer)) {
+      $printSetupPrinterXml = "<Printer>$printerEsc</Printer>"
+    }
+    $formatEsc = Escape-Xml $formatPath
+    $namedSubs = Build-NamedSubStringsXml -Data $cmd.data
+
+    $commandXmlList.Add(@"
+  <Command Name="MESPrint_$idx">
+    <Print>
+      <Format>$formatEsc</Format>
+      <PrintSetup>
+        $printSetupPrinterXml
+        <IdenticalCopiesOfLabel>$copies</IdenticalCopiesOfLabel>
+      </PrintSetup>
+      $namedSubs
+    </Print>
+  </Command>
+"@) | Out-Null
+  }
+
+  $xml = @"
+<?xml version="1.0" encoding="utf-8"?>
+<XMLScript Version="2.0">
+$($commandXmlList -join "`n")
+</XMLScript>
+"@
+
+  $tempXml = Join-Path $env:TEMP ("mes_bt_batch_" + [guid]::NewGuid().ToString('N') + ".xml")
+  Set-Content -Path $tempXml -Value $xml -Encoding UTF8
+  try {
+    $args = "/XMLScriptFile=`"$tempXml`" /X"
+    if ($Async) {
+      Wait-PreviousBarTenderPrint -TimeoutSeconds ([Math]::Max(120, $TimeoutSeconds))
+    }
+    $proc = Start-Process -FilePath $BarTenderExe -ArgumentList $args -PassThru -WindowStyle Hidden
+    if ($Async) {
+      $script:LastSubmittedPrintProcessId = $proc.Id
+      Start-Job -ScriptBlock {
+        param($procId, $xmlPath)
+        try {
+          Wait-Process -Id $procId -Timeout 600 -ErrorAction SilentlyContinue
+        } catch {}
+        Remove-Item -Path $xmlPath -ErrorAction SilentlyContinue
+      } -ArgumentList $proc.Id, $tempXml | Out-Null
+
+      return @{ submitted = $true; processId = $proc.Id; accepted = $jobs.Count }
+    }
+    $finished = $proc.WaitForExit($TimeoutSeconds * 1000)
+    if (-not $finished) {
+      try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch {}
+      throw "BarTender batch timed out after ${TimeoutSeconds}s"
+    }
+    if ($proc.ExitCode -ne 0) {
+      throw "BarTender batch exit code: $($proc.ExitCode)"
+    }
+    return @{ printed = $jobs.Count; processId = $proc.Id }
+  } finally {
+    if (-not $Async) {
       Remove-Item -Path $tempXml -ErrorAction SilentlyContinue
     }
   }
@@ -716,6 +806,16 @@ try {
         $formatPath = [string]$tpl.formatPath
         $formatPath = $formatPath.Trim()
         if ([string]::IsNullOrWhiteSpace($formatPath)) {
+          # 兼容历史配置：COATING 未配置时，自动回退到 COATING_ROLL_LABEL
+          if ($templateKey -eq 'COATING' -and $null -ne $config.templates -and $null -ne $config.templates.PSObject.Properties['COATING_ROLL_LABEL']) {
+            $fallbackTpl = $config.templates.PSObject.Properties['COATING_ROLL_LABEL'].Value
+            $fallbackPath = [string]$fallbackTpl.formatPath
+            if (-not [string]::IsNullOrWhiteSpace($fallbackPath)) {
+              $formatPath = $fallbackPath.Trim()
+            }
+          }
+        }
+        if ([string]::IsNullOrWhiteSpace($formatPath)) {
           throw "Template formatPath is empty: $templateKey"
         }
         $timeout = 30
@@ -743,51 +843,148 @@ try {
       }
 
       $payload = $bodyText | ConvertFrom-Json
-      $templateKey = [string]$payload.template
-      $templateKey = $templateKey.Trim()
-      if ([string]::IsNullOrWhiteSpace($templateKey)) {
-        throw 'payload.template is required'
+      $batchId = [string]$req.Headers['X-Print-Batch-Id']
+      if ([string]::IsNullOrWhiteSpace($batchId)) {
+        $batchId = [string]$req.Headers['X-PrintBatch-Id']
+      }
+      $items = @()
+      if ($payload -is [System.Array]) {
+        $items = @($payload | ForEach-Object { $_ })
+      } else {
+        $items = @($payload)
+      }
+      if ($items.Count -le 0) {
+        throw 'payload is empty'
+      }
+      if ([string]::IsNullOrWhiteSpace($batchId)) {
+        try {
+          $batchId = [string]$items[0].batchId
+        } catch {}
       }
 
-      $tplProp = $null
-      if ($null -ne $config.templates) {
-        $tplProp = $config.templates.PSObject.Properties[$templateKey]
-        if ($null -eq $tplProp -and $templateKey -eq 'RUIPU_PUTONG_GUANXIN') {
-          $tplProp = $config.templates.PSObject.Properties['RUIPU_PUTONG_GUANGXIN']
+      # 如果携带 sequence，则按 sequence 严格排序并校验重复，确保序号正确
+      $allHaveSequence = $true
+      $seqMap = @{}
+      foreach ($it in $items) {
+        $rawSeq = $null
+        try {
+          if ($null -ne $it.PSObject.Properties['sequence']) {
+            $rawSeq = $it.PSObject.Properties['sequence'].Value
+          }
+        } catch {
+          $rawSeq = $null
         }
-        if ($null -eq $tplProp -and $templateKey -eq 'RUIPU_PUTONG_GUANGXIN') {
-          $tplProp = $config.templates.PSObject.Properties['RUIPU_PUTONG_GUANXIN']
+        $seqNo = 0
+        $okSeq = [int]::TryParse([string]$rawSeq, [ref]$seqNo)
+        if (-not $okSeq -or $seqNo -le 0) {
+          $allHaveSequence = $false
+          break
         }
+        if ($seqMap.ContainsKey($seqNo)) {
+          throw "payload.sequence duplicated: $seqNo"
+        }
+        $seqMap[$seqNo] = $true
       }
-      if ($null -eq $tplProp) {
-        $keys = @()
-        if ($null -ne $config.templates) {
-          $keys = @($config.templates.PSObject.Properties | ForEach-Object { [string]$_.Name })
-        }
-        throw "Template not configured: $templateKey. Available templates: $($keys -join ', ')"
+      if ($allHaveSequence) {
+        $items = @($items | Sort-Object { [int]$_.sequence })
       }
-      $tpl = $tplProp.Value
 
-      $barTenderExe = [string]$config.barTenderExe
-      $formatPath = [string]$tpl.formatPath
-      $formatPath = $formatPath.Trim()
-      if ([string]::IsNullOrWhiteSpace($formatPath)) {
-        throw "Template formatPath is empty: $templateKey"
-      }
-      $printer = [string]$tpl.printer
-      $printer = $printer.Trim()
-      $copies = 1
-      if ($null -ne $payload.copies) {
-        [int]::TryParse([string]$payload.copies, [ref]$copies) | Out-Null
-      }
       $timeout = 30
       if ($null -ne $config.defaultTimeoutSeconds) {
         [int]::TryParse([string]$config.defaultTimeoutSeconds, [ref]$timeout) | Out-Null
       }
+      if ($timeout -lt 30) { $timeout = 30 }
+      $barTenderExe = [string]$config.barTenderExe
 
       $printStartedAt = Get-Date
+      $jobResults = New-Object System.Collections.Generic.List[object]
+      $isBatch = $items.Count -gt 1
+      $index = 0
+      $printCommands = New-Object System.Collections.Generic.List[object]
 
-      $submitResult = Invoke-BarTenderPrint -BarTenderExe $barTenderExe -FormatPath $formatPath -Printer $printer -Copies $copies -Data $payload.data -TimeoutSeconds $timeout -Async
+      foreach ($item in $items) {
+        $index++
+        $itemSequence = $null
+        try {
+          if ($null -ne $item.PSObject.Properties['sequence']) {
+            $itemSequence = [int]$item.PSObject.Properties['sequence'].Value
+          }
+        } catch {
+          $itemSequence = $null
+        }
+        $templateKey = [string]$item.template
+        $templateKey = $templateKey.Trim()
+        if ([string]::IsNullOrWhiteSpace($templateKey)) {
+          throw "payload[$index].template is required"
+        }
+
+        $tplProp = $null
+        if ($null -ne $config.templates) {
+          $tplProp = $config.templates.PSObject.Properties[$templateKey]
+          if ($null -eq $tplProp -and $templateKey -eq 'RUIPU_PUTONG_GUANXIN') {
+            $tplProp = $config.templates.PSObject.Properties['RUIPU_PUTONG_GUANGXIN']
+          }
+          if ($null -eq $tplProp -and $templateKey -eq 'RUIPU_PUTONG_GUANGXIN') {
+            $tplProp = $config.templates.PSObject.Properties['RUIPU_PUTONG_GUANXIN']
+          }
+        }
+        if ($null -eq $tplProp) {
+          $keys = @()
+          if ($null -ne $config.templates) {
+            $keys = @($config.templates.PSObject.Properties | ForEach-Object { [string]$_.Name })
+          }
+          throw "Template not configured: $templateKey. Available templates: $($keys -join ', ')"
+        }
+        $tpl = $tplProp.Value
+
+        $formatPath = [string]$tpl.formatPath
+        $formatPath = $formatPath.Trim()
+        if ([string]::IsNullOrWhiteSpace($formatPath)) {
+          throw "Template formatPath is empty: $templateKey"
+        }
+        $printer = [string]$tpl.printer
+        $printer = $printer.Trim()
+        $copies = 1
+        if ($null -ne $item.copies) {
+          [int]::TryParse([string]$item.copies, [ref]$copies) | Out-Null
+        }
+
+        $printCommands.Add([PSCustomObject]@{
+          index = $index
+          sequence = if ($null -ne $itemSequence) { $itemSequence } else { $index }
+          template = $templateKey
+          formatPath = $formatPath
+          printer = $printer
+          copies = $copies
+          data = $item.data
+        }) | Out-Null
+      }
+
+      if ($isBatch) {
+        # 批量模式：单次提交给 BarTender（一个 XMLScript 多命令），异步受理后立即返回
+        $batchTimeoutSeconds = [Math]::Max(120, $timeout * [Math]::Max(1, $printCommands.Count))
+        $batchResult = Invoke-BarTenderBatchPrint -BarTenderExe $barTenderExe -Commands ($printCommands.ToArray()) -TimeoutSeconds $batchTimeoutSeconds -Async
+        foreach ($cmd in $printCommands) {
+          $jobResults.Add(@{
+            index = $cmd.index
+            sequence = $cmd.sequence
+            template = $cmd.template
+            status = 'accepted'
+            processId = $batchResult.processId
+          }) | Out-Null
+        }
+      } else {
+        $single = $printCommands[0]
+        # 单条模式：保持异步提交速度
+        $submitResult = Invoke-BarTenderPrint -BarTenderExe $barTenderExe -FormatPath $single.formatPath -Printer $single.printer -Copies $single.copies -Data $single.data -TimeoutSeconds $timeout -Async
+        $jobResults.Add(@{
+          index = $single.index
+          sequence = $single.sequence
+          template = $single.template
+          status = 'accepted'
+          processId = $submitResult.processId
+        }) | Out-Null
+      }
 
       $printFinishedAt = Get-Date
       $durationMs = 0
@@ -795,22 +992,24 @@ try {
 
       $script:LastResult = @{
         ok = $true
-        message = 'Print job accepted (async)'
-        template = $templateKey
+        message = if ($isBatch) { 'Print batch accepted (async)' } else { 'Print job accepted (async)' }
+        batchId = $batchId
+        batchCount = $items.Count
         time = $printFinishedAt.ToString('yyyy-MM-dd HH:mm:ss')
         startedAt = $printStartedAt.ToString('yyyy-MM-dd HH:mm:ss.fff')
         finishedAt = $printFinishedAt.ToString('yyyy-MM-dd HH:mm:ss.fff')
         durationMs = $durationMs
-        processId = $submitResult.processId
+        jobs = $jobResults
       }
       Write-JsonResponse -Response $res -StatusCode 200 -Body @{
         code = 200
-        message = 'Print job accepted (async)'
-        template = $templateKey
+        message = if ($isBatch) { 'Print batch accepted (async)' } else { 'Print job accepted (async)' }
+        batchId = $batchId
+        batchCount = $items.Count
         startedAt = $printStartedAt.ToString('yyyy-MM-dd HH:mm:ss.fff')
         finishedAt = $printFinishedAt.ToString('yyyy-MM-dd HH:mm:ss.fff')
         durationMs = $durationMs
-        processId = $submitResult.processId
+        jobs = $jobResults
       }
     } catch {
       $script:LastResult = @{ ok = $false; message = $_.Exception.Message; time = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') }

@@ -17,6 +17,26 @@ export function normalizeRole(role) {
     return 'quality'
   }
 
+  // 生产角色别名
+  if (lower === 'production' || raw === '生产' || raw === '生产部' || raw === '车间') {
+    return 'production'
+  }
+
+  // 管理员角色别名
+  if (lower === 'admin' || raw === '管理员' || raw === '系统管理员') {
+    return 'admin'
+  }
+
+  // 涂布角色
+  if (lower === 'coating' || raw === '涂布' || raw === '涂布班' || raw === '涂布组') {
+    return 'coating'
+  }
+
+  // 包装/复卷角色
+  if (lower === 'packing' || lower === 'packaging' || raw === '包装' || raw === '复卷' || raw === '分切') {
+    return 'packing'
+  }
+
   return lower
 }
 

@@ -514,7 +514,7 @@ export const asyncRoutes = [
     component: Layout,
     name: 'BasicData',
     redirect: '/basic-data/company-config',
-    meta: { title: '基本资料', icon: 'documentation', roles: ['production', 'admin'] },
+    meta: { title: '基本资料', icon: 'documentation', roles: ['production', 'admin', 'packaging', 'packing', 'coating'] },
     children: [
       {
         path: 'company-config',
@@ -526,13 +526,13 @@ export const asyncRoutes = [
         path: 'print-config',
         component: () => import('@/views/production/printConfig'),
         name: 'PrintConfig',
-        meta: { title: '打印配置', icon: 'el-icon-printer', roles: ['production', 'admin'] }
+        meta: { title: '打印配置', icon: 'el-icon-printer', roles: ['production', 'admin', 'packaging', 'packing', 'coating'] }
       },
       {
         path: 'label-qr-rule-config',
         component: () => import('@/views/production/labelQrRuleConfig'),
         name: 'LabelQrRuleConfig',
-        meta: { title: '二维码规则管理', icon: 'el-icon-document', roles: ['production', 'admin'] }
+        meta: { title: '二维码规则管理', icon: 'el-icon-document', roles: ['production', 'admin', 'packaging', 'packing', 'coating'] }
       }
     ]
   },

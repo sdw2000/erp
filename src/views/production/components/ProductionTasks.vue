@@ -128,6 +128,7 @@
         <el-form-item>
           <el-button type="primary" icon="el-icon-search" @click="loadTasks">查询</el-button>
           <el-button icon="el-icon-refresh" @click="resetQuery">重置</el-button>
+          <el-button type="info" plain icon="el-icon-printer" @click="$router.push('/basic-data/print-config')">打印机配置与同步</el-button>
         </el-form-item>
         <el-form-item class="query-scan-item">
           <el-checkbox v-model="detailScanPrintMode" class="scan-mode-checkbox" @change="handleDetailScanPrintModeChange">扫码打印标签</el-checkbox>
@@ -1267,7 +1268,7 @@ import { getWorkshopList } from '@/api/equipment'
 import { getSpecByMaterialCode } from '@/api/tapeSpec'
 import { getOrderDetailForProduction, resolveOrderItemByDetailId } from '@/api/sales'
 import { getCustomerLabelQrRule, saveCustomerLabelQrRule } from '@/api/labelQrRule'
-import { getBarTenderConfig, printByScene, sendBarTenderPrint, goToPrintConfig } from '@/utils/printService'
+import { getBarTenderConfig, printByScene, printBySceneBatch, sendBarTenderPrint, goToPrintConfig } from '@/utils/printService'
 import QRCode from 'qrcode'
 
 export default {
@@ -3348,20 +3349,23 @@ export default {
 
       try {
         this.loadBarTenderConfig()
+        const sources = []
         for (let i = 0; i < printCount; i++) {
           const serialNo = Math.trunc(safeStartNo) + i
           const rollCode = this.buildRewindingRollSerialCode(serialNo)
           const row = producedRollCodeMap.get(rollCode) || producedRollSerialMap.get(serialNo) || firstFilled || {}
-          await printByScene(this.getPrintScene('rewinding-label'), {
+          sources.push({
             serialNo,
             widthMm: row.widthMm,
             lengthM: row.lengthM
-          }, {
-            config: this.barTenderConfig,
-            vm: this,
-            alias
           })
         }
+        await printBySceneBatch(this.getPrintScene('rewinding-label'), sources, {
+          config: this.barTenderConfig,
+          vm: this,
+          alias
+        })
+
         const nextStart = Math.trunc(safeStartNo) + printCount
         this.reportForm.rewindingSerialStart = nextStart
         this.savePrintedMaxSerialByMotherRoll(motherRollCode, nextStart - 1)
@@ -4437,25 +4441,25 @@ export default {
       try {
         this.loadBarTenderConfig()
         const scene = this.getPrintScene(sceneType)
-        const jobs = []
+        const sources = []
         for (let i = 0; i < mergedItems.length; i++) {
           const item = mergedItems[i]
           const serialNo = Number(item && item.serialNo) || (i + 1)
           const quantityOverride = Number(item && item.quantityOverride) || 1
           const copies = Math.max(1, Math.trunc(Number(item && item.copies) || 1))
-          jobs.push(() => printByScene(scene, {
+          sources.push({
             serialNo,
             quantityOverride,
             copies
-          }, {
-            config: this.barTenderConfig,
-            vm: this,
-            alias
-          }))
+          })
         }
-        // 顺序提交，保证标签序号和打印顺序一致，减少并发导致的网关超时
-        await this.runPrintJobsInBatches(jobs, 1)
-        this.$message.success(`已提交BarTender打印任务（${labelName}）${printCount}张`)
+        // 使用批量打印接口，一次性提交所有标签任务给网关，极大提升打印效率
+        await printBySceneBatch(scene, sources, {
+          config: this.barTenderConfig,
+          vm: this,
+          alias
+        })
+        this.$message.success(`已提交BarTender批量打印任务（${labelName}）${printCount}张`)
       } catch (e) {
         const msg = (e && e.message) || '未知错误'
         this.$message.error(`BarTender打印失败：${msg}`)
@@ -4781,8 +4785,10 @@ export default {
       if (!(count > 0)) return []
 
       let unitQty = 1
-      if (sceneType === 'slitting-inner-label' || sceneType === 'slitting-core-label') {
+      if (sceneType === 'slitting-inner-label') {
         unitQty = perTube > 0 ? perTube : 1
+      } else if (sceneType === 'slitting-core-label') {
+        unitQty = 1 // 卷芯标签固定为单卷
       } else if (sceneType === 'slitting-outer-label') {
         const perBoxRolls = perTube * perBoxTube
         unitQty = perBoxRolls > 0 ? perBoxRolls : (perTube > 0 ? perTube : 1)

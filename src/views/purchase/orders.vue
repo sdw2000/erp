@@ -1837,9 +1837,13 @@ export default {
         const matched = Array.from(uniqMap.values()).filter(q => {
           const supplierText = String((q && q.supplier) || '').toLowerCase()
           if (!supplierText) return false
+          // 增加全词精确匹配逻辑，避免“三木”匹配到“三木新材料”和“三木化工”两家
+          const targetName = String(supplier && supplier.supplierName || '').toLowerCase()
+          if (targetName && (supplierText === targetName || supplierText.includes(targetName))) return true
+          
           return tokens.some(k => {
             const text = String(k || '').toLowerCase()
-            return supplierText.includes(text) || text.includes(supplierText)
+            return supplierText === text || supplierText.includes(text)
           })
         })
         if (!matched.length) return {}

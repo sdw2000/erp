@@ -24,6 +24,28 @@ if (Is-Blank $ConfigPath) {
 $script:LastPayload = $null
 $script:LastResult = $null
 $script:GatewayStartedAt = Get-Date
+$script:LastSubmittedPrintProcessId = $null
+
+function Wait-PreviousBarTenderPrint {
+  param([int]$TimeoutSeconds = 120)
+
+  if ($null -eq $script:LastSubmittedPrintProcessId) { return }
+  $pidToWait = 0
+  try { $pidToWait = [int]$script:LastSubmittedPrintProcessId } catch { $pidToWait = 0 }
+  if ($pidToWait -le 0) { return }
+
+  try {
+    $proc = Get-Process -Id $pidToWait -ErrorAction SilentlyContinue
+    if ($null -eq $proc) {
+      $script:LastSubmittedPrintProcessId = $null
+      return
+    }
+    Wait-Process -Id $pidToWait -Timeout $TimeoutSeconds -ErrorAction SilentlyContinue
+  } catch {
+  } finally {
+    $script:LastSubmittedPrintProcessId = $null
+  }
+}
 
 function ConvertFrom-JsonCompat {
   param([Parameter(Mandatory=$true)][string]$JsonText)
@@ -183,7 +205,7 @@ function Write-JsonResponse {
   $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
   $Response.Headers['Access-Control-Allow-Origin'] = '*'
   $Response.Headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-  $Response.Headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Api-Key'
+  $Response.Headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Api-Key, X-Print-Batch-Id, X-PrintBatch-Id, x-print-batch-id, x-printbatch-id'
   $Response.StatusCode = $StatusCode
   $Response.ContentType = 'application/json; charset=utf-8'
   $Response.ContentEncoding = [System.Text.Encoding]::UTF8
@@ -198,7 +220,7 @@ function Write-EmptyResponse {
   )
   $Response.Headers['Access-Control-Allow-Origin'] = '*'
   $Response.Headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-  $Response.Headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Api-Key'
+  $Response.Headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Api-Key, X-Print-Batch-Id, X-PrintBatch-Id, x-print-batch-id, x-printbatch-id'
   $Response.StatusCode = $StatusCode
   $Response.OutputStream.Close()
 }
@@ -525,6 +547,86 @@ function Invoke-BarTenderPrint {
   }
 }
 
+function Invoke-BarTenderBatchPrint {
+  param(
+    [string]$BarTenderExe,
+    [array]$Commands,
+    [int]$TimeoutSeconds,
+    [switch]$Async
+  )
+
+  if (!(Test-Path $BarTenderExe)) { throw "BarTender executable not found: $BarTenderExe" }
+  $jobs = @($Commands)
+  if ($jobs.Count -le 0) { return @{ printed = 0 } }
+
+  $blocks = New-Object System.Collections.Generic.List[string]
+  $idx = 0
+  foreach ($cmd in $jobs) {
+    $idx++
+    $formatPath = [string](Get-MapValue -Map $cmd -Key 'formatPath')
+    if (Is-Blank $formatPath -or !(Test-Path $formatPath)) { throw "Template file not found: $formatPath" }
+    $copies = 1
+    [int]::TryParse([string](Get-MapValue -Map $cmd -Key 'copies'), [ref]$copies) | Out-Null
+    if ($copies -lt 1) { $copies = 1 }
+    $printer = [string](Get-MapValue -Map $cmd -Key 'printer')
+    $printerEsc = Escape-Xml $printer
+    $formatEsc = Escape-Xml $formatPath
+    $namedSubs = Build-NamedSubStringsXml -Data (Get-MapValue -Map $cmd -Key 'data')
+
+    $blocks.Add(@"
+  <Command Name="MESPrint_$idx">
+    <Print>
+      <Format>$formatEsc</Format>
+      <PrintSetup>
+        <Printer>$printerEsc</Printer>
+        <IdenticalCopiesOfLabel>$copies</IdenticalCopiesOfLabel>
+      </PrintSetup>
+      $namedSubs
+    </Print>
+  </Command>
+"@) | Out-Null
+  }
+
+  $xml = @"
+<?xml version="1.0" encoding="utf-8"?>
+<XMLScript Version="2.0">
+$($blocks -join "`n")
+</XMLScript>
+"@
+
+  $tempXml = Join-Path $env:TEMP ("mes_bt_batch_" + [guid]::NewGuid().ToString('N') + ".xml")
+  Set-Content -Path $tempXml -Value $xml -Encoding UTF8
+  try {
+    $args = "/XMLScriptFile=`"$tempXml`" /X"
+    if ($Async) {
+      Wait-PreviousBarTenderPrint -TimeoutSeconds ([Math]::Max(120, $TimeoutSeconds))
+    }
+    $proc = Start-Process -FilePath $BarTenderExe -ArgumentList $args -PassThru -WindowStyle Hidden
+    if ($Async) {
+      $script:LastSubmittedPrintProcessId = $proc.Id
+      Start-Job -ScriptBlock {
+        param($procId, $xmlPath)
+        try {
+          Wait-Process -Id $procId -Timeout 600 -ErrorAction SilentlyContinue
+        } catch {}
+        Remove-Item -Path $xmlPath -ErrorAction SilentlyContinue
+      } -ArgumentList $proc.Id, $tempXml | Out-Null
+      return @{ submitted = $true; processId = $proc.Id; accepted = $jobs.Count }
+    }
+    $finished = $proc.WaitForExit($TimeoutSeconds * 1000)
+    if (-not $finished) {
+      try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch {}
+      throw "BarTender batch timed out after ${TimeoutSeconds}s"
+    }
+    if ($proc.ExitCode -ne 0) { throw "BarTender batch exit code: $($proc.ExitCode)" }
+    return @{ printed = $jobs.Count; processId = $proc.Id }
+  } finally {
+    if (-not $Async) {
+      Remove-Item -Path $tempXml -ErrorAction SilentlyContinue
+    }
+  }
+}
+
 $config = Read-ConfigObject -Path $ConfigPath
 $prefix = [string]$config.listenPrefix
 if (Is-Blank $prefix) {
@@ -620,34 +722,136 @@ try {
       }
 
       $payload = ConvertFrom-JsonCompat -JsonText $bodyText
-      $templateKey = [string]$payload.template
-      if (Is-Blank $templateKey) {
-        throw 'payload.template is required'
+      $batchId = [string]$req.Headers['X-Print-Batch-Id']
+      if (Is-Blank $batchId) {
+        $batchId = [string]$req.Headers['X-PrintBatch-Id']
+      }
+      $items = @()
+      if ($payload -is [System.Array]) {
+        $items = @($payload | ForEach-Object { $_ })
+      } else {
+        $items = @($payload)
+      }
+      if ($items.Count -le 0) {
+        throw 'payload is empty'
+      }
+      if (Is-Blank $batchId) {
+        $first = $items[0]
+        $batchId = [string](Get-MapValue -Map $first -Key 'batchId')
       }
 
-      $templates = Get-MapValue -Map $config -Key 'templates'
-      $tpl = Get-MapValue -Map $templates -Key $templateKey
-      if ($null -eq $tpl) {
-        throw "Template not configured: $templateKey"
+      $allHaveSequence = $true
+      $seqMap = @{}
+      foreach ($it in $items) {
+        $seqNo = 0
+        $okSeq = [int]::TryParse([string](Get-MapValue -Map $it -Key 'sequence'), [ref]$seqNo)
+        if (-not $okSeq -or $seqNo -le 0) {
+          $allHaveSequence = $false
+          break
+        }
+        if ($seqMap.ContainsKey($seqNo)) {
+          throw "payload.sequence duplicated: $seqNo"
+        }
+        $seqMap[$seqNo] = $true
+      }
+      if ($allHaveSequence) {
+        $items = @($items | Sort-Object { [int](Get-MapValue -Map $_ -Key 'sequence') })
       }
 
       $barTenderExe = [string](Get-MapValue -Map $config -Key 'barTenderExe')
-      $formatPath = [string](Get-MapValue -Map $tpl -Key 'formatPath')
-      $printer = [string](Get-MapValue -Map $tpl -Key 'printer')
-      $copies = 1
-      if ($null -ne $payload.copies) {
-        [int]::TryParse([string]$payload.copies, [ref]$copies) | Out-Null
-      }
       $timeout = 30
       $defaultTimeout = Get-MapValue -Map $config -Key 'defaultTimeoutSeconds'
       if ($null -ne $defaultTimeout) {
         [int]::TryParse([string]$defaultTimeout, [ref]$timeout) | Out-Null
       }
+      if ($timeout -lt 30) { $timeout = 30 }
 
-      Invoke-BarTenderPrint -BarTenderExe $barTenderExe -FormatPath $formatPath -Printer $printer -Copies $copies -Data $payload.data -TimeoutSeconds $timeout
+      $jobResults = New-Object System.Collections.Generic.List[object]
+      $idx = 0
+      $printCommands = New-Object System.Collections.Generic.List[object]
+      foreach ($item in $items) {
+        $idx++
+        $templateKey = [string](Get-MapValue -Map $item -Key 'template')
+        if (Is-Blank $templateKey) {
+          throw "payload[$idx].template is required"
+        }
+        $templates = Get-MapValue -Map $config -Key 'templates'
+        $tpl = Get-MapValue -Map $templates -Key $templateKey
+        if ($null -eq $tpl) {
+          throw "Template not configured: $templateKey"
+        }
 
-      $script:LastResult = @{ ok = $true; message = 'Print job submitted'; template = $templateKey; time = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') }
-      Write-JsonResponse -Response $res -StatusCode 200 -Body @{ code = 200; message = 'Print job submitted'; template = $templateKey }
+        $formatPath = [string](Get-MapValue -Map $tpl -Key 'formatPath')
+        if (Is-Blank $formatPath -and $templateKey -eq 'COATING') {
+          $templatesMap = Get-MapValue -Map $config -Key 'templates'
+          $fallbackTpl = Get-MapValue -Map $templatesMap -Key 'COATING_ROLL_LABEL'
+          if ($null -ne $fallbackTpl) {
+            $fallbackPath = [string](Get-MapValue -Map $fallbackTpl -Key 'formatPath')
+            if (-not (Is-Blank $fallbackPath)) {
+              $formatPath = $fallbackPath
+            }
+          }
+        }
+        if (Is-Blank $formatPath) {
+          throw "Template formatPath is empty: $templateKey"
+        }
+        $printer = [string](Get-MapValue -Map $tpl -Key 'printer')
+        $copies = 1
+        $itemCopies = Get-MapValue -Map $item -Key 'copies'
+        if ($null -ne $itemCopies) {
+          [int]::TryParse([string]$itemCopies, [ref]$copies) | Out-Null
+        }
+        $itemData = Get-MapValue -Map $item -Key 'data'
+
+        $printCommands.Add(@{
+          index = $idx
+          sequence = if ($allHaveSequence) { [int](Get-MapValue -Map $item -Key 'sequence') } else { $idx }
+          template = $templateKey
+          formatPath = $formatPath
+          printer = $printer
+          copies = $copies
+          data = $itemData
+        }) | Out-Null
+      }
+
+      if ($printCommands.Count -gt 1) {
+        $batchTimeoutSeconds = [Math]::Max(120, $timeout * [Math]::Max(1, $printCommands.Count))
+        $batchResult = Invoke-BarTenderBatchPrint -BarTenderExe $barTenderExe -Commands ($printCommands.ToArray()) -TimeoutSeconds $batchTimeoutSeconds -Async
+        foreach ($cmd in $printCommands) {
+          $jobResults.Add(@{
+            index = $cmd.index
+            sequence = $cmd.sequence
+            template = $cmd.template
+            status = 'accepted'
+            processId = $batchResult.processId
+          }) | Out-Null
+        }
+      } else {
+        $single = $printCommands[0]
+        Invoke-BarTenderPrint -BarTenderExe $barTenderExe -FormatPath ([string](Get-MapValue -Map $single -Key 'formatPath')) -Printer ([string](Get-MapValue -Map $single -Key 'printer')) -Copies ([int](Get-MapValue -Map $single -Key 'copies')) -Data (Get-MapValue -Map $single -Key 'data') -TimeoutSeconds $timeout
+        $jobResults.Add(@{
+          index = $single.index
+          sequence = $single.sequence
+          template = $single.template
+          status = 'printed'
+        }) | Out-Null
+      }
+
+      $script:LastResult = @{
+        ok = $true
+        message = if ($items.Count -gt 1) { 'Print batch accepted (async)' } else { 'Print job submitted' }
+        batchId = $batchId
+        batchCount = $items.Count
+        jobs = $jobResults
+        time = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+      }
+      Write-JsonResponse -Response $res -StatusCode 200 -Body @{
+        code = 200
+        message = if ($items.Count -gt 1) { 'Print batch accepted (async)' } else { 'Print job submitted' }
+        batchId = $batchId
+        batchCount = $items.Count
+        jobs = $jobResults
+      }
     } catch {
       $script:LastResult = @{ ok = $false; message = $_.Exception.Message; time = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') }
       Write-JsonResponse -Response $res -StatusCode 500 -Body @{ code = 500; message = $_.Exception.Message }

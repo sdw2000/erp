@@ -1590,7 +1590,7 @@ export default {
         listenPrefix: this.sanitizeGatewayText(this.gatewayConfig && this.gatewayConfig.listenPrefix),
         barTenderExe: this.sanitizeGatewayText(this.gatewayConfig && this.gatewayConfig.barTenderExe),
         defaultTimeoutSeconds,
-        templates
+        templates: finalTemplates
       }
     },
     formatUptime(totalSeconds) {

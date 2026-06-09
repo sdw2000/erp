@@ -7,6 +7,7 @@
           <div class="home-subtitle">{{ today }} · {{ currentWorkGroup }}班</div>
         </div>
         <div class="header-actions">
+          <el-button type="info" plain icon="el-icon-printer" @click="$router.push('/basic-data/print-config')">打印配置与同步</el-button>
           <el-button type="primary" plain icon="el-icon-tickets" @click="goTaskPage">进入涂布任务</el-button>
           <el-button icon="el-icon-refresh" :loading="loading" @click="loadData">刷新</el-button>
         </div>

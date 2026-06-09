@@ -250,10 +250,23 @@ export default {
   },
   computed: {
     availablePurchaseOrderOptions() {
-      // 支持“同一采购订单多次到货”：不再按已使用订单号做去重限制
+      // 过滤只显示：未完成（未收货/部分收货）的订单
       return (this.purchaseOrderOptions || []).filter(order => {
         const orderNo = String((order && order.orderNo) || '').trim()
-        return !!orderNo
+        if (!orderNo) return false
+        
+        // 过滤状态：只显示未完成的单据（根据业务逻辑，已完成或已取消的不再显示）
+        const status = String(order.status || '').toLowerCase()
+        if (status === 'completed' || status === 'finished' || status === 'cancelled') {
+          return false
+        }
+        
+        // 如果后端有 received_status 字段，则过滤掉“FULL”（完全收货）
+        if (order.receivedStatus === 'FULL' || order.received_status === 'FULL') {
+          return false
+        }
+        
+        return true
       })
     }
   },

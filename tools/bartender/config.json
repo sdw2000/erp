@@ -4,7 +4,7 @@
     "defaultTimeoutSeconds":  30,
     "templates":  {
                       "COATING":  {
-                                      "formatPath":  "",
+                                      "formatPath":  "D:\\MES\\BarTender\\Templates\\coating.btw",
                                       "printer":  "Gprinter GP-1324D"
                                   },
                       "COATING_INBOUND_SHEET":  {
@@ -24,7 +24,7 @@
                                             "printer":  "Gprinter GP-1324D"
                                         },
                       "jianghai_waibiao":  {
-                                               "formatPath":  "",
+                                               "formatPath":  "D:\\MES\\BarTender\\Templates\\jianghai_waibiao.btw",
                                                "printer":  "Gprinter GP-1324D"
                                            },
                       "REWINDING_ROLL_LABEL":  {
@@ -72,11 +72,11 @@
                                                          "printer":  "Gprinter GP-1324D"
                                                      },
                       "SLITTING_INNER_LABEL_RP001":  {
-                                                         "formatPath":  "",
+                                                         "formatPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_INNER_LABEL_RP001.btw",
                                                          "printer":  "Gprinter GP-1324D"
                                                      },
                       "SLITTING_INNER_LABEL_YH001":  {
-                                                         "formatPath":  "",
+                                                         "formatPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_INNER_LABEL_YH001.btw",
                                                          "printer":  "Gprinter GP-1324D"
                                                      },
                       "SLITTING_OUTER_LABEL":  {
@@ -88,12 +88,20 @@
                                                          "printer":  "Gprinter GP-1324D"
                                                      },
                       "SLITTING_OUTER_LABEL_YH001":  {
-                                                         "formatPath":  "",
+                                                         "formatPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_OUTER_LABEL_YH001.btw",
                                                          "printer":  "Gprinter GP-1324D"
                                                      },
                       "SLITTING_PALLET_LABEL":  {
                                                     "formatPath":  "D:\\MES\\BarTender\\Templates\\rolling.btw",
                                                     "printer":  "Gprinter GP-1324D"
-                                                }
+                                                },
+                      "SLITTING_CORE_LABEL_CX001":  {
+                                                        "formatPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_CORE_LABEL_CX001.btw",
+                                                        "printer":  "Gprinter GP-1324D"
+                                                    },
+                      "SLITTING_CORE_LABEL_GF001":  {
+                                                        "formatPath":  "D:\\MES\\BarTender\\Templates\\SLITTING_CORE_LABEL_GF001.btw",
+                                                        "printer":  "Gprinter GP-1324D"
+                                                    }
                   }
 }
