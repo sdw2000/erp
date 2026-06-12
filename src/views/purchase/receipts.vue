@@ -221,7 +221,7 @@ import {
   seedPurchaseReceiptTestData,
   cleanupPurchaseReceiptTestData
 } from '@/api/purchaseReceipt'
-import { getPurchaseOrders, getPurchaseOrderDetail } from '@/api/purchase'
+import { getPurchaseOrders, getPurchaseOrderDetail, getOrdersAvailableForReceipt } from '@/api/purchase'
 import { getRawMaterialList } from '@/api/tapeRawMaterial'
 import { getPurchaseReconciliationMeta, getPurchaseReconciliationOptions } from '@/constants/purchaseReconciliation'
 import { getPurchaseStatusMeta, getPurchaseStatusOptions } from '@/constants/purchaseStatus'
@@ -250,24 +250,8 @@ export default {
   },
   computed: {
     availablePurchaseOrderOptions() {
-      // 过滤只显示：未完成（未收货/部分收货）的订单
-      return (this.purchaseOrderOptions || []).filter(order => {
-        const orderNo = String((order && order.orderNo) || '').trim()
-        if (!orderNo) return false
-        
-        // 过滤状态：只显示未完成的单据（根据业务逻辑，已完成或已取消的不再显示）
-        const status = String(order.status || '').toLowerCase()
-        if (status === 'completed' || status === 'finished' || status === 'cancelled') {
-          return false
-        }
-        
-        // 如果后端有 received_status 字段，则过滤掉“FULL”（完全收货）
-        if (order.receivedStatus === 'FULL' || order.received_status === 'FULL') {
-          return false
-        }
-        
-        return true
-      })
+      // 过滤逻辑已经在 API 层（getOrdersAvailableForReceipt）处理：只返回没有关联收货单的订单
+      return this.purchaseOrderOptions || []
     }
   },
   created() {
@@ -306,9 +290,10 @@ export default {
       if (!code) return null
       return (this.rawMaterials || []).find(item => String(item.materialCode || '').trim() === code) || null
     },
-    async fetchPurchaseOrders() {
+    async fetchPurchaseOrders(availableOnly = false) {
       try {
-        const res = await getPurchaseOrders({ pageNum: 1, pageSize: 200 })
+        const api = availableOnly ? getOrdersAvailableForReceipt : getPurchaseOrders
+        const res = await api({ pageNum: 1, pageSize: 200 })
         if (res && (res.code === 200 || res.code === 20000)) {
           const data = res.data
           if (data && data.records) {
@@ -527,7 +512,7 @@ export default {
     openCreate() {
       this.isEdit = false
       this.form = this.emptyForm()
-      this.fetchPurchaseOrders()
+      this.fetchPurchaseOrders(true)
       this.editVisible = true
     },
     async openEdit(row) {

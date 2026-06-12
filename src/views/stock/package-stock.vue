@@ -32,7 +32,9 @@
         <el-table-column prop="materialCode" label="物料编号" min-width="140" sortable="custom" />
         <el-table-column prop="materialName" label="物料名称" min-width="180" sortable="custom" show-overflow-tooltip />
         <el-table-column prop="specDesc" label="规格" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="unit" label="单位" width="90" align="center" />
+        <el-table-column label="单位" width="90" align="center">
+          <template slot-scope="scope">{{ formatUnit(scope.row) }}</template>
+        </el-table-column>
         <el-table-column prop="totalQuantity" label="总数量" width="100" align="center" sortable="custom" />
         <el-table-column prop="availableQuantity" label="可用" width="100" align="center" sortable="custom">
           <template slot-scope="scope"><span style="color:#67c23a;font-weight:bold">{{ scope.row.availableQuantity || 0 }}</span></template>
@@ -210,6 +212,15 @@ export default {
     },
     indexMethod(index) {
       return (this.pagination.current - 1) * this.pagination.size + index + 1
+    },
+    formatUnit(row) {
+      if (!row) return ''
+      const code = String(row.materialCode || '').trim()
+      const name = String(row.materialName || '').trim()
+      if (/PEG/i.test(code) || /PE管/i.test(name)) {
+        return '支'
+      }
+      return row.unit || '-'
     },
     statusText(status) {
       const map = { active: '正常', low_stock: '库存不足', out_of_stock: '缺货' }

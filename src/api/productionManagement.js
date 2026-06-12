@@ -18,3 +18,25 @@ export function updateCoatingActualTimes(id, data) {
     data
   })
 }
+
+/**
+ * 获取分切样板单任务列表
+ */
+export function getSlittingSampleTasks(params) {
+  return request({
+    url: '/api/production/management/slitting-sample-tasks',
+    method: 'get',
+    params
+  })
+}
+
+/**
+ * 确保样板明细有可报工的排程ID
+ */
+export function ensureSlittingSampleSchedule(data) {
+  return request({
+    url: '/api/production/management/slitting-sample-tasks/ensure-schedule',
+    method: 'post',
+    data
+  })
+}

@@ -107,7 +107,9 @@
         <el-table-column prop="locked" label="锁定" width="120" align="right">
           <template slot-scope="scope">{{ formatNumber(scope.row.locked) }}</template>
         </el-table-column>
-        <el-table-column prop="unit" label="单位" width="80" align="center" />
+        <el-table-column label="单位" width="80" align="center">
+          <template slot-scope="scope">{{ formatUnit(scope.row) }}</template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="120" align="center">
           <template slot-scope="scope">
             <el-tag :type="statusTagType(scope.row.status)" size="small">{{ statusText(scope.row.status) }}</el-tag>
@@ -248,6 +250,15 @@ export default {
     },
     indexMethod(index) {
       return (this.pagination.current - 1) * this.pagination.size + index + 1
+    },
+    formatUnit(row) {
+      if (!row) return ''
+      const code = String(row.materialCode || '').trim()
+      const name = String(row.materialName || '').trim()
+      if (/PEG/i.test(code) || /PE管/i.test(name)) {
+        return '支'
+      }
+      return row.unit || '-'
     },
     goLegacy(type) {
       if (type === 'package') {

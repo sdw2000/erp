@@ -253,6 +253,12 @@ export const asyncRoutes = [
         component: () => import('@/views/purchase/supplierMaterialMapping'),
         name: 'PurchaseSupplierMaterialMapping',
         meta: { title: '供应商物料映射', icon: 'el-icon-connection', roles: ['admin', 'purchase'] }
+      },
+      {
+        path: 'reconciliation',
+        component: () => import('@/views/purchase/reconciliation'),
+        name: 'PurchaseReconciliation',
+        meta: { title: '采购对账', icon: 'el-icon-document', roles: ['admin', 'purchase', 'finance'] }
       }
     ]
   },

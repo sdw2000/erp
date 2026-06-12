@@ -80,10 +80,8 @@
             <el-table-column label="规格" width="180">
               <template slot-scope="scope">{{ formatFilmSpec(scope.row) }}</template>
             </el-table-column>
-            <el-table-column prop="quantity" label="卷数" width="80" />
-            <el-table-column prop="sqm" label="平米数" width="90" />
+            <el-table-column prop="unit" label="单位" width="80" />
             <el-table-column prop="unitPrice" label="单价" width="90" />
-            <el-table-column prop="amount" label="金额" width="100" />
           </el-table>
 
           <el-table v-else :data="detailRawItems(current.items || [])" stripe style="margin-top:10px">
@@ -91,12 +89,8 @@
             <el-table-column prop="materialCode" label="物料编码" width="140" />
             <el-table-column prop="materialName" label="物料名称" width="160" />
             <el-table-column prop="specifications" label="规格" width="160" />
-            <el-table-column prop="quantity" label="数量" width="80" />
-            <el-table-column label="总重(kg)" width="100">
-              <template slot-scope="scope">{{ scope.row.sqm }}</template>
-            </el-table-column>
+            <el-table-column prop="unit" label="单位" width="80" />
             <el-table-column prop="unitPrice" label="单价" width="90" />
-            <el-table-column prop="amount" label="金额" width="100" />
           </el-table>
         </div>
         <span slot="footer">
@@ -169,14 +163,6 @@
           </el-row>
 
           <el-divider>物料明细</el-divider>
-          <el-alert
-            v-if="form.materialMode === 'raw'"
-            type="info"
-            :closable="false"
-            show-icon
-            style="margin-bottom: 8px;"
-            title="胶水/原料录入说明：规格填如 180kg/桶 或 900kg/桶，数量填桶数，单价按元/kg 录入，系统自动按总重计算金额。"
-          />
           <div style="text-align:right; margin-bottom:8px">
             <el-button type="primary" size="mini" @click="addItem">新增明细</el-button>
           </div>
@@ -229,30 +215,16 @@
                 <span v-else>{{ formatFilmSpec(scope.row) || '-' }}</span>
               </template>
             </el-table-column>
-            <el-table-column :label="quantityLabel('film')" width="80">
+            <el-table-column label="单位" width="90">
               <template slot-scope="scope">
-                <el-input v-if="scope.row._editing" v-model="scope.row.rolls" size="small" :placeholder="quantityLabel('film')" />
-                <span v-else>{{ scope.row.rolls || '-' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="计价方式" width="110">
-              <template slot-scope="scope">
-                <el-select v-if="scope.row._editing" v-model="scope.row.pricingMode" size="small" style="width:100%" disabled>
-                  <el-option label="按kg计价" value="kg" />
-                  <el-option label="按㎡计价" value="sqm" />
+                <el-select v-if="scope.row._editing" v-model="scope.row.unit" size="small" style="width:100%" placeholder="单位">
+                  <el-option label="㎡" value="㎡" />
+                  <el-option label="kg" value="kg" />
+                  <el-option label="支" value="支" />
+                  <el-option label="卷" value="卷" />
+                  <el-option label="m" value="m" />
                 </el-select>
-                <span v-else>{{ filmPricingText(scope.row.pricingMode) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="总重(kg)" width="100">
-              <template slot-scope="scope">
-                <el-input
-                  v-if="scope.row._editing && scope.row.pricingMode === 'kg'"
-                  v-model="scope.row.filmWeight"
-                  size="small"
-                  placeholder="总重kg"
-                />
-                <span v-else>{{ scope.row.pricingMode === 'kg' ? (scope.row.filmWeight || '0') : '-' }}</span>
+                <span v-else>{{ scope.row.unit || '-' }}</span>
               </template>
             </el-table-column>
             <el-table-column label="单价" width="100">
@@ -261,19 +233,11 @@
                 <span v-else>{{ scope.row.unitPrice || '-' }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="面积(㎡)" width="100">
+            <el-table-column label="平米单价" width="100">
               <template slot-scope="scope">
-                <el-input
-                  v-if="scope.row._editing && scope.row.pricingMode === 'sqm'"
-                  v-model="scope.row.filmSqm"
-                  size="small"
-                  placeholder="面积㎡"
-                />
-                <span v-else>{{ calcFilmSqm(scope.row) }}</span>
+                <span v-if="!scope.row._editing">{{ calcSqmUnitPrice(scope.row) || '-' }}</span>
+                <el-input v-else :value="calcSqmUnitPrice(scope.row)" size="small" readonly placeholder="自动计算" />
               </template>
-            </el-table-column>
-            <el-table-column label="金额" width="100">
-              <template slot-scope="scope">{{ calcFilmAmount(scope.row) }}</template>
             </el-table-column>
             <el-table-column label="备注" min-width="140">
               <template slot-scope="scope">
@@ -327,23 +291,23 @@
                 <span v-else>{{ scope.row.rawSpec || '-' }}</span>
               </template>
             </el-table-column>
-            <el-table-column :label="quantityLabel('raw')" width="90">
+            <el-table-column label="单位" width="90">
               <template slot-scope="scope">
-                <el-input v-if="scope.row._editing" v-model="scope.row.quantity" size="small" :placeholder="quantityLabel('raw')" />
-                <span v-else>{{ scope.row.quantity || '-' }}</span>
+                <el-select v-if="scope.row._editing" v-model="scope.row.unit" size="small" style="width:100%" placeholder="单位">
+                  <el-option label="kg" value="kg" />
+                  <el-option label="㎡" value="㎡" />
+                  <el-option label="支" value="支" />
+                  <el-option label="卷" value="卷" />
+                  <el-option label="m" value="m" />
+                </el-select>
+                <span v-else>{{ scope.row.unit || '-' }}</span>
               </template>
-            </el-table-column>
-            <el-table-column label="总重(kg)" width="100">
-              <template slot-scope="scope">{{ calcRawTotalWeight(scope.row) }}</template>
             </el-table-column>
             <el-table-column :label="priceLabel('raw')" width="110">
               <template slot-scope="scope">
                 <el-input v-if="scope.row._editing" v-model="scope.row.unitPrice" size="small" :placeholder="priceLabel('raw')" />
                 <span v-else>{{ scope.row.unitPrice || '-' }}</span>
               </template>
-            </el-table-column>
-            <el-table-column label="金额" width="100">
-              <template slot-scope="scope">{{ calcRawAmount(scope.row) }}</template>
             </el-table-column>
             <el-table-column label="备注" min-width="140">
               <template slot-scope="scope">
@@ -792,6 +756,7 @@ export default {
         lengthDisplay: '',
         rolls: '',
         pricingMode: 'sqm',
+        unit: '',
         filmSqm: '',
         filmWeight: '',
         unitPrice: '',
@@ -805,6 +770,7 @@ export default {
         materialName: '',
         rawSpec: '',
         quantity: '',
+        unit: '',
         totalWeight: '',
         unitPrice: '',
         remark: '',
@@ -828,10 +794,10 @@ export default {
       return text
     },
     quantityLabel(mode) {
-      return mode === 'raw' ? '桶数' : '卷数'
+      return '数量'
     },
     priceLabel(mode) {
-      return mode === 'raw' ? '单价(元/kg)' : '单价(元/㎡)'
+      return '单价'
     },
     formatNumber(val) {
       if (val === null || val === undefined) return '-'
@@ -956,6 +922,7 @@ export default {
             lengthDisplay: item.length,
             rolls: item.quantity,
             pricingMode,
+            unit: item.unit,
             filmSqm: pricingMode === 'sqm' ? (item.sqm || '') : '',
             filmWeight: pricingMode === 'kg' ? (item.sqm || '') : '',
             unitPrice: item.unitPrice,
@@ -969,6 +936,7 @@ export default {
             materialName: item.materialName,
             rawSpec: item.specifications || '',
             quantity: item.quantity,
+            unit: item.unit,
             totalWeight: item.sqm,
             unitPrice: item.unitPrice,
             remark: item.remark,
@@ -999,28 +967,71 @@ export default {
       return this.isFilmItem(list[0]) ? 'film' : 'raw'
     },
     filmMaterialOptions() {
-      return (this.rawMaterials || []).filter(item => this.isFilmLikeMaterial(item))
+      const fromRaw = (this.rawMaterials || []).filter(item => this.isFilmLikeMaterial(item))
+      const fromSpecs = (this.specs || []).map(s => ({
+        materialCode: s.materialCode,
+        materialName: s.productName || s.materialName,
+        unit: s.unit || '㎡',
+        spec: `${s.totalThickness || ''}*${s.width || ''}*${s.length || ''}`
+      }))
+      
+      const merged = [...fromRaw]
+      const seen = new Set(fromRaw.map(r => String(r.materialCode).trim().toUpperCase()))
+      fromSpecs.forEach(s => {
+        const code = String(s.materialCode).trim().toUpperCase()
+        if (code && !seen.has(code)) {
+          merged.push(s)
+          seen.add(code)
+        }
+      })
+      return merged
     },
     nonFilmMaterialOptions() {
       return (this.rawMaterials || []).filter(item => !this.isFilmLikeMaterial(item))
     },
     isFilmLikeMaterial(item) {
       if (!item) return false
+      const code = String(item.materialCode || '').toUpperCase().trim()
+      
+      // 检查是否在研发规格库中
+      if (this.specs && this.specs.some(s => this.normalizeMaterialCode(s.materialCode) === code)) return true
+      
       const unitText = String(item.unit || '').toLowerCase()
       const text = `${item.materialCode || ''} ${item.materialName || ''} ${item.materialType || ''} ${item.materialCategoryRaw || ''} ${item.materialCategory || ''} ${item.spec || ''}`.toLowerCase()
-      const code = String(item.materialCode || '').toUpperCase().trim()
       if (code.startsWith('PM')) return true
+      if (code.startsWith('FT')) return true // 胶带成品/母卷通常以 FT 开头
+      if (code.startsWith('T')) return true // 部分胶带以 T 开头
       if (unitText.includes('m') || unitText.includes('㎡') || unitText.includes('m²')) return true
-      return /膜|离型|pe泡棉|泡棉|pet|bopp|epe|foam/.test(text)
+      return /膜|离型|pe泡棉|泡棉|pet|bopp|epe|foam|胶带|双面胶|tape/.test(text)
     },
     materialOptionsForCurrentMode() {
       let list = []
-      if (this.form.materialMode === 'film') list = this.filmMaterialOptions()
-      else if (this.form.materialMode === 'raw') list = this.nonFilmMaterialOptions()
-      else list = this.rawMaterials || []
+      if (this.form.materialMode === 'film') {
+        list = this.filmMaterialOptions()
+      } else if (this.form.materialMode === 'raw') {
+        list = this.nonFilmMaterialOptions()
+      } else {
+        // 如果未确定模式，则合并所有原材料和研发规格库
+        const fromRaw = this.rawMaterials || []
+        const fromSpecs = (this.specs || []).map(s => ({
+          materialCode: s.materialCode,
+          materialName: s.productName || s.materialName,
+          unit: s.unit || '㎡',
+          spec: `${s.totalThickness || ''}*${s.width || ''}*${s.length || ''}`
+        }))
+        const seen = new Set(fromRaw.map(r => String(r.materialCode).trim().toUpperCase()))
+        list = [...fromRaw]
+        fromSpecs.forEach(s => {
+          const code = String(s.materialCode).trim().toUpperCase()
+          if (code && !seen.has(code)) {
+            list.push(s)
+            seen.add(code)
+          }
+        })
+      }
 
       const keyword = String(this.materialSearchKeyword || '').trim().toLowerCase()
-      if (!keyword) return list
+      if (!keyword) return list.slice(0, 100)
       return list.filter(item => {
         const code = String(item.materialCode || '').toLowerCase()
         const name = String(item.materialName || '').toLowerCase()
@@ -1031,10 +1042,24 @@ export default {
       this.materialSearchKeyword = query || ''
     },
     detectMaterialModeByCode(code) {
-      const raw = (this.rawMaterials || []).find(r => r.materialCode === code)
+      if (!code) return this.form.materialMode || 'film'
+      
+      const normalizedCode = this.normalizeMaterialCode(code)
+      // 如果在研发规格库中找到，通常都是胶带类，强制进入薄膜模式
+      if (this.specs && this.specs.some(s => this.normalizeMaterialCode(s.materialCode) === normalizedCode)) {
+        return 'film'
+      }
+
+      const raw = (this.rawMaterials || []).find(r => this.normalizeMaterialCode(r.materialCode) === normalizedCode)
       if (!raw) return this.form.materialMode || 'film'
-      if (this.isFilmLikeMaterial(raw)) return 'film'
+      
       const unitText = String(raw.unit || '').toLowerCase()
+      const normalizedUnit = this.normalizePricingUnit(unitText)
+      
+      // 如果单位是支/个，归类为原材料模式(界面简单些)
+      if (normalizedUnit === '支') return 'raw'
+      
+      if (this.isFilmLikeMaterial(raw)) return 'film'
       const nameText = `${raw.materialName || ''}${raw.spec || ''}`
       if (unitText.includes('kg') || /胶水|粘合|原料|kg|桶/i.test(nameText)) return 'raw'
       return this.form.materialMode || 'film'
@@ -1052,6 +1077,39 @@ export default {
       if (text.includes('公斤') || text.includes('千克') || upper.includes('KG')) {
         return 'kg'
       }
+      if (text.includes('支') || text.includes('个') || upper.includes('PCS') || text.includes('卷')) {
+        return '卷'
+      }
+      if (text === 'm' || text === '米' || upper === 'M') {
+        return 'm'
+      }
+      return text
+    },
+    calcSqmUnitPrice(row) {
+      if (!row) return ''
+      const unit = this.normalizePricingUnit(row.unit || '')
+      const unitPrice = Number(row.unitPrice)
+      if (!Number.isFinite(unitPrice) || unitPrice <= 0) return ''
+
+      if (unit === '㎡') {
+        return unitPrice.toFixed(4)
+      }
+
+      const width = Number(row.width)
+      const length = Number(row.lengthDisplay || row.length)
+
+      if (unit === 'm') {
+        const widthInMeter = Number.isFinite(width) ? width / 1000 : 0
+        if (!Number.isFinite(widthInMeter) || widthInMeter <= 0) return ''
+        return (unitPrice / widthInMeter).toFixed(4)
+      }
+
+      if (unit === '卷') {
+        const sqmPerRoll = (Number.isFinite(width) ? width : 0) * (Number.isFinite(length) ? length : 0) / 1000
+        if (!Number.isFinite(sqmPerRoll) || sqmPerRoll <= 0) return ''
+        return (unitPrice / sqmPerRoll).toFixed(4)
+      }
+
       return ''
     },
     resolveMasterUnitByCode(code) {
@@ -1070,7 +1128,7 @@ export default {
       ;(items || []).forEach(item => {
         const code = this.normalizeMaterialCode(item && item.materialCode)
         if (!code) return
-        const unit = this.resolveMasterUnitByCode(code)
+        const unit = item.unit || this.resolveMasterUnitByCode(code)
         if (!unit) {
           invalid.push(code)
         }
@@ -1103,10 +1161,14 @@ export default {
       return [item.thicknessDisplay || item.thickness || '', item.width || '', item.lengthDisplay || item.length || ''].filter(Boolean).join('*')
     },
     onMaterialCodeChange(row, code) {
+      if (!code) return
+      const normalizedCode = this.normalizeMaterialCode(code)
       const mode = this.detectMaterialModeByCode(code)
+      
       if (!this.form.materialMode) {
         this.form.materialMode = mode
       }
+      
       if (this.form.materialMode !== mode) {
         this.form.materialMode = mode
         if (mode === 'film') {
@@ -1120,24 +1182,30 @@ export default {
         }
       }
 
-      const raw = this.rawMaterials.find(r => r.materialCode === code)
+      const raw = (this.rawMaterials || []).find(r => this.normalizeMaterialCode(r.materialCode) === normalizedCode)
+      const spec = (this.specs || []).find(s => this.normalizeMaterialCode(s.materialCode) === normalizedCode)
+
       if (raw) {
         row.materialName = raw.materialName
+        row.unit = this.resolveMasterUnitByCode(code)
       }
+      
+      if (spec) {
+        row.materialName = spec.productName || spec.materialName || row.materialName
+        row.colorCode = spec.colorCode || row.colorCode
+        row.thicknessDisplay = spec.totalThickness || spec.thickness || row.thicknessDisplay
+        // R&D 规格库通常不限制特定的宽度和长度，所以仅当 row 中为空时尝试填充
+        if (spec.width && !row.width) row.width = spec.width
+        if (spec.length && !row.lengthDisplay) row.lengthDisplay = spec.length
+        if (!row.unit) row.unit = spec.unit || '㎡'
+      }
+
       if (mode === 'film') {
         row.pricingMode = this.resolveFilmPricingModeByCode(code)
         if (row.pricingMode === 'sqm') {
           row.filmWeight = ''
         } else {
           row.filmSqm = ''
-        }
-        const spec = this.specs.find(s => s.materialCode === code)
-        if (spec) {
-          if (!row.materialName) row.materialName = spec.productName
-          row.colorCode = spec.colorCode
-          row.thicknessDisplay = spec.totalThickness
-          row.width = spec.width
-          row.lengthDisplay = spec.length
         }
       } else {
         row.rawSpec = (raw && raw.spec) || row.rawSpec || ''
@@ -1184,7 +1252,14 @@ export default {
       return ((w / 1000) * l * r).toFixed(2)
     },
     calcFilmAmount(row) {
-      const base = row && row.pricingMode === 'sqm'
+      if (!row) return '0'
+      const normalizedUnit = this.normalizePricingUnit(row.unit)
+      if (normalizedUnit === '支') {
+        const q = Number(row.rolls || 0)
+        const p = Number(row.unitPrice || 0)
+        return (q > 0 && p > 0) ? (q * p).toFixed(2) : '0'
+      }
+      const base = row.pricingMode === 'sqm'
         ? Number(this.calcFilmSqm(row))
         : Number(row.filmWeight || 0)
       const price = Number(row.unitPrice || 0)
@@ -1192,6 +1267,16 @@ export default {
       return (base * price).toFixed(2)
     },
     calcRawTotalWeight(row) {
+      if (!row) return '0'
+      const masterUnit = row.unit || this.resolveMasterUnitByCode(row.materialCode)
+      const normalizedUnit = this.normalizePricingUnit(masterUnit)
+
+      // 如果计价单位是支/个，计价基数直接等于数量
+      if (normalizedUnit === '支') {
+        const q = Number(row.quantity)
+        return Number.isFinite(q) ? q.toFixed(2) : '0'
+      }
+
       const perBucket = this.parseSpecKg(row.rawSpec)
       const qty = Number(row.quantity)
       if (perBucket && Number.isFinite(qty) && qty > 0) {
@@ -1224,7 +1309,7 @@ export default {
       const filmItems = (this.form.filmItems || [])
         .filter(item => item.materialCode || item.materialName)
         .map(item => {
-          const masterUnit = this.resolveMasterUnitByCode(item.materialCode)
+          const masterUnit = item.unit || this.resolveMasterUnitByCode(item.materialCode)
           const normalizedMaster = this.normalizePricingUnit(masterUnit)
           const modeByUnit = normalizedMaster === '㎡' ? 'sqm' : (normalizedMaster === 'kg' ? 'kg' : item.pricingMode)
           const unit = masterUnit || (modeByUnit === 'sqm' ? '㎡' : 'kg')
@@ -1254,7 +1339,7 @@ export default {
       const rawItems = (this.form.rawItems || [])
         .filter(item => item.materialCode || item.materialName)
         .map(item => {
-          const unit = this.resolveMasterUnitByCode(item.materialCode) || 'kg'
+          const unit = item.unit || this.resolveMasterUnitByCode(item.materialCode) || 'kg'
           const normalizedUnit = this.normalizePricingUnit(unit)
           const totalWeight = normalizedUnit === 'kg' ? Number(this.calcRawTotalWeight(item)) : Number(item.quantity || 0)
           const unitPrice = item.unitPrice ? Number(item.unitPrice) : null

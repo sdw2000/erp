@@ -51,7 +51,6 @@
           </template>
         </el-table-column>
         <el-table-column prop="orderNo" label="采购单号" width="208" class-name="order-no-col" />
-        <el-table-column prop="supplierOrderNo" label="供应商单号" width="160" />
         <el-table-column label="对账状态" width="110">
           <template slot-scope="scope">
             <el-tag :type="reconciliationTag(scope.row.reconciliationStatus)" size="small">
@@ -61,6 +60,19 @@
         </el-table-column>
         <el-table-column prop="totalAmount" label="总金额" width="108" class-name="amount-col" />
         <el-table-column prop="totalArea" label="总数量" width="108" class-name="area-col" />
+        <el-table-column label="收货进度" width="140">
+          <template slot-scope="scope">
+            <template v-if="scope.row.reconciliationStatus === 'RECONCILED' || scope.row.reconciliationStatus === 'MATCHED'">
+              <el-progress :percentage="100" status="success" />
+            </template>
+            <template v-else-if="scope.row.receiptProgress !== undefined">
+              <el-progress :percentage="Math.min(100, Math.floor(scope.row.receiptProgress || 0))" :status="(scope.row.receiptProgress >= 100) ? 'success' : null" />
+            </template>
+            <template v-else>
+              <div class="progress-placeholder" style="color: #909399; font-size: 12px;">待计算...</div>
+            </template>
+          </template>
+        </el-table-column>
         <el-table-column prop="orderDate" label="下单日期" width="140" />
         <el-table-column prop="deliveryDate" label="交货日期" width="140" />
         <el-table-column label="操作" width="320">
@@ -254,7 +266,7 @@
         <div v-loading="reconciliationLoading">
           <div v-if="reconciliationSummary">
             <p><strong>采购单号：</strong>{{ reconciliationSummary.orderNo }}</p>
-            <p><strong>对账状态：</strong>{{ reconciliationSummary.reconciliationStatus || '-' }} &nbsp;&nbsp; <strong>数量差：</strong>{{ formatNumber(reconciliationSummary.qtyDiff) }} &nbsp;&nbsp; <strong>金额差：</strong>{{ formatNumber(reconciliationSummary.amountDiff) }}</p>
+            <p><strong>对账状态：</strong>{{ reconciliationText(reconciliationSummary.reconciliationStatus) || '-' }} &nbsp;&nbsp; <strong>数量差：</strong>{{ formatNumber(reconciliationSummary.qtyDiff) }} &nbsp;&nbsp; <strong>金额差：</strong>{{ formatNumber(reconciliationSummary.amountDiff) }}</p>
             <el-table :data="reconciliationSummary.lineItems || []" stripe style="width:100%; margin-top:10px;">
               <el-table-column label="物料编码" width="150">
                 <template slot-scope="scope">{{ getSupplierDisplayMaterialCode(scope.row) || '-' }}</template>
@@ -262,15 +274,21 @@
               <el-table-column label="物料名称" width="180">
                 <template slot-scope="scope">{{ getSupplierDisplayMaterialName(scope.row) || '-' }}</template>
               </el-table-column>
-              <el-table-column prop="purchaseUomCode" label="采购单位" width="100" />
-              <el-table-column prop="priceUomCode" label="计价单位" width="100" />
+              <el-table-column prop="purchaseUomCode" label="采购单位" width="100">
+                <template slot-scope="scope">{{ normalizeUomLabel(scope.row.purchaseUomCode) }}</template>
+              </el-table-column>
+              <el-table-column prop="priceUomCode" label="计价单位" width="100">
+                <template slot-scope="scope">{{ normalizeUomLabel(scope.row.priceUomCode) }}</template>
+              </el-table-column>
               <el-table-column prop="orderQty" label="订单数量" width="100" />
               <el-table-column prop="receiptQty" label="收货数量" width="100" />
               <el-table-column prop="qtyDiff" label="差异数量" width="100" />
               <el-table-column prop="orderAmount" label="订单金额" width="100" />
               <el-table-column prop="receiptAmount" label="收货金额" width="100" />
               <el-table-column prop="amountDiff" label="金额差" width="100" />
-              <el-table-column prop="reconciliationStatus" label="状态" width="110" />
+              <el-table-column prop="reconciliationStatus" label="状态" width="110">
+                <template slot-scope="scope">{{ reconciliationText(scope.row.reconciliationStatus) }}</template>
+              </el-table-column>
             </el-table>
           </div>
         </div>
@@ -446,7 +464,7 @@
               </el-table-column>
               <el-table-column label="颜色" width="90">
                 <template slot-scope="scope">
-                  <el-input v-if="isRowEditable(scope.row)" v-model="scope.row.colorCode" class="small-input" placeholder="颜色代码" />
+                  <el-input v-if="isRowEditable(scope.row)" v-model="scope.row.colorCode" class="small-input" placeholder="颜色代码" @change="onFilmSpecChange(scope.row)" />
                   <span v-else>{{ scope.row.colorCode || '-' }}</span>
                 </template>
               </el-table-column>
@@ -761,12 +779,14 @@ export default {
         if (res && (res.code === 200 || res.code === 20000)) {
           const pageData = res.data
           if (pageData && pageData.records) {
-            this.orders = pageData.records
+            this.orders = pageData.records.map(o => ({ ...o, receiptProgress: undefined }))
             this.pagination.total = Number(pageData.total || 0)
           } else if (Array.isArray(pageData)) {
-            this.orders = pageData
+            this.orders = pageData.map(o => ({ ...o, receiptProgress: undefined }))
             this.pagination.total = pageData.length
           }
+          // 异步加载收货进度，不阻塞主列表展示 (改进点6)
+          this.loadReceiptProgress(this.orders)
         }
       } catch (e) {
         console.error('获取采购订单失败', e)
@@ -802,6 +822,50 @@ export default {
         console.error('获取料号失败', e)
       }
     },
+    async loadReceiptProgress(orders) {
+      if (!orders || !orders.length) return
+      // 限制并发数量，避免后端压力过大
+      const limit = 3
+      const list = [...orders]
+      const results = []
+
+      const fetchNext = async() => {
+        if (!list.length) return
+        const row = list.shift()
+        try {
+          // 如果已经是对账完成状态，直接设为 100%
+          if (row.reconciliationStatus === 'RECONCILED' || row.reconciliationStatus === 'MATCHED') {
+            this.$set(row, 'receiptProgress', 100)
+            return fetchNext()
+          }
+
+          const res = await getPurchaseOrderReconciliation(row.orderNo)
+          if (res && (res.code === 200 || res.code === 20000) && res.data) {
+            const data = res.data
+            const orderQty = Number(data.orderQty || 0)
+            const receiptQty = Number(data.receiptQty || 0)
+            if (orderQty > 0) {
+              const progress = (receiptQty / orderQty) * 100
+              this.$set(row, 'receiptProgress', Math.min(100, progress))
+            } else {
+              this.$set(row, 'receiptProgress', 0)
+            }
+          } else {
+            this.$set(row, 'receiptProgress', 0)
+          }
+        } catch (e) {
+          console.error(`加载订单 ${row.orderNo} 进度失败`, e)
+          this.$set(row, 'receiptProgress', 0)
+        }
+        return fetchNext()
+      }
+
+      const workers = []
+      for (let i = 0; i < Math.min(limit, list.length); i++) {
+        workers.push(fetchNext())
+      }
+      await Promise.all(workers)
+    },
     async fetchRawMaterials() {
       try {
         const res = await getRawMaterialList()
@@ -832,7 +896,7 @@ export default {
     async openCreate() {
       this.isEditing = false
       this.editForm = this.emptyForm()
-      this.supplierFilteredMaterials = []
+      this.supplierFilteredMaterials = [] // 初始化为空，强制用户必须先选供应商
       this.latestQuoteByCode = {}
       this.rawSpecHistoryCache = {}
       this.rawSpecHistoryLoadingMap = {}
@@ -880,7 +944,7 @@ export default {
         await this.loadSupplierMaterialMappings(supplier.supplierCode)
         await this.loadSupplierRemarkOptions(supplier)
       } else {
-        this.supplierFilteredMaterials = this.rawMaterials || []
+        this.supplierFilteredMaterials = [] // 供应商为空时，不列出所有物料，强制关联报价单
         this.latestQuoteByCode = {}
         this.supplierMaterialMappings = []
         this.supplierMaterialMappingMap = {}
@@ -1011,8 +1075,8 @@ export default {
         this.materialSearchKeyword = ''
         this.rawSpecHistoryCache = {}
         this.rawSpecHistoryLoadingMap = {}
-        await this.reloadSupplierMaterialContext(supplier)
         await this.loadSupplierMaterialMappings(supplier.supplierCode)
+        await this.reloadSupplierMaterialContext(supplier)
         this.syncDetailRowsBySupplier(supplier)
         await this.loadSupplierRemarkOptions(supplier)
       }
@@ -1116,6 +1180,12 @@ export default {
         if (hasRaw && !hasFilm) nextMode = 'raw'
         else if (hasFilm && !hasRaw) nextMode = 'film'
         else nextMode = 'film'
+      } else {
+        if (nextMode === 'film' && !hasFilm && hasRaw) {
+          nextMode = 'raw'
+        } else if (nextMode === 'raw' && !hasRaw && hasFilm) {
+          nextMode = 'film'
+        }
       }
 
       this.editForm.materialMode = nextMode
@@ -1153,10 +1223,25 @@ export default {
     },
     async reloadSupplierMaterialContext(supplier) {
       this.latestQuoteByCode = await this.fetchLatestQuotationMapBySupplier(supplier)
-      this.supplierFilteredMaterials = this.buildSupplierMaterialsFromQuotations(this.latestQuoteByCode)
+      const quoteMaterials = this.buildSupplierMaterialsFromQuotations(this.latestQuoteByCode)
+      
+      // 合并物料映射表中的料号
+      const mappedMaterials = (this.supplierMaterialMappings || []).map(m => {
+        const code = String(m.materialCode || '').trim()
+        if (!code || this.latestQuoteByCode[code]) return null // 已在报价单中则跳过
+        const raw = (this.rawMaterials || []).find(r => r.materialCode === code) || {}
+        return {
+          ...raw,
+          materialCode: code,
+          materialName: raw.materialName || m.supplierMaterialName || ''
+        }
+      }).filter(Boolean)
+      
+      this.supplierFilteredMaterials = [...quoteMaterials, ...mappedMaterials]
+      
       this.applyQuotePricingModeToFilmRows()
       if (this.editForm && this.editForm.supplierId && (!this.supplierFilteredMaterials || !this.supplierFilteredMaterials.length)) {
-        this.$message.warning('该供应商在报价单中暂无可用物料，请先维护供应商报价单')
+        this.$message.warning('该供应商在报价单和物料映射中暂无可用物料，请先维护')
       }
     },
     applyQuotePricingModeToFilmRows() {
@@ -1164,8 +1249,7 @@ export default {
       rows.forEach(row => {
         if (!row || this.isCountPricedRow(row)) return
         row.pricingMode = this.resolveFilmPricingMode(row)
-        const code = String(row.materialCode || '').trim()
-        const latestQuote = this.getLatestQuoteByCode(code)
+        const latestQuote = this.getLatestQuoteByRow(row)
         if (latestQuote && latestQuote.unitPrice !== null && latestQuote.unitPrice !== undefined) {
           row.unitPrice = latestQuote.unitPrice
           row.unitPriceLocked = true
@@ -1183,13 +1267,15 @@ export default {
       const codes = Object.keys(map)
       if (!codes.length) return []
       return codes.map(code => {
-        const quote = map[code] || {}
+        const candidates = map[code] || []
+        const quote = candidates[0] || {} // 汇总物料映射时取第一条（最新）作为基础参考
         const raw = (this.rawMaterials || []).find(r => r.materialCode === code) || {}
         return {
           ...raw,
           materialCode: code,
           materialName: raw.materialName || quote.materialName || '',
           spec: raw.spec || quote.specifications || '',
+          unit: raw.unit || quote.unit || quote.priceUomCode || quote.purchaseUomCode,
           quotedUnitPrice: quote.unitPrice,
           quotedPricingMode: quote.pricingMode || quote.priceUomCode || quote.purchaseUomCode
         }
@@ -1390,6 +1476,11 @@ export default {
       const typeText = String((meta && meta.type) || '')
       return /纸箱|纸盒|carton|ctn/i.test(typeText)
     },
+    isTapeByMeta(meta) {
+      const categoryText = String((meta && meta.category) || '')
+      const typeText = String((meta && meta.type) || '')
+      return /胶带|tape/i.test(categoryText) || /胶带|tape/i.test(typeText)
+    },
     hasCountPricedRawItems() {
       const rows = (this.editForm && this.editForm.rawItems) || []
       return rows.some(row => this.isCountPricedRow(row))
@@ -1411,6 +1502,7 @@ export default {
       const meta = this.getRawMaterialMetaByRow(row)
       if (this.isCartonByMeta(meta) || this.isCartonRow(row)) return 'carton'
       if (this.isTubeByMeta(meta) || this.isTubeRow(row) || this.isPeTubeRow(row)) return 'tube'
+      if (this.isTapeMaterial(row)) return 'tape'
       if (this.isChemicalByMeta(meta) || this.isChemicalRow(row)) return 'chemical'
       if (this.isFilmByMeta(meta) || this.isLikelyFilmRow(row)) return 'film'
       return 'raw'
@@ -1421,6 +1513,7 @@ export default {
       if (!rows.length) return [{ value: 'empty', label: '识别: 未选择物料', type: 'info' }]
       const set = new Set(rows.map(row => this.classifyRowKind(row)))
       const tags = []
+      if (set.has('tape')) tags.push({ value: 'tape', label: '识别: 胶带', type: 'success' })
       if (set.has('film')) tags.push({ value: 'film', label: '识别: 薄膜', type: 'success' })
       if (set.has('chemical')) tags.push({ value: 'chemical', label: '识别: 化工料(胶水逻辑)', type: 'warning' })
       if (set.has('carton')) tags.push({ value: 'carton', label: '识别: 纸箱', type: '' })
@@ -1504,8 +1597,12 @@ export default {
     },
     resolveFilmPricingMode(row) {
       if (!row) return 'kg'
+      
+      // 胶带优先逻辑：如果是胶带，强制平米计价，不看报价库的计价模式（防止报价库录入错误导致显示重量）
+      if (this.isTapeMaterial(row)) return 'sqm'
+      
       const code = String(row.materialCode || '').trim()
-      const latestQuote = this.getLatestQuoteByCode(code)
+      const latestQuote = this.getLatestQuoteByRow(row)
       const fromQuote = this.normalizeFilmPricingMode(latestQuote && (latestQuote.pricingMode || latestQuote.priceUomCode || latestQuote.purchaseUomCode))
       if (fromQuote) return fromQuote
       const raw = code ? (this.rawMaterials || []).find(r => r.materialCode === code) : null
@@ -1539,6 +1636,19 @@ export default {
     },
     onFilmEstimatedFieldInput(row) {
       this.syncFilmActualQtyWithEstimated(row)
+      this.onFilmSpecChange(row)
+    },
+    onFilmSpecChange(row) {
+      if (!row) return
+      row.filmSpecRaw = this.buildFilmSpecRaw(row)
+      const latestQuote = this.getLatestQuoteByRow(row)
+      // 如果找到了更精准的报价，且当前单价未锁或单价为空，则自动同步
+      if (latestQuote && latestQuote.unitPrice !== null && latestQuote.unitPrice !== undefined) {
+        if (!row.unitPrice || row.unitPriceLocked) {
+           row.unitPrice = latestQuote.unitPrice
+           row.unitPriceLocked = true
+        }
+      }
     },
     onFilmActualQtyInput(row) {
       if (!row) return
@@ -1569,10 +1679,10 @@ export default {
       return '规格'
     },
     getRawTotalHeaderLabelForEdit() {
-      return this.hasCountPricedRawItems() ? '总数量' : '总数量(kg)'
+      return this.hasCountPricedRawItems() ? '总数量' : '总数量(支/kg)'
     },
     getRawQtyHeaderLabelForEdit() {
-      return this.hasCountPricedRawItems() ? '数量' : '数量(桶)'
+      return this.hasCountPricedRawItems() ? '数量' : '数量(支/桶)'
     },
     getRawPriceHeaderLabelForEdit() {
       return this.hasCountPricedRawItems() ? '单价(元/个)' : '单价'
@@ -1601,6 +1711,17 @@ export default {
     onTubeSpecPartChange(row) {
       if (!row) return
       row.rawSpec = this.buildTubeSpecValue(row)
+      // 纸管/胶管同样尝试匹配规格报价
+      const latestQuote = this.getLatestQuoteByRow({
+        materialCode: row.materialCode,
+        thicknessDisplay: row.tubeThickness,
+        width: row.tubeInnerDiameter,
+        lengthDisplay: row.tubeLength,
+        colorCode: row.colorCode
+      })
+      if (latestQuote && latestQuote.unitPrice !== null && latestQuote.unitPrice !== undefined) {
+        row.unitPrice = latestQuote.unitPrice
+      }
     },
     splitFilmSpecToParts(specText) {
       const text = String(specText || '').trim().replace(/[×xX]/g, '*')
@@ -1689,6 +1810,24 @@ export default {
       const text = `${(row && row.materialCode) || ''} ${(row && row.materialName) || ''} ${(row && row.filmSpecRaw) || ''}`.toLowerCase()
       return /泡棉|foam|epe/.test(text)
     },
+    isTapeMaterial(row) {
+      if (!row) return false
+      const code = String(row.materialCode || '').toUpperCase().trim()
+
+      // 最高优先级：只要料号来自研发规格库（胶带表），它就是胶带
+      if (code && this.specs && this.specs.some(s => this.normalizeMaterialCode(s.materialCode) === code)) {
+        return true
+      }
+
+      const meta = this.getRawMaterialMetaByRow(row)
+      if (this.isTapeByMeta(meta)) return true
+      const name = String(row.materialName || '').trim()
+      const spec = String(row.filmSpecRaw || row.rawSpec || '').trim()
+      const text = `${code} ${name} ${spec}`.toLowerCase()
+      if (/胶带|tape/i.test(text)) return true
+      if (/^103-WW/i.test(code)) return true
+      return false
+    },
     calcFilmChargeQty(row) {
       if (this.isPeTubeRow(row)) {
         const qty = Number((row && row.rolls) || 0)
@@ -1717,34 +1856,69 @@ export default {
     },
     isFilmMaterial(item) {
       if (!item) return false
-      const meta = this.getRawMaterialMetaByRow(item)
+      const code = String(item.materialCode || '').toUpperCase().trim()
+      
+      // 如果在研发规格库中找到，强制判定为薄膜模式
+      if (this.specs && this.specs.some(s => this.normalizeMaterialCode(s.materialCode) === code)) return true
+      
+      const meta = this.getRawMaterialMetaByRow(item) || item
       if (this.isFilmByMeta(meta)) return true
       if (this.isPackagingByMeta(meta)) return false
-      const code = String(item.materialCode || '')
-      const unitRaw = String(item.unit || '')
+      const unitRaw = String(item.unit || meta.unit || '')
       const unit = unitRaw.toLowerCase()
-      const spec = String(item.spec || '')
-      const rawText = `${code} ${String(item.materialName || '')} ${spec}`.toLowerCase()
+      const spec = String(item.spec || meta.spec || '')
+      const rawText = `${code} ${String(item.materialName || meta.materialName || '')} ${spec}`.toLowerCase()
       if (/pe管|管材|胶管|纸管|纸筒|纸芯|纸箱|纸盒|carton|ctn/.test(rawText)) return false
-      if ((this.specs || []).some(s => s.materialCode === code)) return true
       if (unit.includes('m') || unit.includes('㎡') || unit.includes('m²') || unit.includes('m2')) return true
-      if (/^PET/i.test(code) || /膜/i.test(code)) return true
-      return /薄膜|离型膜|离型纸|原膜|PET膜|平方|㎡|m²|m2/i.test(spec)
+      if (/^PET/i.test(code) || /膜/i.test(code) || /胶带/i.test(rawText)) return true
+      return /薄膜|离型膜|离型纸|原膜|PET膜|平方|㎡|m²|m2|胶带/i.test(spec)
     },
     filmMaterialOptions() {
-      return this.getSupplierBaseMaterials().filter(item => this.isFilmMaterial(item))
+      const fromRaw = this.getSupplierBaseMaterials().filter(item => this.isFilmMaterial(item))
+      const fromSpecs = (this.specs || []).map(s => ({
+        materialCode: s.materialCode,
+        materialName: s.productName || s.materialName,
+        unit: s.unit || '㎡',
+        spec: `${s.totalThickness || ''}*${s.width || ''}*${s.length || ''}`,
+        thickness: s.totalThickness
+      }))
+      
+      const merged = [...fromRaw]
+      const seen = new Set(fromRaw.map(r => String(r.materialCode).trim().toUpperCase()))
+      fromSpecs.forEach(s => {
+        const code = String(s.materialCode).trim().toUpperCase()
+        if (code && !seen.has(code)) {
+          merged.push(s)
+          seen.add(code)
+        }
+      })
+      return merged
     },
     nonFilmMaterialOptions() {
       return this.getSupplierBaseMaterials().filter(item => !this.isFilmMaterial(item))
     },
     getSupplierBaseMaterials() {
-      if (this.editForm && this.editForm.supplierId) {
-        return this.supplierFilteredMaterials || []
+      const filtered = (this.supplierFilteredMaterials || [])
+      const all = (this.rawMaterials || [])
+      
+      if (!this.editForm || !this.editForm.supplierId) {
+        return all
       }
-      if (this.supplierFilteredMaterials && this.supplierFilteredMaterials.length) {
-        return this.supplierFilteredMaterials
-      }
-      return this.rawMaterials || []
+
+      // 合并逻辑：优先显示该供应商已关联的物料（带基础报价/映射信息），
+      // 随后补充显示所有基础物料，确保用户不仅限于已维护报价的范围
+      const merged = [...filtered]
+      const seen = new Set(filtered.map(f => String(f.materialCode || '').trim().toUpperCase()))
+      
+      all.forEach(item => {
+        const code = String(item.materialCode || '').trim().toUpperCase()
+        if (code && !seen.has(code)) {
+          merged.push(item)
+          seen.add(code)
+        }
+      })
+      
+      return merged
     },
     materialOptionsForCurrentMode() {
       let list = []
@@ -1781,32 +1955,95 @@ export default {
         .filter(Boolean)
       const set = new Set(base)
       base.forEach(text => {
-        const normalized = text
-          .replace(/有限公司|有限责任公司|股份有限公司|新材料科技|新材料|科技|材料/g, '')
-          .replace(/[()（）\-\s]/g, '')
-          .trim()
+        // 处理斜杠分隔的多名称
+        if (text.includes('/')) {
+          text.split('/').forEach(part => {
+            const p = part.trim()
+            if (p.length >= 2) {
+              set.add(p)
+              const normP = this.normalizeSupplierIdentity(p)
+              if (normP.length >= 2) set.add(normP)
+            }
+          })
+        }
+        const normalized = this.normalizeSupplierIdentity(text)
         if (normalized.length >= 2) {
           set.add(normalized)
-          set.add(normalized.substring(0, 2))
-        }
-        if (normalized.length >= 3) {
-          set.add(normalized.substring(0, 3))
         }
       })
       return Array.from(set).filter(v => v && v.length >= 2)
     },
+    normalizeSupplierIdentity(text) {
+      return String(text || '')
+        .toLowerCase()
+        .replace(/有限责任公司|股份有限公司|有限公司|有限公司/g, '')
+        .replace(/广东|东莞市|佛山市|广州市|上海市|深圳市|东莞|佛山|广州|上海|深圳/g, '')
+        .replace(/[()（）\-\/\\\s]/g, '')
+        .trim()
+    },
     normalizeQuoteMaterialCode(code) {
       return String(code || '').trim().toUpperCase()
     },
+    normalizeMaterialCode(code) {
+      return String(code || '').trim().toUpperCase()
+    },
+    getLatestQuoteByRow(row) {
+      if (!row) return null
+      const code = this.normalizeQuoteMaterialCode(row.materialCode)
+      if (!code) return null
+      
+      const candidates = this.latestQuoteByCode[code] || []
+      if (!candidates.length) return null
+
+      // 规格/颜色过滤逻辑（参考销售模块）
+      const rowThickness = this.toDecimalNumber(row.thicknessDisplay || row.thickness)
+      const rowWidth = this.toDecimalNumber(row.width)
+      const rowLength = this.toDecimalNumber(row.lengthDisplay || row.length)
+      const rowColor = String(row.colorCode || '').trim().toUpperCase()
+
+      const matched = candidates.filter(c => {
+        // 如果报价项有明确规格，则严格比对；如果没有（如仅有料号报价），则作为备选
+        if (rowThickness && c.thickness) {
+          if (rowThickness !== this.toDecimalNumber(c.thickness)) return false
+        }
+        if (rowWidth && c.width) {
+          if (rowWidth !== this.toDecimalNumber(c.width)) return false
+        }
+        if (rowLength && c.length) {
+          if (rowLength !== this.toDecimalNumber(c.length)) return false
+        }
+        const cColor = String(c.colorCode || '').trim().toUpperCase()
+        if (rowColor && cColor) {
+          if (rowColor !== cColor) return false
+        }
+        return true
+      })
+
+      const targetList = matched.length > 0 ? matched : candidates
+      
+      return targetList.sort((a, b) => {
+        const t1 = (b.__quoteTime || 0) - (a.__quoteTime || 0)
+        if (t1 !== 0) return t1
+        return (b.__itemId || 0) - (a.__itemId || 0)
+      })[0]
+    },
     getLatestQuoteByCode(code) {
-      const key = this.normalizeQuoteMaterialCode(code)
-      if (!key) return null
-      return this.latestQuoteByCode[key] || null
+      // 兼容仅有料号的场景
+      const candidates = this.latestQuoteByCode[this.normalizeQuoteMaterialCode(code)] || []
+      return candidates.sort((a, b) => (b.__quoteTime || 0) - (a.__quoteTime || 0))[0] || null
     },
     async fetchLatestQuotationMapBySupplier(supplier) {
+      if (!supplier) return {}
       try {
+        const exactKeywords = [supplier && supplier.supplierName, supplier && supplier.shortName, supplier && supplier.supplierCode]
+          .map(v => String(v || '').trim())
+          .filter(Boolean)
         const tokens = this.buildSupplierMatchTokens(supplier)
-        if (!tokens.length) return {}
+        const queryKeywords = Array.from(new Set([...(exactKeywords || []), ...(tokens || [])]))
+        if (!queryKeywords.length) return {}
+
+        const exactSet = new Set(exactKeywords.map(v => String(v || '').trim().toLowerCase()).filter(Boolean))
+        const normalizedSet = new Set(exactKeywords.map(v => this.normalizeSupplierIdentity(v)).filter(Boolean))
 
         const normalizeRecords = (res) => {
           const data = res && res.data
@@ -1824,7 +2061,7 @@ export default {
         }
 
         const uniqMap = new Map()
-        for (const keyword of tokens) {
+        for (const keyword of queryKeywords) {
           const allStatus = await fetchBySupplierKeyword(keyword, '')
           allStatus.forEach(q => {
             const key = q && (q.id || q.quotationNo)
@@ -1835,16 +2072,19 @@ export default {
         }
 
         const matched = Array.from(uniqMap.values()).filter(q => {
-          const supplierText = String((q && q.supplier) || '').toLowerCase()
-          if (!supplierText) return false
-          // 增加全词精确匹配逻辑，避免“三木”匹配到“三木新材料”和“三木化工”两家
-          const targetName = String(supplier && supplier.supplierName || '').toLowerCase()
-          if (targetName && (supplierText === targetName || supplierText.includes(targetName))) return true
-          
-          return tokens.some(k => {
-            const text = String(k || '').toLowerCase()
-            return supplierText === text || supplierText.includes(text)
-          })
+          // 不再严格过滤已过期报价，作为历史报价料号参考（采购下单时价格仍会取最新的）
+          const supplierTextRaw = String((q && q.supplier) || '').trim()
+          if (!supplierTextRaw) return false
+
+          const supplierTextLower = supplierTextRaw.toLowerCase()
+          if (exactSet.has(supplierTextLower)) return true
+
+          const normalizedSupplierText = this.normalizeSupplierIdentity(supplierTextRaw)
+          if (normalizedSupplierText && normalizedSet.has(normalizedSupplierText)) return true
+
+          const tksQS = this.buildSupplierMatchTokens({ supplierName: supplierTextRaw })
+          const tokensStr = tokens.join('|')
+          return tksQS.some(t => tokens.includes(t) || tokensStr.includes(t) || t.includes(normalizedSupplierText))
         })
         if (!matched.length) return {}
 
@@ -1858,16 +2098,28 @@ export default {
         }
 
         const sorted = matched.sort((a, b) => {
-          const ta = new Date(a.quotationDate || a.createdAt || 0).getTime()
-          const tb = new Date(b.quotationDate || b.createdAt || 0).getTime()
+          const ta = pickTime(a.quotationDate, a.createdAt)
+          const tb = pickTime(b.quotationDate, b.createdAt)
           return tb - ta
         })
 
-        const detailTargets = sorted.slice(0, 160)
-        const detailList = await Promise.all(detailTargets.map(async q => {
-          const detailRes = await getPurchaseQuotationDetail(q.id)
-          return detailRes && (detailRes.code === 200 || detailRes.code === 20000) ? detailRes.data : null
-        }))
+        const detailTargets = sorted
+        const detailList = []
+
+        const chunkSize = 5
+        for (let i = 0; i < detailTargets.length; i += chunkSize) {
+          const chunk = detailTargets.slice(i, i + chunkSize)
+          const results = await Promise.all(chunk.map(async q => {
+            try {
+              const detailRes = await getPurchaseQuotationDetail(q.id)
+              return detailRes && (detailRes.code === 200 || detailRes.code === 20000) ? detailRes.data : null
+            } catch (err) {
+              console.warn(`获取报价单 ${q.id} 详情失败`, err)
+              return null
+            }
+          }))
+          detailList.push(...results.filter(Boolean))
+        }
 
         const latestMap = {}
         detailList.forEach(detail => {
@@ -1875,33 +2127,31 @@ export default {
           items.forEach(item => {
             const code = this.normalizeQuoteMaterialCode(item.materialCode)
             if (!code) return
-            const quoteTime = pickTime(
-              item && item.updatedAt,
-              item && item.createdAt,
-              detail && detail.updatedAt,
-              detail && detail.createdAt,
-              detail && detail.quotationDate
-            )
-            const itemId = Number((item && item.id) || 0)
-            const existing = latestMap[code]
-            const shouldReplace = !existing || quoteTime > Number(existing.__quoteTime || 0) ||
-              (quoteTime === Number(existing.__quoteTime || 0) && itemId > Number(existing.__itemId || 0))
-            if (!shouldReplace) return
-            latestMap[code] = {
+
+            if (!latestMap[code]) latestMap[code] = []
+
+            latestMap[code].push({
               unitPrice: item.unitPrice,
               specifications: item.specifications,
               materialName: item.materialName,
               pricingMode: item.pricingMode,
               priceUomCode: item.priceUomCode,
               purchaseUomCode: item.purchaseUomCode,
-              __quoteTime: quoteTime,
-              __itemId: itemId
-            }
+              unit: item.unit,
+              thickness: item.thickness || item.thicknessDisplay,
+              width: item.width,
+              length: item.length || item.lengthDisplay,
+              colorCode: item.colorCode,
+              __quoteTime: pickTime(
+                item && item.updatedAt,
+                item && item.createdAt,
+                detail && detail.updatedAt,
+                detail && detail.createdAt,
+                detail && detail.quotationDate
+              ),
+              __itemId: Number((item && item.id) || 0)
+            })
           })
-        })
-        Object.keys(latestMap).forEach(code => {
-          delete latestMap[code].__quoteTime
-          delete latestMap[code].__itemId
         })
         return latestMap
       } catch (e) {
@@ -1910,25 +2160,52 @@ export default {
       }
     },
     async onMaterialCodeChange(row, code) {
+      if (!code) return
       const mode = this.detectMaterialModeByCode(code)
-      if (!this.editForm.materialMode) {
-        this.editForm.materialMode = mode
-      }
-      if (this.editForm.materialMode !== mode) {
-        this.editForm.materialMode = mode
-        if (mode === 'film') {
-          this.editForm.rawItems = []
-          this.editForm.filmItems = [{ materialCode: code, materialName: '', filmSpecRaw: '', colorCode: '', thicknessDisplay: '', width: '', lengthDisplay: '', rolls: '', pricingMode: '', actualQty: '', __actualQtyManual: false, unitPrice: '', unitPriceLocked: false, remark: '' }]
-          row = this.editForm.filmItems[0]
-        } else {
-          this.editForm.filmItems = []
-          this.editForm.rawItems = [{ materialCode: code, materialName: '', rawSpec: '', quantity: '', totalWeight: '', unitPrice: '', remark: '' }]
-          row = this.editForm.rawItems[0]
+      const isCurrentlyInFilm = (this.editForm.filmItems || []).includes(row)
+      
+      // 如果模式不匹配，或者由于初始状态（默认 film）导致列表类型错误，则执行迁移
+      if ((this.editForm.materialMode && this.editForm.materialMode !== mode) || (mode === 'raw' && isCurrentlyInFilm) || (mode === 'film' && !isCurrentlyInFilm)) {
+        const totalItems = (this.editForm.filmItems.length || 0) + (this.editForm.rawItems.length || 0)
+        if (totalItems > 1 && this.editForm.materialMode && this.editForm.materialMode !== mode) {
+          this.$message.warning(`当前订单模式为${this.editForm.materialMode === 'film' ? '薄膜' : '原料'}，不能混用物料类型`)
+          row.materialCode = ''
+          return
         }
+        
+        const newRow = { 
+          materialCode: code, 
+          materialName: '', 
+          remark: '', 
+          __editing: true 
+        }
+        
+        if (mode === 'film') {
+          Object.assign(newRow, {
+            filmSpecRaw: '', colorCode: '', thicknessDisplay: '', width: '', lengthDisplay: '', rolls: '', pricingMode: '', actualQty: '', __actualQtyManual: false, unitPrice: '', unitPriceLocked: false
+          })
+          this.editForm.materialMode = 'film'
+          this.editForm.rawItems = []
+          this.editForm.filmItems = [newRow]
+          row = newRow
+        } else {
+          Object.assign(newRow, {
+            rawSpec: '', quantity: '', totalWeight: '', unitPrice: ''
+          })
+          this.editForm.materialMode = 'raw'
+          this.editForm.filmItems = []
+          this.editForm.rawItems = [newRow]
+          row = newRow
+        }
+        
+        // 强制触发一次视图更新，确保 el-select 绑定到新对象
+        await this.$nextTick()
+      } else if (!this.editForm.materialMode) {
+        this.editForm.materialMode = mode
       }
 
       const raw = this.rawMaterials.find(r => r.materialCode === code)
-      const latestQuote = this.getLatestQuoteByCode(code)
+      const latestQuote = this.getLatestQuoteByRow(row)
       if (raw) {
         row.materialName = raw.materialName
       }
@@ -2314,6 +2591,22 @@ export default {
     formatNumber(val) {
       return val === undefined || val === null ? '-' : Number(val).toFixed(2)
     },
+    normalizeUomLabel(uom) {
+      const code = String(uom || '').trim().toUpperCase()
+      if (!code) return ''
+      const map = {
+        DRUM: '桶',
+        DRUN: '桶',
+        KG: 'KG',
+        M2: '㎡',
+        ROLL: '卷',
+        PCS: '支',
+        EA: '支',
+        PC: '支',
+        M: 'M'
+      }
+      return map[code] || uom
+    },
     reconciliationText(status) {
       return getPurchaseReconciliationMeta(status).text
     },
@@ -2554,6 +2847,8 @@ export default {
     },
     isPurchaseFilmWeightPriced(item) {
       if (!this.isPurchaseFilmItem(item)) return false
+      // 胶带强制不使用重量计价 (完美化逻辑)
+      if (this.isTapeMaterial(item)) return false
       const mode = this.normalizeFilmPricingMode(item && (item.pricingMode || item.priceUomCode || item.purchaseUomCode))
       return mode === 'kg'
     },
@@ -2572,7 +2867,7 @@ export default {
       return !this.isCountPrintTemplate()
     },
     getPurchasePrintRollHeaderLabel() {
-      if (this.isChemicalPrintTemplate()) return '桶数'
+      if (this.isChemicalPrintTemplate()) return '支数/桶数'
       return this.isCountPrintTemplate() ? '个数' : '数量/R'
     },
     getPurchasePrintRollValue(item) {
@@ -2595,7 +2890,7 @@ export default {
     },
     getPurchasePrintQuantityHeaderLabel() {
       if (this.isFilmWeightPrintTemplate()) return '下单重量/Kg'
-      return this.isChemicalPrintTemplate() ? '总数量' : '数量'
+      return this.isChemicalPrintTemplate() ? '总数量(支/kg)' : '数量'
     },
     isTubeLikePrintRow(item) {
       return this.isTubeRow(item) || this.isPeTubeRow(item)

@@ -1382,9 +1382,9 @@ Page({
       return
     }
 
-    const resolvedCustomerBatchNo = (customerBatchNo || '').trim() || (batchNo || '').trim()
+    const resolvedCustomerBatchNo = (customerBatchNo || '').trim()
     if (!resolvedCustomerBatchNo) {
-      wx.showToast({ title: '请填写客户批次号', icon: 'none' })
+      wx.showToast({ title: '请填写供商批次号', icon: 'none' })
       return
     }
 

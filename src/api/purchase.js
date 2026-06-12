@@ -39,6 +39,14 @@ export function getPurchaseOrderDetail(orderNo) {
   })
 }
 
+export function getOrdersAvailableForReceipt(params) {
+  return request({
+    url: '/purchase/orders/available-for-receipt',
+    method: 'get',
+    params
+  })
+}
+
 export function getPurchaseOrderReconciliation(orderNo) {
   return request({
     url: `/purchase/orders/${orderNo}/reconciliation`,

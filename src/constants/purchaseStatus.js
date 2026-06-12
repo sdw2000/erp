@@ -1,7 +1,7 @@
 export const PURCHASE_STATUS = {
   pending: {
-    text: '待处理',
-    tag: 'info'
+    text: '待审批',
+    tag: 'warning'
   },
   processing: {
     text: '处理中',
@@ -23,6 +23,10 @@ export const PURCHASE_STATUS = {
     text: '已收货',
     tag: 'success'
   },
+  scanned_in: {
+    text: '已收货',
+    tag: 'success'
+  },
   partial: {
     text: '部分收货',
     tag: 'warning'
@@ -34,7 +38,8 @@ export const PURCHASE_STATUS = {
 }
 
 export function getPurchaseStatusMeta(status) {
-  return PURCHASE_STATUS[status] || {
+  const s = String(status || '').toLowerCase()
+  return PURCHASE_STATUS[s] || {
     text: status || '-',
     tag: 'default'
   }

@@ -87,7 +87,7 @@
         <el-table-column prop="totalAmount" label="总金额" width="97" class-name="amount-col" sortable="custom" />
         <el-table-column prop="totalArea" label="总面积(㎡)" width="97" class-name="area-col" sortable="custom" />
         <el-table-column label="欠卷总数" width="90" align="center">
-          <template slot-scope="scope">{{ formatOrderRemainingRolls(scope.row) }}</template>
+          <template slot-scope="scope">{{ formatOrderRemainingRolls(scope.row) | numberFixed }}</template>
         </el-table-column>
         <el-table-column prop="orderDate" label="订单日期" width="98" sortable="custom">
           <template slot-scope="scope">{{ formatMonthDay(scope.row.orderDate) }}</template>
@@ -162,12 +162,14 @@
             </template>
           </el-table-column>
           <el-table-column prop="colorCode" label="颜色" width="100" />
-          <el-table-column prop="rolls" label="卷数" width="80" />
+          <el-table-column prop="rolls" label="卷数" width="80">
+            <template slot-scope="scope">{{ scope.row.rolls | numberFixed }}</template>
+          </el-table-column>
           <el-table-column label="完成卷" width="90" align="center">
-            <template slot-scope="scope">{{ formatItemCompletedRolls(scope.row) }}</template>
+            <template slot-scope="scope">{{ formatItemCompletedRolls(scope.row) | numberFixed }}</template>
           </el-table-column>
           <el-table-column label="欠卷" width="90" align="center">
-            <template slot-scope="scope">{{ formatItemRemainingRolls(scope.row) }}</template>
+            <template slot-scope="scope">{{ formatItemRemainingRolls(scope.row) | numberFixed }}</template>
           </el-table-column>
           <el-table-column label="状态" width="90" align="center">
             <template slot-scope="scope">
@@ -426,10 +428,21 @@
                   <span v-else>{{ getItemSpecText(scope.row) }}</span>
                 </template>
               </el-table-column>
-              <el-table-column label="卷数" width="64">
+              <el-table-column label="卷数" width="90">
                 <template slot-scope="scope">
-                  <el-input v-if="scope.row._rowEditing" v-model="scope.row.rolls" class="small-input" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="卷数" @input="onEditRollsChanged(scope.row)" />
-                  <span v-else>{{ scope.row.rolls || 0 }}</span>
+                  <el-input-number
+                    v-if="scope.row._rowEditing"
+                    v-model="scope.row.rolls"
+                    size="mini"
+                    :precision="2"
+                    :step="0.1"
+                    :min="0"
+                    placeholder="卷数"
+                    style="width: 100%"
+                    :controls="false"
+                    @change="onEditRollsChanged(scope.row)"
+                  />
+                  <span v-else>{{ scope.row.rolls | numberFixed }}</span>
                 </template>
               </el-table-column>
               <el-table-column label="平米数" width="72">
@@ -451,16 +464,38 @@
               <el-table-column label="金额" width="90">
                 <template slot-scope="scope">{{ calcAmount(scope.row) }}</template>
               </el-table-column>
-              <el-table-column label="已完成" width="72">
+              <el-table-column label="已完成" width="90">
                 <template slot-scope="scope">
-                  <el-input v-if="scope.row._rowEditing" v-model="scope.row.deliveredQty" class="small-input" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="完成" @input="onEditCompletedQtyChanged(scope.row)" />
-                  <span v-else>{{ scope.row.deliveredQty || 0 }}</span>
+                  <el-input-number
+                    v-if="scope.row._rowEditing"
+                    v-model="scope.row.deliveredQty"
+                    size="mini"
+                    :precision="2"
+                    :step="0.1"
+                    :min="0"
+                    placeholder="完成"
+                    style="width: 100%"
+                    :controls="false"
+                    @change="onEditCompletedQtyChanged(scope.row)"
+                  />
+                  <span v-else>{{ scope.row.deliveredQty | numberFixed }}</span>
                 </template>
               </el-table-column>
-              <el-table-column label="欠卷" width="72">
+              <el-table-column label="欠卷" width="90">
                 <template slot-scope="scope">
-                  <el-input v-if="scope.row._rowEditing" v-model="scope.row.remainingQty" class="small-input" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="欠卷" @input="onEditRemainingQtyChanged(scope.row)" />
-                  <span v-else>{{ scope.row.remainingQty || 0 }}</span>
+                  <el-input-number
+                    v-if="scope.row._rowEditing"
+                    v-model="scope.row.remainingQty"
+                    size="mini"
+                    :precision="2"
+                    :step="0.1"
+                    :min="0"
+                    placeholder="欠卷"
+                    style="width: 100%"
+                    :controls="false"
+                    @change="onEditRemainingQtyChanged(scope.row)"
+                  />
+                  <span v-else>{{ scope.row.remainingQty | numberFixed }}</span>
                 </template>
               </el-table-column>
               <el-table-column label="完成状态" width="110">

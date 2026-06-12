@@ -48,12 +48,12 @@
             <el-table-column prop="paymentAccount" label="收款账户" min-width="200" show-overflow-tooltip />
             <el-table-column prop="reconcileStatus" label="扣账状态" width="110">
               <template slot-scope="scope">
-                <el-tag :type="receiptStatusTag(scope.row.reconcileStatus)">{{ scope.row.reconcileStatus || 'UNRECONCILED' }}</el-tag>
+                <el-tag :type="receiptStatusTag(scope.row.reconcileStatus)">{{ receiptStatusLabel(scope.row.reconcileStatus) }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column label="操作" width="220" fixed="right">
               <template slot-scope="scope">
-                <el-button size="mini" type="primary" plain :disabled="Number(scope.row.unallocatedAmount || 0) <= 0" @click="handleReconcile(scope.row)">按先出货先扣账</el-button>
+                <el-button size="mini" type="primary" plain :disabled="Number(scope.row.unallocatedAmount || 0) <= 0" @click="handleReconcile(scope.row)">扣账</el-button>
                 <el-button size="mini" type="danger" plain :disabled="!canReverse(scope.row)" @click="handleReverse(scope.row)">冲销</el-button>
               </template>
             </el-table-column>
@@ -116,8 +116,20 @@
             <el-table-column prop="unpaidAmount" label="未回款" width="120" align="right">
               <template slot-scope="scope">{{ formatMoney(scope.row.unpaidAmount) }}</template>
             </el-table-column>
-            <el-table-column prop="detailStatus" label="状态" width="100" />
-            <el-table-column prop="matchStatus" label="匹配" width="100" />
+            <el-table-column prop="detailStatus" label="状态" width="100">
+              <template slot-scope="scope">
+                <el-tag :type="scope.row.detailStatus === 'PAID' ? 'success' : 'danger'" size="mini">
+                  {{ scope.row.detailStatus === 'PAID' ? '已回款' : '未回款' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="matchStatus" label="匹配" width="100">
+              <template slot-scope="scope">
+                <el-tag :type="scope.row.matchStatus === 'MATCHED' ? 'success' : 'info'" size="mini">
+                  {{ scope.row.matchStatus === 'MATCHED' ? '已匹配' : '未匹配' }}
+                </el-tag>
+              </template>
+            </el-table-column>
           </el-table>
 
           <el-pagination
@@ -141,10 +153,13 @@
 
           <el-table :data="invoices" stripe border>
             <el-table-column prop="id" label="ID" width="80" />
-            <el-table-column prop="invoice_no" label="发票号" />
-            <el-table-column prop="customer_code" label="客户" width="160" />
-            <el-table-column prop="invoice_date" label="开票日期" width="120" />
-            <el-table-column prop="total_amount" label="金额" width="120" align="right" />
+            <el-table-column prop="invoice_no" label="发票号" width="150" />
+            <el-table-column prop="customerCode" label="客户编码" width="130" />
+            <el-table-column prop="customerName" label="客户名称" min-width="180" show-overflow-tooltip />
+            <el-table-column prop="invoiceDate" label="开票日期" width="120" />
+            <el-table-column prop="totalAmount" label="金额" width="120" align="right">
+              <template slot-scope="scope">{{ formatMoney(scope.row.totalAmount) }}</template>
+            </el-table-column>
             <el-table-column prop="status" label="状态" width="100" />
           </el-table>
         </el-tab-pane>
@@ -203,6 +218,7 @@ import {
   createAndPostInvoice,
   listReceipts,
   createReceipt,
+  reconcileReceipt,
   reconcileReceiptHistory,
   reverseReceipt,
   listUnpaidDetails,
@@ -271,6 +287,14 @@ export default {
       if (s === 'PARTIAL') return 'warning'
       if (s === 'REVERSED') return 'info'
       return ''
+    },
+    receiptStatusLabel(status) {
+      const s = String(status || '').toUpperCase()
+      if (s === 'FULL') return '已结清'
+      if (s === 'PARTIAL') return '部分结清'
+      if (s === 'REVERSED') return '已冲销'
+      if (s === 'UNRECONCILED') return '未扣账'
+      return s || '未扣账'
     },
     canReverse(row) {
       const status = String((row && row.reconcileStatus) || '').toUpperCase()
@@ -371,7 +395,7 @@ export default {
       const id = row && row.id
       if (!id) return
       await this.$confirm('确认按出货时间先后顺序执行扣账？', '提示', { type: 'warning' })
-      const res = await reconcileReceiptHistory(id, {})
+      const res = await reconcileReceipt(id)
       if (!this.isSuccess(res)) {
         return this.$message.error((res && (res.msg || res.message)) || '扣账失败')
       }

@@ -14,7 +14,8 @@ export const PURCHASE_RECONCILIATION_STATUS = {
 }
 
 export function getPurchaseReconciliationMeta(status) {
-  return PURCHASE_RECONCILIATION_STATUS[status] || {
+  const s = String(status || '').toUpperCase()
+  return PURCHASE_RECONCILIATION_STATUS[s] || {
     text: status || '-',
     tag: 'default'
   }

@@ -75,10 +75,26 @@
       <el-table :data="detailItems" border size="small" class="chemical-detail-table">
         <el-table-column prop="rawMaterialCode" label="物料代码" width="150" header-align="center" />
         <el-table-column prop="rawMaterialName" label="物料名称" width="145" header-align="center" />
-        <el-table-column prop="requiredKg" label="需求kg" width="95" align="center" header-align="center" />
-        <el-table-column prop="suggestedQty" label="建议请购" width="100" align="center" header-align="center" />
-        <el-table-column prop="receivedQty" label="累计已收" width="95" align="center" header-align="center" />
-        <el-table-column prop="remainingQty" label="剩余待收" width="95" align="center" header-align="center" />
+        <el-table-column prop="requiredKg" label="需求kg" width="95" align="center" header-align="center">
+          <template slot-scope="scope">
+            <span>{{ scope.row.requiredKg | numberFixed }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="suggestedQty" label="建议请购" width="100" align="center" header-align="center">
+          <template slot-scope="scope">
+            <span>{{ scope.row.suggestedQty | numberFixed }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="receivedQty" label="累计已收" width="95" align="center" header-align="center">
+          <template slot-scope="scope">
+            <span>{{ scope.row.receivedQty | numberFixed }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="remainingQty" label="剩余待收" width="95" align="center" header-align="center">
+          <template slot-scope="scope">
+            <span>{{ scope.row.remainingQty | numberFixed }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="请购数量" width="150" align="center" header-align="center">
           <template slot-scope="scope">
             <el-input-number
@@ -86,6 +102,8 @@
               class="qty-stepper"
               style="width: 128px"
               :min="0"
+              :precision="2"
+              :step="0.1"
               :disabled="!canEditQty"
               size="mini"
               @change="val => handleUpdateQty(scope.row, val)"
@@ -100,6 +118,8 @@
               class="qty-stepper"
               style="width: 128px"
               :min="0"
+              :precision="2"
+              :step="0.1"
               :max="scope.row.remainingQty || 0"
               :disabled="!canReceiveCurrent"
               size="mini"

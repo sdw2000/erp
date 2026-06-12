@@ -52,7 +52,7 @@
           <el-card shadow="hover" class="stat-card">
             <div class="stat-content">
               <div class="stat-label">总数量</div>
-              <div class="stat-value">{{ statistics.totalQuantity }}</div>
+              <div class="stat-value">{{ statistics.totalQuantity | numberFixed }}</div>
             </div>
           </el-card>
         </el-col>
@@ -60,7 +60,7 @@
           <el-card shadow="hover" class="stat-card">
             <div class="stat-content">
               <div class="stat-label">可用数量</div>
-              <div class="stat-value" style="color: #67c23a">{{ statistics.availableQuantity }}</div>
+              <div class="stat-value" style="color: #67c23a">{{ statistics.availableQuantity | numberFixed }}</div>
             </div>
           </el-card>
         </el-col>
@@ -68,7 +68,7 @@
           <el-card shadow="hover" class="stat-card">
             <div class="stat-content">
               <div class="stat-label">锁定数量</div>
-              <div class="stat-value" style="color: #e6a23c">{{ statistics.lockedQuantity }}</div>
+              <div class="stat-value" style="color: #e6a23c">{{ statistics.lockedQuantity | numberFixed }}</div>
             </div>
           </el-card>
         </el-col>
@@ -93,22 +93,22 @@
         </el-table-column>
         <el-table-column prop="totalQuantity" label="总数量" width="100" align="center" sortable="custom">
           <template slot-scope="scope">
-            <span style="font-weight: bold">{{ scope.row.totalQuantity }}</span>
+            <span style="font-weight: bold">{{ scope.row.totalQuantity | numberFixed }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="availableQuantity" label="可用数量" width="100" align="center" sortable="custom">
           <template slot-scope="scope">
-            <span style="color: #67c23a; font-weight: bold">{{ scope.row.availableQuantity }}</span>
+            <span style="color: #67c23a; font-weight: bold">{{ scope.row.availableQuantity | numberFixed }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="bucketCount" label="桶数" width="90" align="center" sortable="custom">
           <template slot-scope="scope">
-            <span style="font-weight: bold">{{ scope.row.bucketCount == null ? '-' : scope.row.bucketCount }}</span>
+            <span style="font-weight: bold">{{ scope.row.bucketCount == null ? '-' : (Number(scope.row.bucketCount).toFixed(2)) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="lockedQuantity" label="锁定数量" width="100" align="center" sortable="custom">
           <template slot-scope="scope">
-            <span style="color: #e6a23c">{{ scope.row.lockedQuantity }}</span>
+            <span style="color: #e6a23c">{{ scope.row.lockedQuantity | numberFixed }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="safetyStock" label="安全库存" width="100" align="center" sortable="custom">

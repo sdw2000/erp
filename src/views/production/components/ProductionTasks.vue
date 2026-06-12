@@ -147,6 +147,11 @@
     </el-card>
 
     <el-card v-if="!standaloneLabelOnly" shadow="never">
+      <el-tabs v-if="isSlitting" v-model="activeTab" class="mb-10" @tab-click="handleTabClick">
+        <el-tab-pane label="标准订单" name="standard" />
+        <el-tab-pane label="样板单" name="sample" />
+      </el-tabs>
+
       <div class="mb-10 table-summary">
         <span>
           物料代码 {{ taskMaterialCodeCount }} 个，当班生产报工总平米数 {{ formatAreaNum(taskTotalArea) }}m²；
@@ -671,6 +676,8 @@
                 size="small"
                 style="width: 130px"
                 placeholder="如 001"
+                @blur="handleDigitalNoInput"
+                @change="handleDigitalNoInput"
               />
             </div>
           </el-form-item>
@@ -1244,7 +1251,7 @@
 
 <script>
 import request from '@/utils/request'
-import { getProductionTasks } from '@/api/productionManagement'
+import { getProductionTasks, getSlittingSampleTasks, ensureSlittingSampleSchedule } from '@/api/productionManagement'
 import { getStagePlanTaskPage, getStagePlanTaskSummary } from '@/api/schedulePlan'
 import { getShiftProductionSummary } from '@/api/schedule'
 import { getCoatingSchedules, getPendingOrders, reportWork, getReportWorkList, getReportWorkDetail, getLatestScheduleId, getNextCoatingRollCode, updateReportWork, deleteReportWork } from '@/api/manualSchedule'
@@ -1279,6 +1286,9 @@ export default {
   },
   data() {
     return {
+      standaloneLabelOnly: false,
+      fixedType: '',
+      activeTab: 'standard',
       loading: false,
       showOrderNo: false,
       showTaskNo: false,
@@ -1922,6 +1932,10 @@ export default {
       if (end instanceof Date) return end.getTime()
       return -Infinity
     },
+    handleTabClick() {
+      this.query.pageNum = 1
+      this.loadTasks()
+    },
     handleShowCompletedToggleChange() {
       this.query.pageNum = 1
       this.loadTasks()
@@ -2024,9 +2038,13 @@ export default {
     },
     async resolveCustomerCodeForReportRow(row) {
       const direct = this.extractCustomerCodeCandidate(row)
-      if (direct) return direct
+      if (direct && !String(direct).trim().startsWith('SP')) {
+        // 如果已经是确切的代码且不是SP开头的占位符，直接返回
+        return String(direct).trim()
+      }
 
-      const orderNo = this.resolvePrintableOrderNo((row && (row.orderNo || row.order_no)) || '')
+      const orderNoRaw = String((row && (row.orderNo || row.order_no || row.sampleNo)) || '').trim()
+      const orderNo = this.resolvePrintableOrderNo(orderNoRaw)
       if (!orderNo) return ''
 
       if (Object.prototype.hasOwnProperty.call(this.detailOrderCustomerCache, orderNo)) {
@@ -2046,9 +2064,12 @@ export default {
     },
     async resolveCustomerOrderNoForReportRow(row) {
       const direct = this.extractCustomerOrderNoCandidate(row)
-      if (direct) return direct
+      if (direct && !String(direct).trim().startsWith('SP')) {
+        return String(direct).trim()
+      }
 
-      const orderNo = this.resolvePrintableOrderNo((row && (row.orderNo || row.order_no)) || '')
+      const orderNoRaw = String((row && (row.orderNo || row.order_no || row.sampleNo || row.customerOrderNo || row.customer_order_no)) || '').trim()
+      const orderNo = this.resolvePrintableOrderNo(orderNoRaw)
       if (!orderNo) return ''
 
       if (Object.prototype.hasOwnProperty.call(this.detailOrderCustomerOrderNoCache, orderNo)) {
@@ -2058,12 +2079,12 @@ export default {
       try {
         const res = await getOrderDetailForProduction(orderNo, { silentError: true })
         const order = (res && (res.code === 200 || res.code === 20000)) ? (res.data || {}) : {}
-        const customerOrderNo = this.extractCustomerOrderNoCandidate(order)
+        const customerOrderNo = this.extractCustomerOrderNoCandidate(order) || orderNo
         this.$set(this.detailOrderCustomerOrderNoCache, orderNo, customerOrderNo)
         return customerOrderNo
       } catch (e) {
-        this.$set(this.detailOrderCustomerOrderNoCache, orderNo, '')
-        return ''
+        this.$set(this.detailOrderCustomerOrderNoCache, orderNo, orderNo)
+        return orderNo
       }
     },
     normalizeCompareText(value) {
@@ -2237,7 +2258,7 @@ export default {
     },
     async getOrderItemsByOrderNo(orderNo) {
       const no = this.resolvePrintableOrderNo(orderNo)
-      if (!no) return []
+      if (!no || no.startsWith('SP')) return []
       if (Object.prototype.hasOwnProperty.call(this.detailOrderItemsCache, no)) {
         return Array.isArray(this.detailOrderItemsCache[no]) ? this.detailOrderItemsCache[no] : []
       }
@@ -2579,6 +2600,7 @@ export default {
             const printTime = this.toDateTimeString(new Date())
             const productionDateText = String((this.reportForm && this.reportForm.labelProductionDate) || '').trim() || this.toDateString((this.reportForm && this.reportForm.startTime) || printTime)
             const productionDate = this.toDateString(productionDateText)
+            const producedQty = Number((this.reportForm && this.reportForm.producedQty) || 0) || 0
             const productionDate8 = this.toCompactDateStringStrict(productionDateText)
             const productionDate6 = this.toCompactDateYYMMDD(productionDateText)
             const groupNo = this.currentUserTeamName
@@ -2590,6 +2612,7 @@ export default {
               workGroup: groupNo,
               teamName: groupNo,
               qty: 1,
+              producedQty,
               spec,
               widthMm: Number.isFinite(width) ? width : 0,
               lengthM: Number.isFinite(length) ? length : 0,
@@ -2635,6 +2658,7 @@ export default {
             const productionDate = this.toDateString(productionDateText)
             const productionDate8 = this.toCompactDateStringStrict(productionDateText)
             const productionDate6 = this.toCompactDateYYMMDD(productionDateText)
+            const producedQty = Number((this.reportForm && this.reportForm.producedQty) || 0) || 0
             const groupNo = this.currentUserTeamName
             const labelOrderNo = this.resolveLabelOrderNo(this.reportForm)
             const srcWidth = Number(source && source.widthMm)
@@ -2672,6 +2696,7 @@ export default {
               orderNo: labelOrderNo,
               internalOrderNo: this.reportForm.orderNo || '',
               customerOrderNo: this.reportForm.customerOrderNo || '',
+              producedQty,
               widthMm: Number.isFinite(widthMm) ? widthMm : 0,
               lengthM: Number.isFinite(lengthM) ? lengthM : 0,
               processType: 'REWINDING',
@@ -3338,8 +3363,10 @@ export default {
         width,
         length
       })
+      const producedQty = Number((this.reportForm && this.reportForm.producedQty) || 0) || 0
       const ok = await this.confirmPrintPreview('涂布小支标签（复卷模板）', [
         { label: '母卷号前缀', value: motherRollCode },
+        { label: '生产卷数', value: producedQty || '-', field: 'producedQty' },
         { label: '起始序号', value: safeStartNo },
         { label: '打印张数', value: printCount },
         { label: '订单号', value: this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo) },
@@ -3642,6 +3669,8 @@ export default {
         deliveryNoteNo,
         batchNo,
         materialCode,
+        producedQty,
+        produced_qty: producedQty,
         boxRollCount,
         packageQty,
         packageQtyM: packageQty,
@@ -4094,8 +4123,10 @@ export default {
         width,
         length
       })
+      const producedQty = Number((this.reportForm && this.reportForm.producedQty) || 0) || 0
       const ok = await this.confirmPrintPreview('母卷标签', [
         { label: '母卷号', value: rollCode, field: 'rollCode | qrText' },
+        { label: '生产卷数', value: producedQty || '-', field: 'producedQty' },
         { label: '订单号', value: this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo), field: 'orderNo | orderNoDisplay | internalOrderNo' },
         { label: '客户订单号', value: this.reportForm.customerOrderNo || '-', field: 'customerOrderNo' },
         { label: '生产日期', value: productionDate || '-', field: 'productionDate | produtionDate | printDate' },
@@ -4264,8 +4295,10 @@ export default {
       })
       const materialName = this.resolveMaterialNameByCode(materialCode)
       const previewSpec = this.resolveRewindingTemplateSpec({ widthMm: width, lengthM: labelLengthM })
+      const producedQty = Number((this.reportForm && this.reportForm.producedQty) || 0) || 0
       const ok = await this.confirmPrintPreview('复卷标签', [
         { label: '母卷号', value: motherRollCode },
+        { label: '生产卷数', value: producedQty || '-', field: 'producedQty' },
         { label: '订单号', value: this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo) },
         { label: '客户订单号', value: this.reportForm.customerOrderNo || '-' },
         { label: '物料代码', value: (alias && alias.customerMaterialCode) || materialCode || '-' },
@@ -4281,21 +4314,28 @@ export default {
 
       try {
         this.loadBarTenderConfig()
+        const sceneId = this.getPrintScene('rewinding-label')
+        const sources = []
         for (let i = 0; i < printCount; i++) {
           const serialNo = Math.trunc(safeStartNo) + i
-          await printByScene(this.getPrintScene('rewinding-label'), { serialNo, widthMm: width, lengthM: labelLengthM }, {
-            config: this.barTenderConfig,
-            vm: this,
-            alias
+          sources.push({
+            serialNo,
+            widthMm: width,
+            lengthM: labelLengthM
           })
         }
+        await printBySceneBatch(sceneId, sources, {
+          config: this.barTenderConfig,
+          vm: this,
+          alias
+        })
         const nextStart = Math.trunc(safeStartNo) + printCount
         this.reportForm.rewindingSerialStart = nextStart
         this.savePrintedMaxSerialByMotherRoll(motherRollCode, nextStart - 1)
-        this.$message.success(`已提交BarTender打印任务（复卷标签）${printCount}张`)
+        this.$message.success(`已提交BarTender批量打印任务（复卷标签）${printCount}张`)
       } catch (e) {
         const msg = (e && e.message) || '未知错误'
-        this.$message.error(`BarTender打印失败：${msg}`)
+        this.$message.error(`BarTender批量打印失败：${msg}`)
       }
     },
     async printSlittingLabel(sceneType) {
@@ -4315,6 +4355,7 @@ export default {
         this.$message.warning('批次号已设置为必填，请先选择或填写批次号后再打印')
         return
       }
+      this.handleDigitalNoInput()
       const digitalNoRequired = !!(this.reportForm && this.reportForm.slittingDigitalNoRequired)
       const digitalNoRaw = String((this.reportForm && this.reportForm.slittingDigitalNo) || '').trim()
       if (digitalNoRequired && !digitalNoRaw) {
@@ -4397,6 +4438,7 @@ export default {
 
       const ok = await this.confirmPrintPreview(labelName, [
         { label: '订单号', value: this.composeOrderNoDisplay(this.reportForm.orderNo, this.reportForm.customerOrderNo), field: 'orderNo | orderNoDisplay' },
+        { label: '生产卷数', value: producedQty, field: 'producedQty' },
         { label: '客户订单号', value: this.reportForm.customerOrderNo || '-', field: 'customerOrderNo' },
         { label: '客户简称', value: customerShortName, field: 'customerShortName | customerShort' },
         { label: '我司名称', value: myCompanyName, field: 'myCompanyName | companyName' },
@@ -4593,6 +4635,15 @@ export default {
       if (!(width > 0)) return 1
       const n = Math.floor(320 / width)
       return n > 0 ? n : 1
+    },
+    handleDigitalNoInput() {
+      if (!this.reportForm) return
+      const val = String(this.reportForm.slittingDigitalNo || '').trim()
+      if (!val || /^\(.*\)$/.test(val)) return
+      const num = Number(val)
+      if (val !== '' && !isNaN(num)) {
+        this.reportForm.slittingDigitalNo = `(${val}#)`
+      }
     },
     handleCartonPresetChanged(value) {
       if (!this.reportForm) return
@@ -5418,10 +5469,22 @@ export default {
         this.reportEditingId = null
         await this.loadCartonPresetOptions()
         const materialCode = String((row && (row.materialCode || row.material_code)) || '').trim()
-        const rawOrderNo = String((row && (row.orderNo || row.order_no)) || '').trim()
+        const rawOrderNo = String((row && (row.orderNo || row.order_no || row.customerOrderNo || row.customer_order_no)) || '').trim()
         const normalizedOrderNo = this.resolvePrintableOrderNo(rawOrderNo)
-        const scheduleId = await this.resolveScheduleId(row)
-        const orderDetailId = Number(row && (row.orderItemId || row.order_detail_id || row.orderDetailId))
+        let scheduleId = await this.resolveScheduleId(row)
+        if (!scheduleId && row.isSampleTask) {
+          const resEnsure = await ensureSlittingSampleSchedule({
+            sampleNo: row.sampleNo,
+            sampleItemId: row.sampleItemId,
+            materialCode: row.materialCode,
+            materialName: row.materialName,
+            quantity: row.qty
+          })
+          if (resEnsure.code === 200 || resEnsure.code === 20000) {
+            scheduleId = Number(resEnsure.data.scheduleId || 0)
+          }
+        }
+        const orderDetailId = Number(row && (row.orderItemId || row.order_detail_id || row.orderDetailId || (row.isSampleTask ? row.sampleItemId : null)))
         if (!scheduleId && !(Number.isFinite(orderDetailId) && orderDetailId > 0)) {
           this.$message.warning('未找到对应排程ID，暂无法报工')
           return
@@ -5737,7 +5800,7 @@ export default {
       return colorName
     },
     async printOrderInstructionByTask(taskRow) {
-      const orderNo = this.resolvePrintableOrderNo(taskRow && taskRow.orderNo)
+      const orderNo = this.resolvePrintableOrderNo(taskRow && (taskRow.orderNo || taskRow.order_no || taskRow.customerOrderNo || taskRow.customer_order_no))
       if (!orderNo) {
         this.$message.warning('订单号为空，无法打印')
         return
@@ -5792,7 +5855,10 @@ export default {
         `).join('')
 
         const printTime = this.toDateTimeString(new Date())
-        const customerCode = order.customer || order.customerCode || '-'
+        
+        // 只获取客户代码
+        const customerCode = order.customerCode || order.customer || '-'
+
         const orderRemarkRaw = order.remark || order.orderRemark || order.note || order.notes || order.memo || order.customerRemark || ''
         const orderRemark = String(orderRemarkRaw || '').trim() || '-'
         const itemCount = enrichedItems.length
@@ -6666,6 +6732,7 @@ export default {
         UNSCHEDULED: '未排程',
         IN_PROGRESS: '进行中',
         COMPLETED: '已完成',
+        UNCOMPLETED: '未完成',
         CANCELLED: '已取消',
         COATING_SCHEDULED: '待生产',
         REWINDING_SCHEDULED: '待生产',
@@ -6674,7 +6741,8 @@ export default {
         DONE: '已完成',
         pending: '待生产',
         in_progress: '进行中',
-        completed: '已完成'
+        completed: '已完成',
+        uncompleted: '未完成'
       }
       return m[s] || s
     },
@@ -6684,6 +6752,7 @@ export default {
         UNSCHEDULED: 'info',
         IN_PROGRESS: 'warning',
         COMPLETED: 'success',
+        UNCOMPLETED: 'info',
         CANCELLED: 'danger',
         COATING_SCHEDULED: 'info',
         REWINDING_SCHEDULED: 'info',
@@ -6692,7 +6761,8 @@ export default {
         DONE: 'success',
         pending: 'info',
         in_progress: 'warning',
-        completed: 'success'
+        completed: 'success',
+        uncompleted: 'info'
       }
       return m[s] || 'info'
     },
@@ -6791,6 +6861,9 @@ export default {
       return String(val || '').trim()
     },
     async resolveOrderDetailRemarkForReportRow(row) {
+      if (row && row.isSampleTask) {
+        return String(row.remark || row.itemRemark || row.detailRemark || '').trim()
+      }
       const direct = this.resolveOrderDetailRemarkText(row)
       if (direct) return direct
 
@@ -6901,6 +6974,10 @@ export default {
       return true
     },
 
+    handleTabClick() {
+      this.query.pageNum = 1
+      this.loadTasks()
+    },
     async loadTasks() {
       this.loading = true
       try {
@@ -6929,8 +7006,31 @@ export default {
         }
 
         let res
-        // 生产管理固定任务（涂布/复卷/分切）统一按计划取数
-        if (ft === 'coating') {
+        if (this.activeTab === 'sample' && ft === 'slitting') {
+          res = await getSlittingSampleTasks({
+            orderNo: normalizedOrderNo || undefined,
+            materialCode: normalizedMaterialCode || undefined,
+            specKeyword: normalizedSpecKeyword || undefined,
+            planDateStart: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[0] : undefined,
+            planDateEnd: this.query.dateRange && this.query.dateRange.length ? this.query.dateRange[1] : undefined,
+            pageNum: this.query.pageNum,
+            pageSize: this.query.pageSize
+          })
+          if (res && (res.code === 200 || res.code === 20000) && res.data) {
+            const list = (res.data.records || []).map(x => ({
+              ...x,
+              isSampleTask: true,
+              orderNo: x.sampleNo,
+              customerOrderNo: x.orderNo,
+              customerShortName: x.customerShortName,
+              customerName: x.customerName
+            }))
+            this.list = list
+            this.total = Number(res.data.total || 0)
+            this.taskSummary = this.calcTaskSummary(list)
+            return
+          }
+        } else if (ft === 'coating') {
           // 涂布任务必须与“涂布排程”一致：直接复用手动排程涂布列表数据源
           res = await getCoatingSchedules({
             current: this.query.pageNum,
@@ -7837,7 +7937,7 @@ export default {
     },
     openSlittingIssueDialog(row) {
       const planDate = this.resolveTaskLockDate(row) || this.pickDateForLocks(this.query.dateRange) || this.todayDate()
-      const orderNo = this.resolvePrintableOrderNo(row && row.orderNo)
+      const orderNo = this.resolvePrintableOrderNo(row && (row.orderNo || row.order_no || row.customerOrderNo || row.customer_order_no))
       const materialCode = (row && row.materialCode) || ''
       const plannedMachineCode = (row && row.equipmentCode) || ''
       const operator = this.currentOperatorName || this.buildOperatorWithGroup()

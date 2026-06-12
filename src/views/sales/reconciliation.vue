@@ -47,7 +47,7 @@
           <el-col v-if="activeTab === 'detail' && statementLoaded" :span="8">
             <div class="search-item">
               <span class="search-label status-label">状态</span>
-              <el-tag :type="getStatusTagType(statement.reconciliationStatus)" size="small">{{ statement.reconciliationStatusLabel || '未对账' }}</el-tag>
+              <el-tag :type="getStatusTagType(statement.reconciliationStatus, statement.reconciliationStatusLabel)" size="small">{{ statement.reconciliationStatusLabel || '未对账' }}</el-tag>
             </div>
           </el-col>
         </el-row>
@@ -149,12 +149,13 @@
               <el-table-column label="对账月份" width="140" align="center">
                 <template slot-scope="scope">
                   <el-select
-                    v-if="scope.row.bizType === 'delivery' && !statement.rpNaturalMonthLocked"
+                    v-if="scope.row.bizType === 'delivery'"
                     v-model="scope.row.reconcileTargetMonth"
                     size="mini"
                     style="width: 120px"
                     @change="handleDetailTargetMonthChange(scope.row)"
                   >
+                    <el-option :value="getPreviousMonth(queryForm.month)" :label="`${getPreviousMonth(queryForm.month)}(上月)`" />
                     <el-option :value="queryForm.month" :label="`${queryForm.month}(当月)`" />
                     <el-option :value="getNextMonth(queryForm.month)" :label="`${getNextMonth(queryForm.month)}(下月)`" />
                   </el-select>
@@ -165,7 +166,7 @@
                 <template slot-scope="scope">
                   <div v-if="scope.row.bizType === 'delivery' || scope.row.bizType === 'return'" class="op-btns">
                     <el-button
-                      v-if="scope.row.bizType === 'delivery' && !statement.rpNaturalMonthLocked"
+                      v-if="scope.row.bizType === 'delivery'"
                       type="text"
                       size="mini"
                       @click="openSplitDialog(scope.row)"
@@ -272,7 +273,7 @@
               </el-table-column>
               <el-table-column prop="reconciliationStatus" label="对账状态" width="120" align="center" sortable="custom">
                 <template slot-scope="scope">
-                  <el-tag :type="getStatusTagType(scope.row.reconciliationStatus)" size="small">
+                  <el-tag :type="getStatusTagType(scope.row.reconciliationStatus, scope.row.reconciliationStatusLabel)" size="small">
                     {{ scope.row.reconciliationStatusLabel || '未对账' }}
                   </el-tag>
                 </template>
@@ -740,8 +741,14 @@ export default {
         await this.fetchOverview()
       }
     },
-    getStatusTagType(status) {
-      return status === 'RECONCILED' ? 'success' : 'danger'
+    getStatusTagType(status, label) {
+      if (status === 'RECONCILED' || label === '已对账' || label === '财务已确认') {
+        return 'success'
+      }
+      if (label === '待财务确认') {
+        return 'warning'
+      }
+      return 'danger'
     },
     isAdminUser() {
       const roles = (this.$store && this.$store.getters && this.$store.getters.roles) || []
@@ -963,6 +970,13 @@ export default {
       d.setMonth(d.getMonth() + 1)
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     },
+    getPreviousMonth(month) {
+      if (!month || !/^\d{4}-\d{2}$/.test(month)) return month
+      const [y, m] = month.split('-').map(Number)
+      const d = new Date(y, m - 1, 1)
+      d.setMonth(d.getMonth() - 1)
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    },
     openSplitDialog(row) {
       if (this.statement.rpNaturalMonthLocked) {
         return this.$message.warning('RP客户固定自然月，不支持拆分到下月')
@@ -1090,12 +1104,6 @@ export default {
     },
     handleDetailTargetMonthChange(row) {
       if (!row || row.bizType !== 'delivery') return
-      if (this.statement.rpNaturalMonthLocked) {
-        this.$set(row, 'reconcileTargetMonth', this.queryForm.month)
-        this.$set(row, 'includeInCurrentStatement', true)
-        this.refreshCurrentMonthDetailRows()
-        return
-      }
       const targetMonth = (row.reconcileTargetMonth || this.queryForm.month || '').trim()
       this.$set(row, 'includeInCurrentStatement', targetMonth === this.queryForm.month)
       this.refreshCurrentMonthDetailRows()

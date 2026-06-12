@@ -147,7 +147,7 @@
           <view class="muted">料号: {{item.materialCode}}</view>
           <view class="muted">名称: {{item.productName}}</view>
           <view class="muted">批次: {{item.batchNo}}</view>
-          <view class="muted">客户批次: {{item.customerBatchNo}}</view>
+          <view class="muted">供商批次: {{item.customerBatchNo}}</view>
           <view class="muted">规格: {{item.specDesc}}</view>
           <view class="muted">数量: {{item.qtyText}}</view>
           <view class="muted">库位: {{item.location}}</view>
@@ -211,7 +211,7 @@
           <input class="input" value="{{batchNo}}" bindinput="onBatchNoInput" />
         </view>
         <view>
-          <view class="label">客户批次号 customerBatchNo</view>
+          <view class="label">供商批次号 customerBatchNo</view>
           <input class="input" value="{{customerBatchNo}}" bindinput="onCustomerBatchNoInput" />
         </view>
       </view>

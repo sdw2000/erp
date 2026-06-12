@@ -185,6 +185,19 @@ Page({
       }
       const sameDoc = this.isSameDocument(this.data.document, doc)
       const preserveScans = !!preserveOnSameDoc && sameDoc && Array.isArray(this.data.scanCodes) && this.data.scanCodes.length > 0
+      
+      let initialCodes = preserveScans ? (this.data.scanCodes || []) : []
+      if (!preserveScans && scanCode) {
+        // 如果扫描的 code 能匹配到明细中的任何一项（无论是通过申请单号、批次号还是模糊批次号）
+        // 且它不是单据编号本身，则自动将其加入待提交列表
+        const isReceiptNoMatch = toUpperSafe(scanCode) === (doc.receiptNo || '').toUpperCase()
+        if (!isReceiptNoMatch && this.findDocItemByCode(scanCode, doc)) {
+          initialCodes = [scanCode]
+        }
+      }
+
+      console.log('loadDocument scanCodes:', initialCodes)
+
       this.setData({
         selectedReceiptId: doc.receiptId || null,
         selectedReceiptNo: doc.receiptNo || '',
@@ -192,8 +205,8 @@ Page({
         displayItems: this.buildDisplayItems(doc, scanCode),
         focusedCode: (scanCode || '').trim(),
         focusedSummary: this.buildFocusedSummary(doc, scanCode),
-        scanGroupedItems: preserveScans ? (this.data.scanGroupedItems || []) : [],
-        scanCodes: preserveScans ? (this.data.scanCodes || []) : [],
+        scanGroupedItems: initialCodes.length > 0 ? this.buildScanGroupedItems(initialCodes, doc) : (preserveScans ? (this.data.scanGroupedItems || []) : []),
+        scanCodes: initialCodes,
         failedCodeMap: preserveScans ? (this.data.failedCodeMap || {}) : {},
         scanning: false,
         scanCodeInput: ''
@@ -220,10 +233,10 @@ Page({
 
   toDocumentListRow(doc, scanCode) {
     return {
-      id: doc.receiptId || '',
+      id: doc.receiptId || doc.id || '',
       receiptNo: doc.receiptNo || scanCode || '-',
-      supplier: doc.supplierCode || '-',
-      supplierCode: doc.supplierCode || '-',
+      supplier: doc.supplierCode || doc.supplier || '-',
+      supplierCode: doc.supplierCode || doc.supplier || '-',
       purchaseOrderNo: doc.purchaseOrderNo || '-',
       status: doc.status || '-',
       scanCode: scanCode || ''
@@ -339,17 +352,17 @@ Page({
 
     const exists = (this.data.scanCodes || []).some(v => toUpperSafe(v) === code)
     if (exists) {
-      wx.showToast({ title: '重复码', icon: 'none' })
+      wx.showToast({ title: '重复码', icon: 'none', duration: 2000 })
       return
     }
 
     const batch = this.extractBatchCode(code)
     if (!this.isKnownBatch(batch)) {
-      wx.showToast({ title: '无效码', icon: 'none' })
+      wx.showToast({ title: '无效码:' + batch, icon: 'none', duration: 2500 })
       return
     }
     if (this.isAlreadyInBatch(batch)) {
-      wx.showToast({ title: '已入库码', icon: 'none' })
+      wx.showToast({ title: '已入库码或无效', icon: 'none', duration: 2500 })
       return
     }
 
@@ -358,33 +371,43 @@ Page({
       scanCodes: next,
       scanGroupedItems: this.buildScanGroupedItems(next)
     })
-    wx.showToast({ title: `已扫码 ${next.length}`, icon: 'success' })
+    // 自动滚动到底部（如果有上百条，方便用户确认）
+    wx.showToast({ title: `已录入(${next.length})`, icon: 'success', duration: 800 })
   },
 
-  findDocItemByCode(code) {
-    const doc = this.data.document || {}
+  findDocItemByCode(code, providedDoc) {
+    const doc = providedDoc || this.data.document || {}
     const items = Array.isArray(doc.items) ? doc.items : []
     const raw = toUpperSafe(code)
-    const batch = this.extractBatchCode(raw)
+    const rawBatch = this.extractBatchCode(raw)
+    
     for (let i = 0; i < items.length; i += 1) {
       const row = items[i] || {}
       const requestNo = toUpperSafe(row.requestNo)
       const incomingBatchNo = toUpperSafe(row.incomingBatchNo)
-      if (requestNo === raw || incomingBatchNo === raw || incomingBatchNo === batch) {
+      const rowBatch = this.extractBatchCode(incomingBatchNo)
+      
+      // 多重匹配逻辑：
+      // 1. 扫描的内容完全等于 申请单号 或 原始批号
+      // 2. 扫描提取后的批号 等于 申请单号 或 原始批号
+      // 3. 扫描提取后的批号 等于 原始批号提取后的批号
+      if (requestNo === raw || incomingBatchNo === raw || 
+          requestNo === rawBatch || incomingBatchNo === rawBatch || 
+          rowBatch === rawBatch || rowBatch === raw) {
         return row
       }
     }
     return null
   },
 
-  buildScanGroupedItems(scanCodes) {
+  buildScanGroupedItems(scanCodes, providedDoc) {
+    const activeDoc = providedDoc || this.data.document
     const grouped = {}
     const list = Array.isArray(scanCodes) ? scanCodes : []
     list.forEach((code) => {
-      const row = this.findDocItemByCode(code)
-      if (!row) {
-        return
-      }
+      const row = this.findDocItemByCode(code, activeDoc)
+      if (!row) return
+
       const key = String(row.itemId || row.requestId || row.incomingBatchNo || row.materialCode || code)
       if (!grouped[key]) {
         grouped[key] = {
@@ -423,7 +446,12 @@ Page({
   },
 
   extractBatchCode(code) {
-    const text = toUpperSafe(code)
+    let text = toUpperSafe(code)
+    // 支持 | 分隔符提取批次
+    if (text.includes('|')) {
+      const parts = text.split('|')
+      if (parts.length >= 2) text = parts[1].trim()
+    }
     const idx = text.lastIndexOf('-')
     if (idx > 0 && idx < text.length - 1) {
       const suffix = text.substring(idx + 1)
@@ -435,22 +463,36 @@ Page({
   },
 
   isKnownBatch(batch) {
+    // 逻辑：只要能匹配到明细里的任何一项，就是已知批次
+    if (this.findDocItemByCode(batch)) return true
+
     const doc = this.data.document || {}
     const valid = Array.isArray(doc.validBatchNos) ? doc.validBatchNos : []
     const already = Array.isArray(doc.alreadyInBatchNos) ? doc.alreadyInBatchNos : []
     const all = [...valid, ...already].map(v => toUpperSafe(v))
-    return all.includes(toUpperSafe(batch))
+    const b = toUpperSafe(batch)
+    const shortB = this.extractBatchCode(b)
+    
+    return all.some(v => v === b || v === shortB || this.extractBatchCode(v) === shortB)
   },
 
   isAlreadyInBatch(batch) {
     const doc = this.data.document || {}
     const already = Array.isArray(doc.alreadyInBatchNos) ? doc.alreadyInBatchNos : []
-    return already.map(v => toUpperSafe(v)).includes(toUpperSafe(batch))
+    const b = toUpperSafe(batch)
+    const shortB = this.extractBatchCode(b)
+    return already.some(v => {
+      const sv = toUpperSafe(v)
+      return sv === b || sv === shortB || this.extractBatchCode(sv) === shortB
+    })
   },
 
   async onSubmitInbound() {
     const doc = this.data.document || {}
-    if (!doc.receiptId && !doc.receiptNo) {
+    const receiptId = doc.receiptId || this.data.selectedReceiptId
+    const receiptNo = doc.receiptNo || this.data.selectedReceiptNo
+
+    if (!receiptId && (!receiptNo || receiptNo === '-')) {
       wx.showToast({ title: '请先选择单据', icon: 'none' })
       return
     }
@@ -463,8 +505,8 @@ Page({
     try {
       const submittedCodes = [...(this.data.scanCodes || [])]
       const res = await submitInboundScan({
-        receiptId: doc.receiptId || undefined,
-        receiptNo: doc.receiptNo || undefined,
+        receiptId: receiptId || undefined,
+        receiptNo: receiptNo || undefined,
         scanCodes: submittedCodes,
         scannedLocation: (this.data.scannedLocation || '').trim() || undefined,
         operator: (this.data.operator || '').trim() || undefined
@@ -488,8 +530,18 @@ Page({
         scanning: false
       })
 
-      wx.showToast({ title: isAllSuccess ? '提交完成' : '部分失败，请看下方原因', icon: isAllSuccess ? 'success' : 'none' })
-      this.loadDocument({ receiptId: doc.receiptId, receiptNo: doc.receiptNo })
+      wx.showToast({ title: isAllSuccess ? '提交完成' : (failures.length > 0 ? '部分提交失败' : '提交完成'), icon: isAllSuccess ? 'success' : 'none' })
+      
+      // 使用后台返回的最新单据信息进行重载，优先使用 receiptId
+      const targetId = rawSummary.receiptId || receiptId
+      const targetNo = (rawSummary.receiptNo && rawSummary.receiptNo !== '-') ? rawSummary.receiptNo : receiptNo
+      
+      this.loadDocument({ 
+        receiptId: targetId || undefined, 
+        receiptNo: targetNo || undefined, 
+        preserveOnSameDoc: !isAllSuccess,
+        silent: isAllSuccess
+      })
     } catch (e) {
       wx.showToast({ title: (e && (e.msg || e.message)) || '提交失败', icon: 'none' })
     } finally {
