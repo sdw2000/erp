@@ -770,7 +770,7 @@ export default {
           actual4: values[3] === undefined || values[3] === '' ? '-' : values[3],
           actual5: values[4] === undefined || values[4] === '' ? '-' : values[4],
           status: matched.status || 'pending',
-          message: matched.message || ''
+          remark: matched.message || ''
         }
       })
       return {
@@ -829,7 +829,7 @@ export default {
             <td>${this.escapeHtml(item.ruleText || '-')}</td>
             ${valueCells}
             <td>${this.escapeHtml(this.resultText(item.status))}</td>
-            <td>${this.escapeHtml(item.message || '-')}</td>
+            <td>${this.escapeHtml(item.remark || '-')}</td>
           </tr>
         `
       }).join('')

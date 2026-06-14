@@ -5813,10 +5813,56 @@ export default {
         }
 
         const order = res.data || {}
-        const items = Array.isArray(order.items) ? order.items : []
+        let items = Array.isArray(order.items) ? order.items : []
         if (!items.length) {
           this.$message.warning('该订单暂无明细，无法生成打印单')
           return
+        }
+
+        // 仅在任务列表中点击打印时，根据排程日期过滤明细和数量
+        const targetDate = String(taskRow.planStartTime || taskRow.planDate || '').slice(0, 10)
+        const sameDayTasks = (this.list || []).filter(t => {
+          const tOrderNo = this.resolvePrintableOrderNo(t.orderNo || t.customerOrderNo)
+          const tDate = String(t.planStartTime || t.planDate || '').slice(0, 10)
+          return tOrderNo === orderNo && tDate === targetDate
+        })
+
+        if (sameDayTasks.length > 0) {
+          const taskMap = {}
+          sameDayTasks.forEach(t => {
+            const detailId = t.orderDetailId || t.order_detail_id || t.orderItemId
+            if (detailId) {
+              if (!taskMap[detailId]) taskMap[detailId] = 0
+              taskMap[detailId] += Number(t.qty || 0)
+            }
+          })
+
+          items = items.filter(it => taskMap[it.id]).map(it => {
+            const scheduledQty = taskMap[it.id]
+            let rolls = it.rolls
+            let sqm = it.sqm
+
+            if (it.rolls > 0) {
+              const ratio = Number(it.sqm || 0) / Number(it.rolls)
+              // 涂布任务通常以平米为单位
+              if (String(taskRow.type).toLowerCase() === 'coating') {
+                sqm = scheduledQty
+                rolls = ratio > 0 ? (scheduledQty / ratio) : it.rolls
+              } else {
+                // 复卷/分切通常以卷数为单位
+                rolls = scheduledQty
+                sqm = scheduledQty * ratio
+              }
+            } else {
+              sqm = scheduledQty
+            }
+
+            return {
+              ...it,
+              rolls: Number.isInteger(rolls) ? rolls : Number(rolls.toFixed(2)),
+              sqm: Number.isInteger(sqm) ? sqm : Number(sqm.toFixed(2))
+            }
+          })
         }
 
         const printableOrderNo = order.orderNo || orderNo

@@ -1238,7 +1238,7 @@ export default {
         unitPrice: '',
         unit: '㎡',
         remark: '',
-        _rowEditing: !this.isEditing,
+        _rowEditing: true,
         _unitPriceLocked: false,
         _quotationUnit: '㎡',
         _priceMatchReason: '',
@@ -2145,7 +2145,7 @@ export default {
             item.unit = this.normalizePricingUnit(item.unit)
             item._quotationUnit = this.normalizePricingUnit(item.unit)
             item._unitPriceLocked = false
-            this.$set(item, '_rowEditing', true)
+            this.$set(item, '_rowEditing', false)
             this.$set(item, 'historySpecOptions', [])
             this.$set(item, 'historySpecKey', '')
             this.normalizeEditCompletionFields(item)

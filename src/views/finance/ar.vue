@@ -51,10 +51,14 @@
                 <el-tag :type="receiptStatusTag(scope.row.reconcileStatus)">{{ receiptStatusLabel(scope.row.reconcileStatus) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="220" fixed="right">
+            <el-table-column label="操作" width="280" fixed="right">
               <template slot-scope="scope">
                 <el-button size="mini" type="primary" plain :disabled="Number(scope.row.unallocatedAmount || 0) <= 0" @click="handleReconcile(scope.row)">扣账</el-button>
                 <el-button size="mini" type="danger" plain :disabled="!canReverse(scope.row)" @click="handleReverse(scope.row)">冲销</el-button>
+                <template v-if="isAdmin">
+                  <el-button size="mini" type="text" icon="el-icon-edit" @click="handleEditReceipt(scope.row)">编辑</el-button>
+                  <el-button size="mini" type="text" icon="el-icon-delete" style="color: #F56C6C" @click="handleDeleteReceipt(scope.row)">删除</el-button>
+                </template>
               </template>
             </el-table-column>
           </el-table>
@@ -166,8 +170,11 @@
       </el-tabs>
     </el-card>
 
-    <el-dialog title="新增收款" :visible.sync="receiptDialogVisible" width="640px">
+    <el-dialog :title="isEditMode ? '编辑收款' : '新增收款'" :visible.sync="receiptDialogVisible" width="640px">
       <el-form :model="receiptForm" label-width="120px" size="small">
+        <el-form-item v-if="isEditMode" label="ID">
+          <span>{{ receiptForm.id }}</span>
+        </el-form-item>
         <el-form-item label="客户">
           <el-select
             v-model="receiptForm.customerCode"
@@ -213,11 +220,14 @@
 </template>
 
 <script>
+import { mapGetters } from 'vuex'
 import {
   listInvoices,
   createAndPostInvoice,
   listReceipts,
   createReceipt,
+  updateReceipt,
+  deleteReceipt,
   reconcileReceipt,
   reconcileReceiptHistory,
   reverseReceipt,
@@ -234,6 +244,7 @@ export default {
       receiptList: [],
       receiptTotal: 0,
       receiptDialogVisible: false,
+      isEditMode: false,
       receiptQuery: {
         keyword: '',
         dateRange: [],
@@ -242,6 +253,7 @@ export default {
         size: 20
       },
       receiptForm: {
+        id: null,
         customerCode: '',
         amount: null,
         payDate: ''
@@ -267,6 +279,12 @@ export default {
         debit_account_id: null,
         credit_account_id: null
       }
+    }
+  },
+  computed: {
+    ...mapGetters(['roles']),
+    isAdmin() {
+      return this.roles && this.roles.includes('admin')
     }
   },
   created() {
@@ -356,14 +374,46 @@ export default {
       this.loadReceipts(false)
     },
     openReceiptDialog() {
+      this.isEditMode = false
       this.receiptDialogVisible = true
       this.receiptForm = {
+        id: null,
         customerCode: '',
         amount: null,
         payDate: ''
       }
       this.customerOptions = []
       this.searchCustomers('')
+    },
+    handleEditReceipt(row) {
+      this.isEditMode = true
+      this.receiptDialogVisible = true
+      this.receiptForm = {
+        id: row.id,
+        customerCode: row.customerCode,
+        amount: row.receiptAmount,
+        payDate: row.payDate
+      }
+      this.customerOptions = [{ customerCode: row.customerCode, customerName: row.customerName }]
+    },
+    async handleDeleteReceipt(row) {
+      if (!row || !row.id) return
+      try {
+        await this.$confirm(`确认删除该收款记录(ID: ${row.id})吗？如果已扣账，请先冲销。`, '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+        const res = await deleteReceipt(row.id)
+        if (this.isSuccess(res)) {
+          this.$message.success('删除成功')
+          this.loadReceipts()
+        } else {
+          this.$message.error(res.msg || res.message || '删除失败')
+        }
+      } catch (e) {
+        // user cancel
+      }
     },
     async searchCustomers(keyword) {
       const res = await searchArCustomers({ keyword: keyword || '' })
@@ -378,15 +428,23 @@ export default {
         return this.$message.warning('请填写客户和收款金额')
       }
       const payload = {
+        id: this.receiptForm.id,
         customerCode: this.receiptForm.customerCode,
         amount: Number(this.receiptForm.amount),
         payDate: this.receiptForm.payDate || ''
       }
-      const res = await createReceipt(payload)
-      if (!this.isSuccess(res)) {
-        return this.$message.error((res && (res.msg || res.message)) || '新增收款失败')
+
+      let res
+      if (this.isEditMode) {
+        res = await updateReceipt(payload)
+      } else {
+        res = await createReceipt(payload)
       }
-      this.$message.success('新增收款成功')
+
+      if (!this.isSuccess(res)) {
+        return this.$message.error((res && (res.msg || res.message)) || '操作失败')
+      }
+      this.$message.success(this.isEditMode ? '修改收款成功' : '新增收款成功')
       this.receiptDialogVisible = false
       this.loadReceipts(true)
       this.loadDetails(false)

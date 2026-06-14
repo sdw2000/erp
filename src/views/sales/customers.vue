@@ -50,23 +50,39 @@
         style="width: 100%; margin-top: 12px"
         border
         stripe
+        @sort-change="handleSortChange"
       >
         <el-table-column type="index" label="序号" width="56" align="center" />
-        <el-table-column prop="customerCode" label="客户编号" min-width="120" show-overflow-tooltip />
-        <el-table-column prop="shortName" label="客户简称" min-width="120" show-overflow-tooltip />
-        <el-table-column prop="customerLevel" label="客户等级" width="88">
+        <el-table-column prop="customerCode" label="客户编号" min-width="120" show-overflow-tooltip sortable="custom" />
+        <el-table-column prop="shortName" label="客户简称" min-width="120" show-overflow-tooltip sortable="custom" />
+        <el-table-column prop="customerLevel" label="客户等级" width="88" sortable="custom">
           <template slot-scope="scope">
             <el-tag :type="getLevelTagType(scope.row.customerLevel)" size="small">{{ scope.row.customerLevel }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="76">
+        <el-table-column prop="status" label="状态" width="76" sortable="custom">
           <template slot-scope="scope">
             <el-tag :type="getStatusTagType(scope.row.status)" size="small">{{ scope.row.status }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="salesUserName" label="销售" min-width="88" show-overflow-tooltip />
-        <el-table-column prop="documentationPersonUserName" label="跟单员" min-width="88" show-overflow-tooltip />
-        <el-table-column prop="createTime" label="创建日期" width="90">
+        <el-table-column prop="lastMonthSalesAmount" label="上月销售额" width="110" align="right" sortable="custom">
+          <template slot-scope="scope">
+            <span class="money">¥{{ formatMoney(scope.row.lastMonthSalesAmount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="thisYearSalesAmount" label="当年销售额" width="110" align="right" sortable="custom">
+          <template slot-scope="scope">
+            <span class="money">¥{{ formatMoney(scope.row.thisYearSalesAmount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="shippedAmount" label="累计出货" width="110" align="right" sortable="custom">
+          <template slot-scope="scope">
+            <span class="money">¥{{ formatMoney(scope.row.shippedAmount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="salesUserName" label="销售" min-width="88" show-overflow-tooltip sortable="custom" />
+        <el-table-column prop="documentationPersonUserName" label="跟单员" min-width="88" show-overflow-tooltip sortable="custom" />
+        <el-table-column prop="createTime" label="创建日期" width="90" sortable="custom">
           <template slot-scope="scope">
             {{ formatDateCompact(scope.row.createTime) }}
           </template>
@@ -188,6 +204,14 @@
                   <el-select v-model="formData.documentationPersonUserId" placeholder="请选择跟单员" clearable filterable style="width: 100%">
                     <el-option v-for="user in users" :key="user.id" :label="user.realName || user.username" :value="user.id" />
                   </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="24">
+                <el-form-item label="企微群 ID" prop="wecomChatId">
+                  <el-input v-model="formData.wecomChatId" placeholder="请输入企业微信群聊 ID（用于自动发货推送）" />
+                  <span class="form-tip">通过企业微信侧边栏打开发货看板可获取此 ID</span>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -431,6 +455,7 @@
                   </el-tag>
                 </template>
               </el-table-column>
+              <el-table-column prop="wecomChatId" label="企微群 ID" width="180" />
               <el-table-column prop="status" label="状态" width="100">
                 <template slot-scope="scope">
                   <el-tag :type="getStatusTagType(scope.row.status)" size="small">
@@ -682,7 +707,10 @@ export default {
       searchForm: {
         customerKeyword: '',
         customerType: '',
-        customerLevel: '', status: ''
+        customerLevel: '',
+        status: '',
+        sortField: 'createTime',
+        sortOrder: 'descending'
       },
       // 表格数据
       customers: [],
@@ -840,8 +868,19 @@ export default {
         customerKeyword: '',
         customerType: '',
         customerLevel: '',
-        status: ''
+        status: '',
+        sortField: 'createTime',
+        sortOrder: 'descending'
       }
+      if (this.$refs.customerTable) {
+        this.$refs.customerTable.clearSort()
+      }
+      this.handleSearch()
+    },
+    // 排序变更
+    handleSortChange({ prop, order }) {
+      this.searchForm.sortField = prop
+      this.searchForm.sortOrder = order
       this.handleSearch()
     },
     // 新增

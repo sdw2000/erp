@@ -5,6 +5,8 @@
     <button class="btn-primary" bindtap="goPurchaseScanInbound">采购扫码入库</button>
     <button class="btn-secondary" bindtap="goCoatingInbound">涂布入库</button>
     <button class="btn-secondary" bindtap="goPackagingReturnInbound">包装车间退仓</button>
+    <button class="btn-primary" style="background: #10b981; color: white;" bindtap="goWorkshopReturn">车间批量退料</button>
+    <button class="btn-primary" style="background: #3b82f6; color: white;" bindtap="goWorkshopReceive">车间批量收货</button>
     <button class="btn-secondary" bindtap="goCoatingIssue">涂布领料</button>
     <button class="btn-secondary" bindtap="goPackagingIssue">包装领料</button>
     <button class="btn-secondary" bindtap="goSalesOutbound">销售出库</button>

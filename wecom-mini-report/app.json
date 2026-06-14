@@ -13,7 +13,9 @@
     "pages/purchase-scan-inbound/index",
     "pages/stocktake/index",
     "pages/issue/index",
-    "pages/history/index"
+    "pages/history/index",
+    "pages/workshop-return/index",
+    "pages/workshop-receive/index"
   ],
   "window": {
     "navigationBarTitleText": "MES 报工",

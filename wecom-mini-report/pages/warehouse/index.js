@@ -37,6 +37,14 @@ Page({
     wx.navigateTo({ url: '/pages/inbound/index?scene=packagingReturnInbound' })
   },
 
+  goWorkshopReturn() {
+    wx.navigateTo({ url: '/pages/workshop-return/index' })
+  },
+
+  goWorkshopReceive() {
+    wx.navigateTo({ url: '/pages/workshop-receive/index' })
+  },
+
   goCoatingIssue() {
     wx.navigateTo({ url: '/pages/issue/index?scene=coatingIssue' })
   },

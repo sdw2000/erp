@@ -903,10 +903,11 @@ export default {
   },
   created() {
     this.fetchDeliveryTemplatesFromServer()
-    this.fetchNotices()
     this.fetchCompanyInfo()
     this.fetchCarriers()
     this.fetchCustomers()
+    
+    // 统一由 handleRouteOrderEntry 决定是否立刻加载数据以及加载什么数据
     this.handleRouteOrderEntry(this.$route, true)
   },
   beforeRouteUpdate(to, from, next) {
@@ -916,17 +917,32 @@ export default {
   methods: {
     handleRouteOrderEntry(route, autoOpen = false) {
       const query = (route && route.query) || {}
+      
+      // 1. 处理来自订单页面的跳转
       const fromOrders = String(query.fromOrders || '').trim() === '1'
       const orderNo = this.normalizeSearchKeyword(query.orderNo)
       this.fromOrdersEntry = !!(fromOrders && orderNo)
       this.fromOrdersOrderNo = this.fromOrdersEntry ? orderNo : ''
-      if (!this.fromOrdersEntry) return
 
-      this.searchQuery.orderNo = orderNo
+      // 2. 处理来自企微或其他外部链接的过滤参数
+      const customerCode = this.normalizeSearchKeyword(query.customerCode || query.customer)
+      const noticeNo = this.normalizeSearchKeyword(query.noticeNo)
+
+      if (this.fromOrdersEntry) {
+        this.searchQuery.orderNo = orderNo
+      }
+      if (customerCode) {
+        this.searchQuery.customer = customerCode
+      }
+      if (noticeNo) {
+        this.searchQuery.noticeNo = noticeNo
+      }
+
+      // 执行搜索 (如果没有参数则加载全量)
       this.page.current = 1
       this.fetchNotices()
 
-      if (autoOpen) {
+      if (autoOpen && this.fromOrdersEntry) {
         const shouldOpen = String(query.autoOpen || '').trim() === '1'
         if (shouldOpen) {
           this.openNoticeFromOrder(orderNo)
@@ -1296,79 +1312,16 @@ export default {
 
           this.tableData = rows
 
-          // 映射客户简称与客户代码
-          if (!this.customerMap || Object.keys(this.customerMap).length === 0) {
-            await this.fetchCustomers()
-          }
+          // 后端已在 /delivery/list 中并行返回了客户简称(customerShortName)、客户代码(customerCode)以及
+          // 所有明细(items)及其关联的规格(spec)、厚度、宽度、长度等信息。
+          // 此前此处有大量的 await fetchCustomers() 和 Promise.all 导致 N+1 问题，现已移除，显著提升加载速度。
           this.tableData = this.tableData.map(row => {
-            const key = row.customer
-            const customer = (key && this.customerMap[key]) || (row.customerCode && this.customerMap[row.customerCode]) || null
-            return Object.assign({}, row, {
+            return {
+              ...row,
               deliveryDate: this.normalizeNoticeDeliveryDate(row.deliveryDate),
-              customerShortName: customer ? (customer.shortName || customer.customerName || row.customer) : (row.customerShortName || row.customer),
-              customerCode: customer ? (customer.customerCode || row.customerCode || row.customer) : (row.customerCode || row.customer)
-            })
+              items: row.items || []
+            }
           })
-
-          // 并行请求当前页每条发货单详情以填充 items（仅在列表中未包含明细时）
-          try {
-            const detailPromises = this.tableData.map((row, idx) => {
-              if (!row.items || row.items.length === 0) {
-                return request({ url: `/delivery/${row.id}`, method: 'get' })
-                  .then(det => ({ idx, data: det && (det.code === 200 || det.code === 20000) ? det.data : null }))
-                  .catch(() => ({ idx, data: null }))
-              }
-              return Promise.resolve({ idx, data: { items: row.items }})
-            })
-
-            const details = await Promise.all(detailPromises)
-            // 统一写回，避免并发赋值导致的 race-condition 警告
-            details.forEach(resItem => {
-              if (resItem && resItem.data) {
-                const items = resItem.data.items || []
-                // 可能 tableData 已经被翻页或更新，先检查索引有效性
-                if (this.tableData[resItem.idx]) this.tableData[resItem.idx].items = items
-              }
-            })
-
-            // 根据订单明细补齐/纠正规格顺序：厚度*宽度*长度
-            const orderNoSet = new Set((this.tableData || []).map(r => r.orderNo).filter(Boolean))
-            const orderList = Array.from(orderNoSet)
-            const orderRes = await Promise.all(orderList.map(orderNo => request({ url: `/sales/orders/${orderNo}`, method: 'get' }).catch(() => null)))
-            const orderMap = {}
-            orderList.forEach((orderNo, idx) => {
-              const r = orderRes[idx]
-              const ok = r && (r.code === 200 || r.code === 20000) && r.data
-              if (ok) orderMap[orderNo] = r.data
-            })
-
-            this.tableData = this.tableData.map(row => {
-              const order = orderMap[row.orderNo]
-              if (!order || !Array.isArray(order.items) || !Array.isArray(row.items)) return row
-
-              const byId = {}
-              const byMaterial = {}
-              order.items.forEach(oi => {
-                if (oi && oi.id != null) byId[String(oi.id)] = oi
-                if (oi && oi.materialCode) byMaterial[String(oi.materialCode)] = oi
-              })
-
-              const mergedItems = row.items.map(it => {
-                const matched = (it && it.orderItemId != null && byId[String(it.orderItemId)]) || (it && it.materialCode && byMaterial[String(it.materialCode)])
-                if (!matched) return it
-                return {
-                  ...it,
-                  _orderThickness: matched.thickness,
-                  _orderWidth: matched.width,
-                  _orderLength: matched.length
-                }
-              })
-
-              return { ...row, items: mergedItems }
-            })
-          } catch (e) {
-            // 忽略整体详情请求错误，保持页面可用
-          }
         }
       } catch (error) {
         console.error(error)

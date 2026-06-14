@@ -23,6 +23,12 @@ export const constantRoutes = [
     hidden: true
   },
   {
+    path: '/public-shipment',
+    component: () => import('@/views/sales/public-delivery'),
+    hidden: true,
+    meta: { title: '发货查询' }
+  },
+  {
     path: '/',
     component: Layout,
     redirect: '/dashboard',
@@ -294,10 +300,28 @@ export const asyncRoutes = [
         meta: { title: '退货入库审核', icon: 'el-icon-refresh-left', roles: ['warehouse', 'admin'] }
       },
       {
+        path: 'workshop-daily-report',
+        component: () => import('@/views/stock/workshop-daily-report'),
+        name: 'WorkshopDailyReport',
+        meta: { title: '线边仓进出明细', icon: 'el-icon-notebook-2', roles: ['warehouse', 'admin', 'production'] }
+      },
+      {
+        path: 'workshop-warehouse',
+        component: () => import('@/views/stock/workshop-warehouse'),
+        name: 'StockWorkshopWarehouse',
+        meta: { title: '线边仓实时看板', icon: 'el-icon-monitor', roles: ['warehouse', 'admin'] }
+      },
+      {
         path: 'outbound',
         component: () => import('@/views/stock/outbound'),
         name: 'OutboundRequest',
         meta: { title: '出库申请', icon: 'excel', roles: ['warehouse', 'admin', 'sales'] }
+      },
+      {
+        path: 'workshop-warehouse',
+        component: () => import('@/views/stock/workshop-warehouse'),
+        name: 'WorkshopWarehouse',
+        meta: { title: '车间现场(线边仓)', icon: 'el-icon-monitor', roles: ['production', 'admin', 'warehouse'] }
       },
       {
         path: 'log',
@@ -605,6 +629,12 @@ export const asyncRoutes = [
         component: () => import('@/views/production/materialIssueHistory'),
         name: 'ProductionMaterialHistory',
         meta: { title: '锁定/领退料追溯', icon: 'el-icon-document', roles: ['production', 'admin'] }
+      },
+      {
+        path: 'workshop-warehouse',
+        component: () => import('@/views/stock/workshop-warehouse'),
+        name: 'ProductionWorkshopWarehouse',
+        meta: { title: '线边仓管理', icon: 'el-icon-office-building', roles: ['production', 'admin', 'packaging', 'packing', 'coating'] }
       }
     ]
   },

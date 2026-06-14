@@ -83,10 +83,11 @@
         <el-table-column label="送达日期" width="89">
           <template slot-scope="scope">{{ formatShortDate(scope.row.deliveryDate) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="184" align="center">
+        <el-table-column label="操作" width="220" align="center">
           <template slot-scope="scope">
             <div class="sample-op-btns">
               <el-button size="mini" type="text" class="op-action-btn" @click="viewDetail(scope.row)">详情</el-button>
+              <el-button size="mini" type="text" class="op-action-btn" @click="handleFeedback(scope.row)">反馈</el-button>
               <el-button size="mini" type="text" class="op-action-btn" @click="openEdit(scope.row)">编辑</el-button>
               <el-button size="mini" type="text" class="op-action-btn" @click="handleSamplePrint(scope.row)">打印</el-button>
               <el-button size="mini" type="text" class="op-action-btn" @click="openLogistics(scope.row)">物流</el-button>
@@ -133,22 +134,161 @@
         </el-descriptions>        <h4 style="margin-top: 20px;">样品明细</h4>
         <el-table :data="currentSample.items" border style="width:100%">
           <el-table-column type="index" label="序号" width="60" align="center" />
-          <el-table-column prop="materialCode" label="物料代码" width="281" />
-          <el-table-column prop="materialName" label="物料名称" width="180" />
-          <el-table-column width="192" align="center" header-align="center">
+          <el-table-column prop="materialCode" label="物料代码" width="200" />
+          <el-table-column prop="materialName" label="物料名称" />
+          <el-table-column width="180" align="center" header-align="center">
             <template slot="header">
               <span class="sample-spec-header">规格</span>
-              <span class="sample-spec-header">（厚度μm*宽度mm*长度m）</span>
             </template>
             <template slot-scope="scope">{{ getSpecText(scope.row) }}</template>
           </el-table-column>
           <el-table-column prop="quantity" label="数量" width="80" />
           <el-table-column prop="unit" label="单位" width="60" />
-          <el-table-column prop="remark" label="备注" />
+          <el-table-column label="跟进记录" width="100" align="center">
+            <template slot-scope="scope">
+              <el-button type="text" size="mini" @click="viewItemFeedback(scope.row)">查看跟进</el-button>
+            </template>
+          </el-table-column>
         </el-table>
+
+        <!-- 客户历史送样 -->
+        <div style="margin-top: 30px; border-top: 1px dashed #ebeef5; padding-top: 20px;">
+          <h4 style="margin: 0 0 15px 0;">该客户其历史送样记录</h4>
+          <el-table
+            v-loading="customerHistoryLoading"
+            :data="flattenedHistory"
+            :span-method="historySpanMethod"
+            border
+            style="width:100%"
+            size="small"
+            stripe
+            max-height="500"
+          >
+            <el-table-column label="送样单号" width="140" align="center">
+              <template slot-scope="scope">{{ formatSampleNo(scope.row.sampleNo) }}</template>
+            </el-table-column>
+            <el-table-column prop="sendDate" label="送样日期" width="100" align="center" />
+            <el-table-column prop="materialCode" label="物料代码" width="160" />
+            <el-table-column prop="materialName" label="物料名称" min-width="180" show-overflow-tooltip />
+            <el-table-column label="规格" width="160">
+              <template slot-scope="scope">{{ getSpecText(scope.row) }}</template>
+            </el-table-column>
+            <el-table-column label="数量" width="90" align="center">
+              <template slot-scope="scope">{{ scope.row.quantity }}{{ scope.row.unit }}</template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="90" align="center">
+              <template slot-scope="scope">
+                <el-tag :type="scope.row.status === '已完成' ? 'success' : 'info'" size="mini">{{ scope.row.status }}</el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
       </div>
       <span slot="footer">
         <el-button @click="detailVisible = false">关闭</el-button>
+      </span>
+    </el-dialog>
+
+    <!-- 反馈记录弹窗 -->
+    <el-dialog title="样品跟进记录" :visible.sync="feedbackVisible" width="900px" append-to-body>
+      <div v-if="currentItem">
+        <el-descriptions :column="3" border size="small" style="margin-bottom: 20px;">
+          <el-descriptions-item label="料号">{{ currentItem.materialCode }}</el-descriptions-item>
+          <el-descriptions-item label="品名">{{ currentItem.materialName }}</el-descriptions-item>
+          <el-descriptions-item label="规格">{{ getSpecText(currentItem) }}</el-descriptions-item>
+        </el-descriptions>
+
+        <!-- 填写新反馈 -->
+        <el-card shadow="never" style="margin-bottom: 20px; background: #f8f9fb;">
+          <div slot="header"><span>填写新跟进记录</span></div>
+          <el-form ref="feedbackForm" :model="feedbackForm" :rules="feedbackRules" label-width="80px" size="small">
+            <el-row :gutter="20">
+              <el-col :span="8">
+                <el-form-item label="剥离力">
+                  <el-radio-group v-model="feedbackForm.peelStrength">
+                    <el-radio label="OK">OK</el-radio>
+                    <el-radio label="NG">NG</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="初粘">
+                  <el-radio-group v-model="feedbackForm.initialAdhesion">
+                    <el-radio label="OK">OK</el-radio>
+                    <el-radio label="NG">NG</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="耐电解液">
+                  <el-radio-group v-model="feedbackForm.electrolyteResistance">
+                    <el-radio label="OK">OK</el-radio>
+                    <el-radio label="NG">NG</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="8">
+                <el-form-item label="耐温">
+                  <el-radio-group v-model="feedbackForm.temperatureResistance">
+                    <el-radio label="OK">OK</el-radio>
+                    <el-radio label="NG">NG</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="切刀粘胶">
+                  <el-radio-group v-model="feedbackForm.cutterAdhesive">
+                    <el-radio label="OK">OK</el-radio>
+                    <el-radio label="NG">NG</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="总体结果">
+                  <el-switch v-model="feedbackForm.isQualified" active-color="#13ce66" inactive-color="#ff4949" active-text="OK" inactive-text="NG" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-form-item label="备注说明" prop="feedbackContent">
+              <el-input v-model="feedbackForm.feedbackContent" type="textarea" :rows="2" placeholder="请输入跟进的具体细节信息" />
+            </el-form-item>
+            <el-form-item style="margin-bottom: 0; text-align: right;">
+              <el-button type="primary" size="mini" :loading="feedbackLoading" @click="submitFeedback">保存记录</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+
+        <!-- 历史跟进表格 -->
+        <el-table :data="currentItemFeedbacks" border stripe size="small" max-height="300">
+          <el-table-column prop="feedbackDate" label="日期" width="100" />
+          <el-table-column label="剥离力" width="70" align="center">
+            <template slot-scope="s"><span :style="{color: s.row.peelStrength==='NG'?'#F56C6C':'#67C23A'}">{{s.row.peelStrength}}</span></template>
+          </el-table-column>
+          <el-table-column label="初粘" width="70" align="center">
+            <template slot-scope="s"><span :style="{color: s.row.initialAdhesion==='NG'?'#F56C6C':'#67C23A'}">{{s.row.initialAdhesion}}</span></template>
+          </el-table-column>
+          <el-table-column label="耐电解液" width="80" align="center">
+            <template slot-scope="s"><span :style="{color: s.row.electrolyteResistance==='NG'?'#F56C6C':'#67C23A'}">{{s.row.electrolyteResistance}}</span></template>
+          </el-table-column>
+          <el-table-column label="耐温" width="70" align="center">
+            <template slot-scope="s"><span :style="{color: s.row.temperatureResistance==='NG'?'#F56C6C':'#67C23A'}">{{s.row.temperatureResistance}}</span></template>
+          </el-table-column>
+          <el-table-column label="切刀粘胶" width="80" align="center">
+            <template slot-scope="s"><span :style="{color: s.row.cutterAdhesive==='NG'?'#F56C6C':'#67C23A'}">{{s.row.cutterAdhesive}}</span></template>
+          </el-table-column>
+          <el-table-column label="结论" width="70" align="center">
+            <template slot-scope="s"><el-tag :type="s.row.isQualified?'success':'danger'" size="mini">{{s.row.isQualified?'OK':'NG'}}</el-tag></template>
+          </el-table-column>
+          <el-table-column prop="feedbackContent" label="备注说明" show-overflow-tooltip />
+          <el-table-column label="操作" width="60" align="center">
+            <template slot-scope="s"><el-button type="text" style="color: #F56C6C" @click="handleDeleteFeedback(s.row.id)">删除</el-button></template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <span slot="footer">
+        <el-button @click="feedbackVisible = false">关闭</el-button>
       </span>
     </el-dialog>
 
@@ -484,7 +624,11 @@ import {
   deleteSample as deleteSampleApi,
   updateSampleLogistics,
   getSampleLogistics,
-  importSample
+  importSample,
+  getSampleFeedbacks,
+  addSampleFeedback,
+  deleteSampleFeedback,
+  getCustomerSampleHistory
 } from '@/api/sample'
 import { getCustomerList, getContactsByCustomerId } from '@/api/customer'
 import { getAllEnabledSpecs, getSpecByMaterialCode } from '@/api/tapeSpec'
@@ -515,11 +659,33 @@ export default {
       },
       editVisible: false,
       detailVisible: false,
+      feedbackVisible: false,
       logisticsVisible: false,
       trackingVisible: false,
       printVisible: false,
       isEditing: false,
       currentSample: null,
+      currentItem: null,
+      feedbacks: [],
+      currentItemFeedbacks: [],
+      feedbackLoading: false,
+      feedbackForm: {
+        peelStrength: 'OK',
+        initialAdhesion: 'OK',
+        electrolyteResistance: 'OK',
+        temperatureResistance: 'OK',
+        cutterAdhesive: 'OK',
+        isQualified: true,
+        feedbackContent: '',
+        sampleOrderId: null,
+        sampleItemId: null
+      },
+      feedbackRules: {
+        feedbackContent: [{ required: true, message: '请输入备注说明', trigger: 'blur' }]
+      },
+      customerHistory: [],
+      flattenedHistory: [],
+      customerHistoryLoading: false,
       currentPrintSample: null,
       samplePrintLogoUrl: '/logo/finechem-logo.png',
       samplePrintCompanyInfo: {
@@ -560,6 +726,14 @@ export default {
       return (this.specs || []).filter(item => this.matchSpecOption(item, keyword))
     }
   },
+  watch: {
+    // 监听反馈指标，如有任何一项为 NG，则总体结果自动变为 NG
+    'feedbackForm.peelStrength'(val) { this.autoCheckQualified() },
+    'feedbackForm.initialAdhesion'(val) { this.autoCheckQualified() },
+    'feedbackForm.electrolyteResistance'(val) { this.autoCheckQualified() },
+    'feedbackForm.temperatureResistance'(val) { this.autoCheckQualified() },
+    'feedbackForm.cutterAdhesive'(val) { this.autoCheckQualified() }
+  },
   created() {
     this.editForm = this.emptyForm()
     this.fetchSamples()
@@ -567,6 +741,20 @@ export default {
     this.fetchSpecs()
   },
   methods: {
+    // 自动判断总体结果：只要有一项不合格(NG)，总体结果即为不合格
+    autoCheckQualified() {
+      const f = this.feedbackForm
+      if (f.peelStrength === 'NG' ||
+          f.initialAdhesion === 'NG' ||
+          f.electrolyteResistance === 'NG' ||
+          f.temperatureResistance === 'NG' ||
+          f.cutterAdhesive === 'NG') {
+        this.feedbackForm.isQualified = false
+      } else {
+        // 如果全部都是 OK，则自动恢复为 OK
+        this.feedbackForm.isQualified = true
+      }
+    },
     normalizeSearchText(value) {
       if (value === null || value === undefined) return ''
       return String(value)
@@ -686,7 +874,8 @@ export default {
       const length = item.length === null || item.length === undefined || item.length === '' ? '-' : item.length
       return `${thickness}*${width}*${length}`
     },
-    formatSampleNo(sampleNo) {
+    // 主列表格式化编号已统一到后面供调用
+    oldFormatSampleNo(sampleNo) {
       const raw = String(sampleNo || '').trim()
       if (!raw) return '-'
 
@@ -1003,15 +1192,187 @@ export default {
       this.editVisible = true
     },
     async viewDetail(row) {
+      this.customerHistory = []
+      this.flattenedHistory = []
       try {
         const res = await getSampleDetail(row.sampleNo)
-        if (res && res.code === 20000) {
+        if (res && (res.code === 20000 || res.code === 200)) {
           this.currentSample = res.data
           this.detailVisible = true
+          this.fetchFeedbacks(this.currentSample.id)
+          this.fetchCustomerHistory(this.currentSample.customerId)
         }
       } catch (e) {
         console.error(e)
         this.$message.error('获取详情失败')
+      }
+    },
+    async fetchCustomerHistory(customerId) {
+      if (!customerId) return
+      this.customerHistoryLoading = true
+      try {
+        const res = await getCustomerSampleHistory(customerId)
+        if (res && (res.code === 20000 || res.code === 200)) {
+          this.customerHistory = res.data || []
+          // 展平数据用于表格显示
+          const flat = []
+          this.customerHistory.forEach(order => {
+            const items = order.items && order.items.length > 0 ? order.items : [{}]
+            items.forEach((item, index) => {
+              flat.push({
+                ...order,
+                ...item,
+                orderItemCount: items.length,
+                orderItemIndex: index
+              })
+            })
+          })
+          this.flattenedHistory = flat
+        }
+      } catch (e) {
+        console.error(e)
+      } finally {
+        this.customerHistoryLoading = false
+      }
+    },
+    // 合并单元格逻辑：单号、日期、状态列合并
+    historySpanMethod({ row, column, rowIndex, columnIndex }) {
+      if ([0, 1, 6].includes(columnIndex)) {
+        if (row.orderItemIndex === 0) {
+          return {
+            rowspan: row.orderItemCount,
+            colspan: 1
+          }
+        } else {
+          return {
+            rowspan: 0,
+            colspan: 0
+          }
+        }
+      }
+    },
+    // 获取规格文本
+    getSpecText(item = {}) {
+      if (item.specification) return item.specification
+      const list = []
+      if (item.thickness) list.push(item.thickness + 'μm')
+      if (item.width) list.push(item.width + 'mm')
+      if (item.length) list.push(item.length + 'm')
+      return list.join('*') || '-'
+    },
+    formatSampleNo(no) {
+      const raw = String(no || '').trim()
+      if (!raw) return '-'
+
+      const normalized = raw.toUpperCase()
+      let match = normalized.match(/^SP-?(\d{6})-(\d{3})$/)
+      if (match) {
+        return `SP${match[1]}-${match[2]}`
+      }
+
+      match = normalized.match(/^SP-?(\d{6,})$/)
+      if (match) {
+        return `SP${match[1]}`
+      }
+
+      return raw
+    },
+    async fetchFeedbacks(sampleOrderId) {
+      if (!sampleOrderId) return
+      this.feedbackLoading = true
+      try {
+        const res = await getSampleFeedbacks(sampleOrderId)
+        if (res && res.code === 20000) {
+          this.feedbacks = res.data
+        }
+      } catch (e) {
+        console.error(e)
+      } finally {
+        this.feedbackLoading = false
+      }
+    },
+    async submitFeedback() {
+      this.$refs.feedbackForm.validate(async(valid) => {
+        if (valid) {
+          try {
+            const data = {
+              ...this.feedbackForm,
+              sampleOrderId: this.currentSample.id,
+              sampleItemId: this.currentItem ? this.currentItem.id : null
+            }
+            const res = await addSampleFeedback(data)
+            if (res && res.code === 20000) {
+              this.$message.success('反馈提交成功')
+              this.feedbackForm.feedbackContent = ''
+              if (this.currentItem) {
+                this.fetchItemFeedbacks(this.currentItem.id)
+              } else {
+                this.fetchFeedbacks(this.currentSample.id)
+              }
+            } else {
+              this.$message.error(res.message || '反馈提交失败')
+            }
+          } catch (e) {
+            console.error(e)
+            this.$message.error('反馈提交过程中发生错误')
+          }
+        }
+      })
+    },
+    async handleDeleteFeedback(id) {
+      try {
+        await this.$confirm('确定删除此条反馈记录吗？', '提示', { type: 'warning' })
+        const res = await deleteSampleFeedback(id)
+        if (res && res.code === 20000) {
+          this.$message.success('删除成功')
+          if (this.feedbackVisible && this.currentItem) {
+            this.fetchItemFeedbacks(this.currentItem.id)
+          } else {
+            this.fetchFeedbacks(this.currentSample.id)
+          }
+        }
+      } catch (e) {
+        if (e !== 'cancel') {
+          console.error(e)
+          this.$message.error('删除失败')
+        }
+      }
+    },
+    // 处理主列表反馈按钮
+    handleFeedback(row) {
+      this.viewDetail(row)
+    },
+    // 查看单项反馈
+    viewItemFeedback(item) {
+      this.currentItem = item
+      this.feedbackVisible = true
+      this.feedbackForm = {
+        peelStrength: 'OK',
+        initialAdhesion: 'OK',
+        electrolyteResistance: 'OK',
+        temperatureResistance: 'OK',
+        cutterAdhesive: 'OK',
+        isQualified: true,
+        feedbackContent: '',
+        sampleOrderId: this.currentSample.id,
+        sampleItemId: item.id
+      }
+      this.fetchItemFeedbacks(item.id)
+    },
+    async fetchItemFeedbacks(itemId) {
+      if (!itemId) return
+      this.feedbackLoading = true
+      try {
+        // 后端接口目前是根据订单ID取的，如果需要根据单项取，可以增加参数
+        // 这里暂时复用接口，前端过滤或后端支持
+        const res = await getSampleFeedbacks(this.currentSample.id)
+        if (res && res.code === 20000) {
+          this.currentItemFeedbacks = res.data.filter(f => f.sampleItemId === itemId)
+        }
+      } catch (e) {
+        console.error(e)
+      } finally {
+        this.feedbackLoading = false
       }
     },
     async handleSamplePrint(row) {

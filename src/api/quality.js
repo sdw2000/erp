@@ -109,6 +109,10 @@ export function deleteProcessInspection(id) {
   return request({ url: `/api/quality/process/${id}`, method: 'delete' })
 }
 
+export function getCoatingRollCandidates(params) {
+  return request({ url: '/api/quality/process/coating-rolls', method: 'get', params })
+}
+
 export function deleteOutboundInspection(id) {
   return request({ url: `/api/quality/outbound/${id}`, method: 'delete' })
 }

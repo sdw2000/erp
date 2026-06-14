@@ -9,7 +9,7 @@ import { normalizeRoles } from '@/utils/role'
 
 NProgress.configure({ showSpinner: false }) // NProgress Configuration
 
-const whiteList = ['/login', '/auth-redirect'] // no redirect whitelist
+const whiteList = ['/login', '/auth-redirect', '/public-shipment'] // no redirect whitelist
 
 function isCoatingRestrictedUser(roles) {
   const normalizedRoles = normalizeRoles(roles)

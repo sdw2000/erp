@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="app-container">
     <el-card shadow="never">
       <div slot="header" class="card-header">
@@ -490,7 +490,7 @@ export default {
       printLogoUrl: '/logo/finechem-logo.png',
       reportTemplateRuleCache: {},
       excelTemplateUrlMap: {
-        OUTBOUND_DEFAULT: '/downloads/normal.xlsx',
+        OUTBOUND_DEFAULT: '/downloads/normal_1.xlsx',
         OUTBOUND_RP01: '/downloads/quality-report-template-rp01.full.xlsx'
       },
       defectTypes: [],
@@ -1401,7 +1401,8 @@ export default {
           actual4: values[3] === undefined || values[3] === '' ? '-' : values[3],
           actual5: values[4] === undefined || values[4] === '' ? '-' : values[4],
           status: matched.status || 'pending',
-          message: matched.message || ''
+          message: matched.message || '',
+          remark: row.remark || '-'
         }
       })
       return {
@@ -1636,11 +1637,8 @@ export default {
       if (this.excelTemplateUrlMap[code]) {
         return this.excelTemplateUrlMap[code]
       }
-      if (code === 'OUTBOUND_DEFAULT') {
-        return ''
-      }
       const suffix = code.replace(/^OUTBOUND_/, '').toLowerCase()
-      if (!suffix) {
+      if (!suffix || suffix === 'default') {
         return ''
       }
       return `/downloads/quality-report-template-${suffix}.xlsx`
@@ -1670,6 +1668,7 @@ export default {
       })
     },
     buildExcelValueMap(record, data, templateCode) {
+      const snapshot = record.processSnapshot ? JSON.parse(record.processSnapshot) : {}
       const rows = Array.isArray(data && data.rows) ? data.rows : []
       const summary = (data && data.summary) || {}
       const customer = this.getRecordCustomerInfo(record)
@@ -1682,6 +1681,10 @@ export default {
         formNo: this.normalizeTemplateCode(templateCode) === 'OUTBOUND_RP01' ? 'RP01-QC-01' : 'FE-FR-GC-01',
         customerCode: customer.customerCode || '-',
         customerName: customer.customerName || '-',
+        customerPartNo: snapshot.customerPartNo || '-',
+        customerMaterialCode: snapshot.customerMaterialCode || '-',
+        customerMaterialName: snapshot.customerMaterialName || '-',
+        coatingNo: snapshot.coatingBatchNo || '-',
         inspectionNo: record.inspectionNo || '-',
         sourceOrderNo: record.sourceOrderNo || '-',
         batchNo: record.batchNo || '-',
@@ -1784,12 +1787,12 @@ export default {
         values[`item${i}_actual6`] = actualValues[5] || actualValues[4] || ''
         values[`item${i}_status`] = this.resultText(item.status || 'pending')
         values[`item${i}_message`] = item.message || ''
+        values[`item${i}_remark`] = item.remark || ''
 
         // 行级语义别名
         values[`item${i}_name`] = values[`item${i}_label`]
         values[`item${i}_standard`] = values[`item${i}_rule`]
         values[`item${i}_result`] = values[`item${i}_status`]
-        values[`item${i}_remark`] = values[`item${i}_message`]
         values[`item${i}_actual_all`] = actualValues.filter(Boolean).join(' / ')
 
         // 按“项目名/项目key”生成占位符别名，避免模板只靠 item1、item2 编号
@@ -1877,6 +1880,12 @@ export default {
     doPrintReport(record, data, templateCode) {
       const rows = data.rows || []
       const customer = this.getRecordCustomerInfo(record)
+      let snapshot = {}
+      try {
+        snapshot = JSON.parse(record.processSnapshot || '{}')
+      } catch (e) {
+        console.error('Failed to parse processSnapshot', e)
+      }
       const activeTemplateCode = this.normalizeTemplateCode(templateCode)
       const isRp01Template = activeTemplateCode === 'OUTBOUND_RP01'
       const titleText = isRp01Template ? '出货检测报告（RP01）' : '出货检测报告'
@@ -1894,7 +1903,7 @@ export default {
             <td>${this.escapeHtml(item.ruleText || '-')}</td>
             ${valueCells}
             <td>${this.escapeHtml(this.resultText(item.status))}</td>
-            <td>${this.escapeHtml(item.message || '-')}</td>
+            <td>${this.escapeHtml(item.remark || '-')}</td>
           </tr>
         `
       }).join('')
@@ -1948,26 +1957,34 @@ export default {
               <div class="sec-title">A. 产品与检测条件</div>
               <table class="meta-table">
                 <tr>
-                  <td class="label">产品名称</td>
-                  <td>${this.escapeHtml(this.getMappedDisplayInfo(record).materialName)}</td>
-                  <td class="label">产品料号</td>
-                  <td>${this.escapeHtml(this.getMappedDisplayInfo(record).materialCode)}</td>
+                  <td class="label">客户</td>
+                  <td>${this.escapeHtml(snapshot.customerName || customer.customerName || '-')}</td>
+                  <td class="label">客户料号</td>
+                  <td>${this.escapeHtml(snapshot.customerMaterialCode || '-')}</td>
                   <td class="label">出货规格</td>
                   <td>${this.escapeHtml(record.specification || '-')}</td>
                 </tr>
                 <tr>
+                  <td class="label">产品名称</td>
+                  <td>${this.escapeHtml(this.getMappedDisplayInfo(record).materialName)}</td>
+                  <td class="label">料号/品名</td>
+                  <td>${this.escapeHtml(this.getMappedDisplayInfo(record).materialCode)}</td>
                   <td class="label">净重</td>
                   <td>${this.escapeHtml(record.netWeight || '-')}</td>
-                  <td class="label">检测环境</td>
-                  <td>23±5℃，50±5%</td>
-                  <td class="label">批次号</td>
-                  <td>${this.escapeHtml(record.batchNo || '-')}</td>
                 </tr>
                 <tr>
-                  <td class="label">数量（卷）</td>
-                  <td>${this.escapeHtml(record.sampleQty || '-')}</td>
                   <td class="label">订单号</td>
                   <td>${this.escapeHtml(record.sourceOrderNo || '-')}</td>
+                  <td class="label">出货批号</td>
+                  <td>${this.escapeHtml(record.batchNo || '-')}</td>
+                  <td class="label">检验日期</td>
+                  <td>${this.escapeHtml(record.inspectionTime || '-')}</td>
+                </tr>
+                <tr>
+                  <td class="label">检测环境</td>
+                  <td>23±5℃，50±5%</td>
+                  <td class="label">数量(卷)</td>
+                  <td>${this.escapeHtml(record.sampleQty || '-')}</td>
                   <td class="label">质检单号</td>
                   <td>${this.escapeHtml(record.inspectionNo || '-')}</td>
                 </tr>

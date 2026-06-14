@@ -56,6 +56,7 @@
             v-loading="loading"
             :data="orderList"
             :row-key="pendingRowKey"
+            :span-method="orderListSpanMethod"
             border
             stripe
             style="width: 100%"
@@ -365,7 +366,11 @@
             <div style="margin-bottom: 8px; color: #606266; font-weight: 500;">计划面积覆盖明细（按优先级）</div>
             <el-table :data="coatingRequirement.details || []" border size="mini" max-height="260">
               <el-table-column prop="sort_no" label="#" width="50" align="center" />
-              <el-table-column prop="order_no" label="订单号" width="140" />
+              <el-table-column label="订单号" width="140">
+                <template slot-scope="scope">
+                  <el-button type="text" @click="handleOrderNoClick(scope.row)">{{ scope.row.order_no || '-' }}</el-button>
+                </template>
+              </el-table-column>
               <el-table-column prop="priority_score" label="优先级" width="80" align="right" />
               <el-table-column prop="remaining_area" label="订单待涂布(㎡)" width="130" align="right">
                 <template slot-scope="scope">{{ Number(scope.row.remaining_area || 0).toFixed(2) }}</template>
@@ -431,27 +436,6 @@
             <el-button type="primary" @click="handleSaveRemark">保存备注</el-button>
           </div>
         </el-dialog>
-
-        <el-dialog
-          title="订单信息"
-          :visible.sync="orderInfoDialogVisible"
-          width="560px"
-        >
-          <el-descriptions :column="1" border>
-            <el-descriptions-item label="订单号">
-              {{ orderInfoDialog.orderNo || '-' }}
-            </el-descriptions-item>
-            <el-descriptions-item label="交货日期">
-              {{ orderInfoDialog.deliveryDate || '-' }}
-            </el-descriptions-item>
-            <el-descriptions-item label="备注">
-              {{ orderInfoDialog.remark || '-' }}
-            </el-descriptions-item>
-          </el-descriptions>
-          <div slot="footer">
-            <el-button type="primary" @click="orderInfoDialogVisible = false">关闭</el-button>
-          </div>
-        </el-dialog>
       </el-tab-pane>
 
       <!-- Tab 2: 涂布排程 -->
@@ -512,9 +496,11 @@
                 {{ scope.row.id || scope.row.schedule_id || '-' }}
               </template>
             </el-table-column>
-            <el-table-column prop="related_order_nos" label="关联订单号" width="170" show-overflow-tooltip sortable="custom" column-key="related_order_nos">
+            <el-table-column label="关联订单号" width="170" show-overflow-tooltip sortable="custom" column-key="related_order_nos">
               <template slot-scope="scope">
-                {{ scope.row.related_order_nos || scope.row.order_nos || scope.row.order_no }}
+                <el-button type="text" @click="handleOrderNoClick(scope.row)">
+                  {{ scope.row.related_order_nos || scope.row.order_nos || scope.row.order_no || '-' }}
+                </el-button>
               </template>
             </el-table-column>
             <el-table-column prop="material_code" label="产品编码" width="230" show-overflow-tooltip sortable="custom" column-key="material_code">
@@ -795,7 +781,11 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="order_no" label="订单号" width="112" sortable="custom" column-key="order_no" />
+            <el-table-column label="订单号" width="112" sortable="custom" column-key="order_no">
+              <template slot-scope="scope">
+                <el-button type="text" @click="handleOrderNoClick(scope.row)">{{ scope.row.order_no || '-' }}</el-button>
+              </template>
+            </el-table-column>
             <el-table-column prop="customer_name" label="客户" width="86" sortable="custom" column-key="customer_name" show-overflow-tooltip />
             <el-table-column prop="material_code" label="产品编码" width="230" class-name="wrap-col" header-class-name="wrap-col" show-overflow-tooltip sortable="custom" column-key="material_code">
               <template slot-scope="scope">
@@ -1022,7 +1012,11 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="order_no" label="订单号" width="112" sortable="custom" column-key="order_no" />
+            <el-table-column label="订单号" width="112" sortable="custom" column-key="order_no">
+              <template slot-scope="scope">
+                <el-button type="text" @click="handleOrderNoClick(scope.row)">{{ scope.row.order_no || '-' }}</el-button>
+              </template>
+            </el-table-column>
             <el-table-column prop="material_code" label="料号" width="230" class-name="wrap-col" header-class-name="wrap-col" show-overflow-tooltip sortable="custom" column-key="material_code">
               <template slot-scope="scope">
                 <el-autocomplete
@@ -1522,7 +1516,11 @@
             {{ scope.row.customer_code || scope.row.customer || scope.row.customer_name || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="order_no" label="订单号" width="150" show-overflow-tooltip />
+        <el-table-column label="订单号" width="150" show-overflow-tooltip>
+          <template slot-scope="scope">
+            <el-button type="text" @click.stop="handleOrderNoClick(scope.row)">{{ scope.row.order_no || '-' }}</el-button>
+          </template>
+        </el-table-column>
         <el-table-column prop="material_code" label="料号" width="220" show-overflow-tooltip />
         <el-table-column label="规格" width="190" show-overflow-tooltip>
           <template slot-scope="scope">
@@ -1551,6 +1549,83 @@
       <div slot="footer">
         <el-button @click="manualSlittingDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="manualSlittingSubmitting" @click="confirmManualSlittingSelection">确定</el-button>
+      </div>
+    </el-dialog>
+
+    <el-dialog
+      title="订单生产详情"
+      :visible.sync="orderInfoDialogVisible"
+      width="820px"
+      top="5vh"
+      append-to-body
+      custom-class="order-info-preview-dialog"
+    >
+      <div v-loading="orderDetailLoading" class="order-detail-preview" style="padding: 10px;">
+        <div v-if="orderDetailInfo">
+          <div class="print-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+            <div style="flex: 1; text-align: center; padding-left: 90px;">
+              <div style="font-size: 18px; font-weight: bold; color: #000;">东莞市方恩电子材料科技有限公司</div>
+              <div style="margin: 4px 0;">
+                <span style="font-size: 20px; font-weight: bold; letter-spacing: 4px;">生 产 指 令 单</span>
+                <div style="font-size: 12px; font-weight: normal; margin-top: -2px;">(包装)</div>
+              </div>
+            </div>
+            <div class="order-qr-code" style="text-align: center; width: 90px;">
+              <div style="border: 1px solid #000; padding: 1px; width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                <img v-if="orderQrCode" :src="orderQrCode" style="width: 68px; height: 68px;" />
+                <div v-else style="font-size: 10px; color: #999;">生成中...</div>
+              </div>
+              <div style="font-size: 11px; margin-top: 2px; color: #000; font-weight: bold;">{{ orderDetailInfo.orderNo }}</div>
+            </div>
+          </div>
+          
+          <table class="order-meta-table" style="width: 100%; border-collapse: collapse; margin-bottom: 10px; table-layout: fixed;">
+            <tr>
+              <td style="border: 1px solid #000; padding: 4px 8px; font-size: 13px;"><strong>订单号：</strong>{{ orderDetailInfo.orderNo }}</td>
+              <td style="border: 1px solid #000; padding: 4px 8px; font-size: 13px;"><strong>客户代码：</strong>{{ orderDetailInfo.customerCode || '-' }}</td>
+              <td style="border: 1px solid #000; padding: 4px 8px; font-size: 13px;"><strong>制单人：</strong>{{ orderDetailInfo.createBy || '-' }}</td>
+            </tr>
+            <tr>
+              <td style="border: 1px solid #000; padding: 4px 8px; font-size: 13px;"><strong>下单日期：</strong>{{ orderDetailInfo.orderDate || '-' }}</td>
+              <td style="border: 1px solid #000; padding: 4px 8px; font-size: 13px;"><strong>交货日期：</strong>{{ orderDetailInfo.deliveryDate || '-' }}</td>
+              <td style="border: 1px solid #000; padding: 4px 8px; font-size: 13px;"><strong>打印时间：</strong>{{ parseTime(new Date(), '{y}-{m}-{d} {h}:{i}') }}</td>
+            </tr>
+          </table>
+
+          <div class="remark-section" style="margin-bottom: 10px; border: 1px solid #000; padding: 6px 8px; min-height: 40px;">
+            <div style="font-weight: bold; margin-bottom: 3px; font-size: 13px;">备注：</div>
+            <div style="font-size: 13px; white-space: pre-wrap;">{{ orderDetailInfo.remark || '无' }}</div>
+          </div>
+
+          <el-table :data="orderDetailInfo.items || []" border size="mini" stripe header-cell-style="background-color: #f5f7fa; color: #333; font-weight: bold; border-color: #000; padding: 2px 0;" cell-style="border-color: #000; padding: 2px 0;">
+            <el-table-column type="index" label="序号" width="45" align="center" />
+            <el-table-column prop="materialCode" label="产品编码 (含颜色)" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="materialName" label="产品名称" min-width="120" show-overflow-tooltip />
+            <el-table-column label="产品规格" min-width="140" show-overflow-tooltip>
+              <template slot-scope="{row}">
+                {{ formatItemSpec(row) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="rolls" label="订单数量" width="80" align="center" />
+            <el-table-column prop="sqm" label="平方数/㎡" width="90" align="center">
+              <template slot-scope="{row}">
+                {{ Number(row.sqm || 0).toFixed(2) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="明细码" width="90" align="center">
+              <template slot-scope="{row}">
+                <div style="font-size: 11px; font-weight: bold;">{{ row.id || row.detailId }}</div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+        <div v-else-if="!orderDetailLoading" style="text-align: center; padding: 60px 0;">
+          <i class="el-icon-document" style="font-size: 40px; color: #C0C4CC; margin-bottom: 15px;"></i>
+          <div style="color: #909399;">未获取到订单详情数据</div>
+        </div>
+      </div>
+      <div slot="footer">
+        <el-button type="primary" @click="orderInfoDialogVisible = false">确 定</el-button>
       </div>
     </el-dialog>
   </div>
@@ -1593,7 +1668,10 @@ import { getProcessParamsList, getProcessParams } from '@/api/processParams'
 import { getRewindingProcessParamsList, getRewindingProcessParams } from '@/api/rewindingProcessParams'
 import { getSlittingProcessParamsList, getSlittingProcessParams } from '@/api/slittingProcessParams'
 import { getSpecByMaterialCode, getSpecSuggestions } from '@/api/tapeSpec'
+import { getOrderDetailForProduction } from '@/api/sales'
 import { getAllActiveTeams } from '@/api/staff'
+import { parseTime } from '@/utils'
+import QRCode from 'qrcode'
 
 const SLITTING_SORT_STORAGE_KEY = 'manualSchedule:slittingSort:v1'
 
@@ -1752,6 +1830,10 @@ export default {
       remarkDialogVisible: false,
       selectedRow: null,
       orderInfoDialogVisible: false,
+      orderDetailLoading: false,
+      orderDetailInfo: null,
+      orderQrCode: '', // 存储二维码图片Base64
+      orderSpanData: [],
       orderInfoDialog: {
         orderNo: '',
         deliveryDate: '',
@@ -1992,6 +2074,22 @@ export default {
       const s = String(value)
       return s.length >= 16 ? s.substring(0, 16) : s
     },
+    parseTime(time, pattern) {
+      return parseTime(time, pattern)
+    },
+    // 格式化规格型号
+    formatItemSpec(item) {
+      if (!item) return '-'
+      // 如果后端没有返回 materialSpec，则尝试根据各种字段名拼接 (兼容多种数据源)
+      const thickness = item.thickness || item.materialThickness || item.material_thickness || ''
+      const width = item.width || item.materialWidth || item.material_width || ''
+      const length = item.length || item.materialLength || item.material_length || ''
+      
+      if (thickness && width && length) {
+        return `${thickness}μm*${width}mm*${length}m`
+      }
+      return item.materialSpec || item.specification || item.spec || '-'
+    },
     resolveOrderDeliveryDate(row) {
       if (!row) return ''
       const candidate = row.delivery_date || row.deliveryDate || row.delivery_time || row.deliveryTime || row.due_date || row.dueDate || row.delivery_deadline || row.plan_delivery_date || row.planDeliveryDate || ''
@@ -2001,13 +2099,87 @@ export default {
       if (!row) return ''
       return String(row.remark || row.order_remark || row.schedule_remark || row.requirement || row.requirements || '').trim()
     },
-    handleOrderNoClick(row) {
+    async handleOrderNoClick(row) {
+      if (!row || !row.order_no) return
+      
       this.orderInfoDialog = {
-        orderNo: String((row && row.order_no) || ''),
+        orderNo: String(row.order_no),
         deliveryDate: this.resolveOrderDeliveryDate(row),
         remark: this.resolveOrderRemark(row)
       }
       this.orderInfoDialogVisible = true
+      this.orderDetailLoading = true
+      this.orderDetailInfo = null
+      this.orderQrCode = ''
+      
+      try {
+        const res = await getOrderDetailForProduction(row.order_no)
+        if (res && (res.code === 200 || res.code === 20000)) {
+          this.orderDetailInfo = res.data
+          this.generateOrderQrCode(row.order_no)
+        } else {
+          this.$message.error(res.message || res.msg || '获取订单详情失败')
+        }
+      } catch (e) {
+        console.error('Fetch order detail error:', e)
+        this.$message.error('获取订单详情发生错误，请检查网络或权限')
+      } finally {
+        this.orderDetailLoading = false
+      }
+    },
+    async generateOrderQrCode(text) {
+      if (!text) return
+      try {
+        this.orderQrCode = await QRCode.toDataURL(text, { width: 80, margin: 1 })
+      } catch (e) {
+        console.error('QR code error:', e)
+      }
+    },
+    calculateOrderSpans() {
+      const spans = []
+      let currentOrderNo = null
+      let count = 0
+      let startIndex = 0
+
+      this.orderList.forEach((row, index) => {
+        const orderNo = row.order_no || ''
+        if (orderNo !== currentOrderNo) {
+          if (currentOrderNo !== null) {
+            spans[startIndex] = count
+            for (let i = startIndex + 1; i < index; i++) {
+              spans[i] = 0
+            }
+          }
+          currentOrderNo = orderNo
+          count = 1
+          startIndex = index
+        } else {
+          count++
+        }
+      })
+
+      // handle last group
+      if (currentOrderNo !== null) {
+        spans[startIndex] = count
+        for (let i = startIndex + 1; i < this.orderList.length; i++) {
+          spans[i] = 0
+        }
+      }
+      this.orderSpanData = spans
+    },
+    orderListSpanMethod({ row, column, rowIndex, columnIndex }) {
+      // 只需要合并“序号”和“订单编号”列
+      // 序号是第2列 (index 1), 订单编号是第3列 (index 2)
+      // 注意：第1列 (index 0) 是 selection checkbox，不要合并
+      if (columnIndex === 1 || columnIndex === 2) {
+        const span = this.orderSpanData[rowIndex]
+        if (span !== undefined) {
+          return {
+            rowspan: span,
+            colspan: span > 0 ? 1 : 0
+          }
+        }
+      }
     },
     formatArea(value) {
       return Number(value || 0).toFixed(2)
@@ -3076,6 +3248,7 @@ export default {
       const { prop, order } = this.pendingSort || {}
       if (!prop || !order) {
         this.orderList = src
+        this.calculateOrderSpans()
         return
       }
       const factor = order === 'ascending' ? 1 : -1
@@ -3086,6 +3259,7 @@ export default {
         return av > bv ? factor : -factor
       })
       this.orderList = src
+      this.calculateOrderSpans()
     },
     handlePendingSortChange({ prop, order, column }) {
       this.$message.info('待排程列表已固定按优先级从高到低排序')
@@ -5434,6 +5608,7 @@ export default {
           }
           this.pendingRawList = visibleMapped
           this.orderList = visibleMapped
+          this.calculateOrderSpans()
           if (!this.pendingDefaultSelectionInited) {
             this.pendingDefaultSelectionInited = true
             this.autoSelectPendingRowsByDailyTarget()
@@ -7681,5 +7856,24 @@ export default {
   line-height: 1.45;
   padding-top: 8px;
   padding-bottom: 8px;
+}
+
+.order-detail-preview {
+  padding: 10px;
+  background-color: #fff;
+  color: #333;
+  
+  .detail-table-header {
+    background-color: #f5f7fa !important;
+    color: #606266;
+    font-weight: bold;
+  }
+}
+
+.order-info-preview-dialog {
+  .el-dialog__body {
+    padding: 20px 30px;
+    background-color: #fcfcfc;
+  }
 }
 </style>

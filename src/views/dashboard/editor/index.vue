@@ -61,15 +61,24 @@
         <div class="chart-wrapper">
           <div class="chart-title">今日报工明细（按班次时间窗口）</div>
           <el-table v-loading="todayReportsLoading" :data="todayReports" size="mini" stripe style="width:100%">
-            <el-table-column prop="reportTime" label="报工时间" min-width="160" />
-            <el-table-column prop="shiftCode" label="班次" width="90" />
-            <el-table-column prop="taskType" label="工序" width="110" />
-            <el-table-column prop="taskNo" label="任务号" min-width="150" show-overflow-tooltip />
-            <el-table-column prop="staffName" label="报工人" width="120" />
-            <el-table-column prop="outputQty" label="卷数" width="90" align="right" />
-            <el-table-column prop="outputSqm" label="平米数" width="110" align="right" />
-            <el-table-column prop="statDate" label="统计归属日" width="110" align="center" />
+            <el-table-column prop="reportTime" label="报工时间" width="140" align="center" />
+            <el-table-column prop="orderNo" label="订单号" width="120" />
+            <el-table-column prop="materialCode" label="料号" width="140" show-overflow-tooltip />
+            <el-table-column prop="specDesc" label="规格" min-width="180" show-overflow-tooltip />
+            <el-table-column prop="taskType" label="工序" width="90" align="center" />
+            <el-table-column prop="staffName" label="报工人" width="100" align="center" />
+            <el-table-column prop="outputQty" label="卷数" width="80" align="right" />
+            <el-table-column prop="outputSqm" label="平米数" width="100" align="right" />
+            <el-table-column prop="shiftCode" label="班次" width="70" align="center" />
           </el-table>
+          <pagination
+            v-show="pagination.total > 0"
+            :total="pagination.total"
+            :page.sync="pagination.pageNum"
+            :limit.sync="pagination.pageSize"
+            style="padding: 10px 0; margin-top: 0;"
+            @pagination="fetchTodayReports"
+          />
         </div>
       </el-col>
     </el-row>
@@ -81,6 +90,7 @@ import { mapGetters } from 'vuex'
 import ProductionPanelGroup from './components/ProductionPanelGroup'
 import LineChart from '../admin/components/LineChart'
 import BarChart from '../admin/components/BarChart'
+import Pagination from '@/components/Pagination'
 import { getProductionSummary, getProductionTopProcesses, getProductionYearTrend, getProductionTodayReports } from '@/api/dashboard'
 
 export default {
@@ -88,7 +98,8 @@ export default {
   components: {
     ProductionPanelGroup,
     LineChart,
-    BarChart
+    BarChart,
+    Pagination
   },
   computed: {
     ...mapGetters(['workGroup']),
@@ -113,6 +124,11 @@ export default {
       yearTrend: { xAxis: [], series: [] },
       todayReports: [],
       todayReportsLoading: false,
+      pagination: {
+        pageNum: 1,
+        pageSize: 15,
+        total: 0
+      },
       dashboardLoading: false,
       refreshTimer: null,
       refreshIntervalMs: 30000
@@ -152,12 +168,10 @@ export default {
       this.dashboardLoading = true
       try {
         const params = this.currentGroupCode ? { shiftCode: this.currentGroupCode } : {}
-        this.todayReportsLoading = true
-        const [summaryRes, topRes, trendRes, todayRes] = await Promise.allSettled([
+        const [summaryRes, topRes, trendRes] = await Promise.allSettled([
           getProductionSummary(params, { timeout: 20000 }),
           getProductionTopProcesses(params, { timeout: 20000 }),
-          getProductionYearTrend(params, { timeout: 20000 }),
-          getProductionTodayReports(params, { timeout: 15000 })
+          getProductionYearTrend(params, { timeout: 20000 })
         ])
 
         this.summary = summaryRes.status === 'fulfilled'
@@ -169,15 +183,46 @@ export default {
         this.yearTrend = trendRes.status === 'fulfilled'
           ? this.normalizeTrend(trendRes.value && trendRes.value.data)
           : { xAxis: [], series: [] }
-        this.todayReports = todayRes.status === 'fulfilled'
-          ? this.normalizeTodayReports(todayRes.value && todayRes.value.data)
-          : []
+
+        // 独立拉取报工明细
+        this.fetchTodayReports()
       } catch (e) {
         this.useFallbackData()
       } finally {
-        this.todayReportsLoading = false
         this.dashboardLoading = false
       }
+    },
+    async fetchTodayReports() {
+      this.todayReportsLoading = true
+      try {
+        const params = {
+          pageNum: this.pagination.pageNum,
+          pageSize: this.pagination.pageSize
+        }
+        if (this.currentGroupCode) {
+          params.shiftCode = this.currentGroupCode
+        }
+        const res = await getProductionTodayReports(params)
+        if (res.code === 200 || res.code === 20000) {
+          const data = res.data || {}
+          this.pagination.total = Number(data.total || 0)
+          this.todayReports = this.normalizeTodayReports(data.records || [])
+        }
+      } catch (e) {
+        console.error('fetchTodayReports error:', e)
+        this.todayReports = []
+      } finally {
+        this.todayReportsLoading = false
+      }
+    },
+    handleSizeChange(val) {
+      this.pagination.pageSize = val
+      this.pagination.pageNum = 1
+      this.fetchTodayReports()
+    },
+    handleCurrentChange(val) {
+      this.pagination.pageNum = val
+      this.fetchTodayReports()
     },
     normalizeSummary(data = {}) {
       const source = (data && data.data && data.todayArea === undefined) ? data.data : data
@@ -210,14 +255,12 @@ export default {
       }
     },
     normalizeTodayReports(data = []) {
-      const rows = (Array.isArray(data) ? data : []).map(item => ({
+      return (Array.isArray(data) ? data : []).map(item => ({
         ...item,
         reportTime: this.formatReportTimeToMinute(item.reportTime),
         outputQty: this.formatNumber(item.outputQty, 0),
         outputSqm: this.formatNumber(item.outputSqm, 2)
       }))
-      rows.sort((a, b) => String(b.reportTime || '').localeCompare(String(a.reportTime || '')))
-      return rows
     },
     formatReportTimeToMinute(value) {
       if (!value) return ''

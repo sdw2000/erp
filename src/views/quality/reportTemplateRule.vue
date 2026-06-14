@@ -155,7 +155,7 @@ export default {
         enabled: 1
       },
       rules: {
-        customerCode: [{ required: true, message: '请输入客户代码', trigger: 'blur' }],
+        customerCode: [{ required: false, message: '请输入客户代码', trigger: 'blur' }],
         inspectionType: [{ required: true, message: '请选择检验类型', trigger: 'change' }],
         templateCode: [{ required: true, message: '请输入模板编码', trigger: 'change' }]
       }

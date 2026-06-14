@@ -25,6 +25,17 @@ export function getSampleDetail(sampleNo) {
 }
 
 /**
+ * 获取客户历史送样记录
+ * @param {Number} customerId - 客户ID
+ */
+export function getCustomerSampleHistory(customerId) {
+  return request({
+    url: `/api/sales/samples/history/${customerId}`,
+    method: 'get'
+  })
+}
+
+/**
  * 生成送样单号
  */
 export function generateSampleNo() {
@@ -55,6 +66,40 @@ export function updateSample(data) {
     url: '/api/sales/samples',
     method: 'put',
     data
+  })
+}
+
+/**
+ * 获取送样反馈列表
+ * @param {Number} sampleOrderId - 送样单ID
+ */
+export function getSampleFeedbacks(sampleOrderId) {
+  return request({
+    url: `/api/sales/samples/${sampleOrderId}/feedbacks`,
+    method: 'get'
+  })
+}
+
+/**
+ * 提交送样反馈
+ * @param {Object} data - 反馈数据
+ */
+export function addSampleFeedback(data) {
+  return request({
+    url: '/api/sales/samples/feedbacks',
+    method: 'post',
+    data
+  })
+}
+
+/**
+ * 删除送样反馈
+ * @param {Number} id - 反馈ID
+ */
+export function deleteSampleFeedback(id) {
+  return request({
+    url: `/api/sales/samples/feedbacks/${id}`,
+    method: 'delete'
   })
 }
 
@@ -120,3 +165,4 @@ export function exportSample(params) {
     responseType: 'blob'
   })
 }
+
