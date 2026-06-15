@@ -300,6 +300,12 @@ export const asyncRoutes = [
         meta: { title: '退货入库审核', icon: 'el-icon-refresh-left', roles: ['warehouse', 'admin'] }
       },
       {
+        path: 'warehouse-management',
+        component: () => import('@/views/stock/warehouse-management'),
+        name: 'WarehouseManagement',
+        meta: { title: '实体仓库设置', icon: 'el-icon-office-building', roles: ['warehouse', 'admin'] }
+      },
+      {
         path: 'workshop-daily-report',
         component: () => import('@/views/stock/workshop-daily-report'),
         name: 'WorkshopDailyReport',

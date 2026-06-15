@@ -154,7 +154,7 @@
 
       <div class="mb-10 table-summary">
         <span>
-          物料代码 {{ taskMaterialCodeCount }} 个，当班生产报工总平米数 {{ formatAreaNum(taskTotalArea) }}m²；
+          物料代码 {{ taskMaterialCodeCount }} 个，当天排程总平米数 {{ formatAreaNum(taskTotalArea) }}m²，共 {{ formatQtyNum(taskTotalQty) }} 卷；
           {{ currentWorkGroup }}班本月生产总平米数 {{ formatAreaNum(shiftProductionSummary.monthArea) }}m²，
           当年总平米数 {{ formatAreaNum(shiftProductionSummary.yearArea) }}m²
         </span>
@@ -1298,6 +1298,7 @@ export default {
       taskSummary: {
         materialCodeCount: 0,
         totalArea: 0,
+        totalQty: 0,
         reportedMaterialCodeCount: 0,
         reportedArea: 0
       },
@@ -1530,12 +1531,19 @@ export default {
       return this.sortTaskList(filtered)
     },
     taskMaterialCodeCount() {
-      if (!this.hasRealtimeKeywordFilter) return Number(this.taskSummary.reportedMaterialCodeCount || 0)
-      return Number(this.calcTaskSummary(this.liveFilteredList).reportedMaterialCodeCount || 0)
+      // 始终显示当前视图中的物料种类总数（不仅是报工的）
+      if (!this.hasRealtimeKeywordFilter) return Number(this.taskSummary.materialCodeCount || 0)
+      return Number(this.calcTaskSummary(this.liveFilteredList).materialCodeCount || 0)
     },
     taskTotalArea() {
-      if (!this.hasRealtimeKeywordFilter) return Number(this.taskSummary.reportedArea || 0)
-      return Number(this.calcTaskSummary(this.liveFilteredList).reportedArea || 0)
+      // 始终显示当前视图中的计划总平米数
+      if (!this.hasRealtimeKeywordFilter) return Number(this.taskSummary.totalArea || 0)
+      return Number(this.calcTaskSummary(this.liveFilteredList).totalArea || 0)
+    },
+    taskTotalQty() {
+      // 当前视图中的总卷数
+      if (!this.hasRealtimeKeywordFilter) return Number(this.taskSummary.totalQty || 0)
+      return Number(this.calcTaskSummary(this.liveFilteredList).totalQty || 0)
     },
     taskGridColspan() {
       let count = 6
@@ -4930,6 +4938,10 @@ export default {
       const n = Number(value || 0)
       return Number.isFinite(n) ? n.toFixed(2) : '0.00'
     },
+    formatQtyNum(value) {
+      const n = Number(value || 0)
+      return Number.isFinite(n) ? n.toFixed(0) : '0'
+    },
     extractTaskArea(row) {
       const areaDirect = Number(
         (row && (
@@ -5078,10 +5090,12 @@ export default {
           .filter(Boolean)
       )
       const totalArea = list.reduce((sum, row) => sum + this.extractTaskArea(row), 0)
+      const totalQty = list.reduce((sum, row) => sum + this.extractTaskQty(row), 0)
       const reportedArea = reportedRows.reduce((sum, row) => sum + this.extractReportedArea(row), 0)
       return {
         materialCodeCount: materialCodeSet.size,
         totalArea: Number(totalArea.toFixed(2)),
+        totalQty: Number(totalQty.toFixed(2)),
         reportedMaterialCodeCount: reportedMaterialCodeSet.size,
         reportedArea: Number(reportedArea.toFixed(2))
       }
