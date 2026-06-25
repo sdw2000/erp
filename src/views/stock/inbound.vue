@@ -694,7 +694,12 @@ export default {
     },
     canPrintPurchaseLabel(row) {
       if (!row || row.isAggregated) return false
-      return this.resolveInboundSourceType(row) === 'PURCHASE_RECEIVING' && !!row.id
+      const source = this.resolveInboundSourceType(row)
+      if (source !== 'PURCHASE_RECEIVING') return false
+      // Prefer explicit id, but fall back to any supplier/batch/request identifier
+      if (row.id) return true
+      const incomingId = String(row.customerBatchNo || row.batchNo || row.requestNo || row.receiptNo || '').trim()
+      return incomingId !== ''
     },
     todayDateString() {
       const d = new Date()
