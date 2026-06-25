@@ -57,7 +57,7 @@
             {{ displayProductionBatchNo(scope.row) }}
           </template>
         </el-table-column>
-        <el-table-column prop="customerBatchNo" label="供商批次号" width="150" show-overflow-tooltip sortable="custom">
+        <el-table-column prop="customerBatchNo" label="客户批次号" width="150" show-overflow-tooltip sortable="custom">
           <template slot-scope="scope">
             {{ displayCustomerBatchNo(scope.row) }}
           </template>
@@ -152,15 +152,15 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="供商批次号" prop="customerBatchNo">
-              <el-input v-model="form.customerBatchNo" placeholder="请填写供商批次号（供方追踪用）" />
+            <el-form-item label="客户批次号" prop="customerBatchNo">
+              <el-input v-model="form.customerBatchNo" placeholder="请填写客户批次号（追踪用）" />
             </el-form-item>
           </el-col>
         </el-row>
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="入库数量" prop="rolls">
-              <el-input v-model.number="form.rolls" placeholder="请输入数量" style="width: 100%" />
+              <el-input-number v-model="form.rolls" :min="1" style="width: 100%" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -168,13 +168,11 @@
           <el-col :span="12">
             <el-form-item label="数量单位" prop="qtyUnit">
               <el-select v-model="form.qtyUnit" placeholder="请选择单位" style="width: 100%">
-                <el-option label="支" value="支" />
                 <el-option label="卷" value="卷" />
                 <el-option label="㎡" value="㎡" />
                 <el-option label="箱" value="箱" />
                 <el-option label="个" value="个" />
                 <el-option label="kg" value="kg" />
-                <el-option label="桶" value="桶" />
                 <el-option label="数量" value="数量" />
               </el-select>
             </el-form-item>
@@ -183,34 +181,34 @@
         <el-row :gutter="20">
           <el-col :span="8">
             <el-form-item label="厚度μm" prop="thickness">
-              <el-input v-model.number="form.thickness" placeholder="μm" style="width: 100%" />
+              <el-input-number v-model="form.thickness" :min="1" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="宽度mm" prop="width">
-              <el-input v-model.number="form.width" placeholder="mm" style="width: 100%" />
+              <el-input-number v-model="form.width" :min="1" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="长度M" prop="length">
-              <el-input v-model.number="form.length" placeholder="M" style="width: 100%" />
+              <el-input-number v-model="form.length" :min="1" style="width: 100%" />
             </el-form-item>
           </el-col>
         </el-row>
         <el-row :gutter="20">
           <el-col :span="8">
             <el-form-item label="生产年份">
-              <el-input v-model.number="form.prodYear" placeholder="年" style="width: 100%" />
+              <el-input-number v-model="form.prodYear" :min="20" :max="99" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="生产月份">
-              <el-input v-model.number="form.prodMonth" placeholder="月" style="width: 100%" />
+              <el-input-number v-model="form.prodMonth" :min="1" :max="12" style="width: 100%" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
             <el-form-item label="生产日期">
-              <el-input v-model.number="form.prodDay" placeholder="日" style="width: 100%" />
+              <el-input-number v-model="form.prodDay" :min="1" :max="31" style="width: 100%" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -332,8 +330,8 @@
             style="width: 100%"
           />
         </el-form-item>
-        <el-form-item label="供商批次" required>
-          <el-input v-model="purchasePrintForm.incomingBatchNo" placeholder="请输入供商批次" />
+        <el-form-item label="来料批次" required>
+          <el-input v-model="purchasePrintForm.incomingBatchNo" placeholder="请输入来料批次" />
         </el-form-item>
         <el-form-item label="数量" required>
           <el-input-number v-model="purchasePrintForm.quantity" :min="1" :precision="0" style="width: 100%" />
@@ -400,7 +398,7 @@ export default {
         materialCode: [{ required: true, message: '请输入料号', trigger: 'blur' }],
         productName: [{ required: true, message: '请输入产品名称', trigger: 'blur' }],
         batchNo: [{ required: true, message: '请输入生产批次号', trigger: 'blur' }],
-        customerBatchNo: [{ required: true, message: '请填写供商批次号', trigger: 'blur' }],
+        customerBatchNo: [{ required: true, message: '请填写客户批次号', trigger: 'blur' }],
         rolls: [{ required: true, message: '请输入入库数量', trigger: 'blur' }],
         qtyUnit: [{ required: true, message: '请选择数量单位', trigger: 'change' }],
         thickness: [{ required: true, message: '请输入厚度', trigger: 'blur' }],
@@ -602,7 +600,7 @@ export default {
     displayCustomerBatchNo(row) {
       if (!row) return '-'
       const sourceType = this.resolveInboundSourceType(row)
-      // 生产入库不展示供商批次号
+      // 生产入库不展示客户批次号
       if (sourceType === 'PROD_COATING' || sourceType === 'PROD_PACKAGING' || sourceType === 'PRODUCTION') {
         return '-'
       }
@@ -628,13 +626,6 @@ export default {
     },
     resolveInboundQtyUnit(row) {
       const unit = row && row.qtyUnit ? String(row.qtyUnit).trim() : ''
-      const code = String((row && row.materialCode) || '').trim()
-      const name = String((row && (row.productName || row.materialName)) || '').trim()
-      const spec = String((row && row.specDesc) || '').trim()
-      // PE管强制显示为支
-      if (/PEG/i.test(code) || /PE管/i.test(name) || /PE管/i.test(spec)) {
-        return '支'
-      }
       if (unit) return unit
       const unitFromToken = this.extractInboundTokenFromRemark(row && row.remark, 'qtyUnit')
       if (unitFromToken) return unitFromToken
@@ -777,7 +768,7 @@ export default {
         return
       }
       if (!String(this.purchasePrintForm.incomingBatchNo || '').trim()) {
-        this.$message.warning('请填写供商批次号（来料批次）')
+        this.$message.warning('请输入来料批次')
         return
       }
       const quantity = Number(this.purchasePrintForm.quantity)
@@ -791,7 +782,6 @@ export default {
         const payload = {
           productionDate: this.purchasePrintForm.productionDate,
           incomingBatchNo: String(this.purchasePrintForm.incomingBatchNo || '').trim(),
-          manualBatchNo: true,
           quantity: Math.trunc(quantity),
           copies: Math.max(1, Math.trunc(Number(this.purchasePrintForm.copies) || 1)),
           operator: this.name
@@ -1026,7 +1016,7 @@ export default {
         this.submitLoading = true
         try {
           this.form.applicant = this.name
-          this.form.customerBatchNo = String(this.form.customerBatchNo || '').trim()
+          this.form.customerBatchNo = String(this.form.customerBatchNo || '').trim() || String(this.form.batchNo || '').trim()
           this.form.qtyUnit = this.form.qtyUnit || '卷'
           const res = await createInboundRequest(this.form)
           if (this.isApiSuccess(res)) {
