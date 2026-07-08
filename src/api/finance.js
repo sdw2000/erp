@@ -56,6 +56,22 @@ export function saveMaterialCostConfig(data) {
   })
 }
 
+export function getProductionCostMvpPage(params) {
+  return request({
+    url: '/finance/cost-accounting/production-mvp/page',
+    method: 'get',
+    params
+  })
+}
+
+export function getProductionCostMvpDetail(params) {
+  return request({
+    url: '/finance/cost-accounting/production-mvp/detail',
+    method: 'get',
+    params
+  })
+}
+
 export function getMonthlyBasicConfig(params) {
   return request({
     url: '/finance/basic-config/monthly',

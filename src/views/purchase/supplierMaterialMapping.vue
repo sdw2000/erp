@@ -81,7 +81,7 @@
         <el-pagination
           :current-page.sync="page.pageNum"
           :page-size="page.pageSize"
-          :page-sizes="[10,20,50,100]"
+          :page-sizes="pageSizes"
           layout="sizes, prev, pager, next, jumper, ->, total"
           :total="Number(page.total || 0)"
           @current-change="fetchList"
@@ -153,6 +153,7 @@ import {
   savePurchaseSupplierMaterialMapping,
   deletePurchaseSupplierMaterialMapping
 } from '@/api/purchaseSupplierMaterialMapping'
+import uiConfig from '@/config/ui'
 
 export default {
   name: 'PurchaseSupplierMaterialMapping',
@@ -169,9 +170,10 @@ export default {
       },
       page: {
         pageNum: 1,
-        pageSize: 20,
+        pageSize: uiConfig.defaultPageSize,
         total: 0
       },
+      pageSizes: uiConfig.pageSizes,
       suppliers: [],
       supplierNameMap: {},
       rawMaterials: [],

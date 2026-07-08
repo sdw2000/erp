@@ -132,7 +132,7 @@
             <div class="pagination-container" style="margin-top: 20px; text-align: right;">
               <el-pagination
                 :current-page="detailPagination.current"
-                :page-sizes="[50, 100, 200, 500]"
+                :page-sizes="pageSizes"
                 :page-size="detailPagination.size"
                 layout="total, sizes, prev, pager, next, jumper"
                 :total="detailPagination.total"
@@ -222,10 +222,10 @@
               </template>
             </el-table-column>
           </el-table>
-          <div class="pagination-container" style="margin-top: 20px; text-align: right;">
+            <div class="pagination-container" style="margin-top: 20px; text-align: right;">
             <el-pagination
               :current-page="overviewPagination.current"
-              :page-sizes="[10, 20, 50, 100]"
+              :page-sizes="pageSizes"
               :page-size="overviewPagination.size"
               layout="total, sizes, prev, pager, next, jumper"
               :total="overviewPagination.total"
@@ -267,6 +267,7 @@ import {
   deletePurchaseReconciliationHistory,
   confirmPurchaseStatementDetails
 } from '@/api/purchaseReconciliation'
+import uiConfig from '@/config/ui'
 
 export default {
   name: 'PurchaseReconciliation',
@@ -277,8 +278,9 @@ export default {
         supplierCode: '',
         month: new Date().toISOString().slice(0, 7)
       },
-      overviewPagination: { current: 1, size: 20, total: 0, sortProp: 'totalAmount', sortOrder: 'desc' },
-      detailPagination: { current: 1, size: 50, total: 0, sortProp: 'bizDate', sortOrder: 'asc' },
+      overviewPagination: { current: 1, size: uiConfig.defaultPageSize, total: 0, sortProp: 'totalAmount', sortOrder: 'desc' },
+      detailPagination: { current: 1, size: uiConfig.pageSizes && uiConfig.pageSizes.length && uiConfig.pageSizes[0] ? (uiConfig.pageSizes[0] < 50 ? 50 : uiConfig.pageSizes[0]) : 50, total: 0, sortProp: 'bizDate', sortOrder: 'asc' },
+      pageSizes: uiConfig.pageSizes,
       suppliers: [],
       overviewRows: [],
       overviewLoading: false,

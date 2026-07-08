@@ -22,6 +22,7 @@
         <el-table :data="warehouseList" border style="width: 100%" v-loading="listLoading">
           <el-table-column prop="warehouseCode" label="仓库编码" width="120" />
           <el-table-column prop="warehouseName" label="仓库名称" width="180" />
+          <el-table-column prop="address" label="仓库位置" min-width="200" show-overflow-tooltip />
           <el-table-column prop="warehouseType" label="仓库类型" width="120" />
           <el-table-column prop="manager" label="管理员" width="120" />
           <el-table-column prop="contactPhone" label="联系电话" width="140" />
@@ -111,21 +112,31 @@
     <el-dialog :title="dialogStatus === 'create' ? '新增仓库' : '编辑仓库'" :visible.sync="dialogFormVisible">
       <el-form ref="dataForm" :model="temp" label-position="left" label-width="100px" style="width: 400px; margin-left:50px;">
         <el-form-item label="仓库编码" prop="warehouseCode">
-          <el-input v-model="temp.warehouseCode" />
+          <el-input v-model="temp.warehouseCode" placeholder="保存时自动生成" disabled />
         </el-form-item>
         <el-form-item label="仓库名称" prop="warehouseName">
           <el-input v-model="temp.warehouseName" />
         </el-form-item>
+        <el-form-item label="仓库位置" prop="address">
+          <el-input v-model="temp.address" placeholder="输入仓库详细位置或地址" />
+        </el-form-item>
         <el-form-item label="仓库类型">
-          <el-select v-model="temp.warehouseType" placeholder="请选择">
+          <el-select v-model="temp.warehouseType" placeholder="请选择" @change="generateCode">
             <el-option label="成品仓" value="成品仓" />
-            <el-option label="原料仓" value="原料仓" />
             <el-option label="半成品仓" value="半成品仓" />
+            <el-option label="原料仓" value="原料仓" />
             <el-option label="暂存区" value="暂存区" />
           </el-select>
         </el-form-item>
         <el-form-item label="管理员">
-          <el-input v-model="temp.manager" />
+          <el-select v-model="temp.manager" placeholder="选择管理员" clearable filterable style="width: 100%">
+            <el-option
+              v-for="item in staffOptions"
+              :key="item.id"
+              :label="item.staffName"
+              :value="item.staffName"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="temp.status" placeholder="请选择">
@@ -144,7 +155,7 @@
     <el-dialog :title="locDialogStatus === 'create' ? '新增库位' : '编辑库位'" :visible.sync="locDialogVisible">
       <el-form ref="locForm" :model="locTemp" label-position="left" label-width="100px" style="width: 400px; margin-left:50px;">
         <el-form-item label="所属仓库" prop="warehouseId">
-          <el-select v-model="locTemp.warehouseId" placeholder="请选择">
+          <el-select v-model="locTemp.warehouseId" placeholder="请选择" @change="generateLocCode">
             <el-option
               v-for="item in allWarehouses"
               :key="item.id"
@@ -154,7 +165,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="库位编码" prop="locationCode">
-          <el-input v-model="locTemp.locationCode" />
+          <el-input v-model="locTemp.locationCode" placeholder="自动生成" disabled />
         </el-form-item>
         <el-form-item label="库位名称" prop="locationName">
           <el-input v-model="locTemp.locationName" />
@@ -186,7 +197,9 @@ import {
   getWarehouseList, saveWarehouse, deleteWarehouse, getAllWarehouses,
   getLocationList, saveLocation, deleteLocation 
 } from '@/api/warehouse'
+import { getStaffList } from '@/api/staff'
 import Pagination from '@/components/Pagination'
+import uiConfig from '@/config/ui'
 
 export default {
   name: 'WarehouseManagement',
@@ -194,13 +207,14 @@ export default {
   data() {
     return {
       activeTab: 'warehouse',
+      staffOptions: [],
       // 仓库相关
       warehouseList: [],
       total: 0,
       listLoading: true,
       listQuery: {
         page: 1,
-        size: 20,
+        size: uiConfig.defaultPageSize,
         keyword: ''
       },
       temp: {
@@ -241,8 +255,42 @@ export default {
     this.getList()
     this.getAllWarehouses()
     this.getLocList()
+    this.getStaffOptions()
   },
   methods: {
+    getStaffOptions() {
+      getStaffList({ current: 1, size: 1000 }).then(res => {
+        // 后端分页接口返回的数据可能在 res.data.records 或 res.data.list 中
+        this.staffOptions = res.data.records || res.data.list || []
+      })
+    },
+    generateCode() {
+      if (this.dialogStatus === 'create') {
+        const prefix = 'CK'
+        // 从所有仓库中找到最大的 CK 编号
+        let maxNum = 0
+        if (this.allWarehouses && this.allWarehouses.length > 0) {
+          this.allWarehouses.forEach(w => {
+            if (w.warehouseCode && w.warehouseCode.startsWith(prefix)) {
+              const numPart = parseInt(w.warehouseCode.replace(prefix, ''))
+              if (!isNaN(numPart) && numPart > maxNum) {
+                maxNum = numPart
+              }
+            }
+          })
+        }
+        const nextNum = (maxNum + 1).toString().padStart(2, '0')
+        this.temp.warehouseCode = prefix + nextNum
+      }
+    },
+    generateLocCode(warehouseId) {
+      if (this.locDialogStatus === 'create') {
+        const warehouse = this.allWarehouses.find(w => w.id === warehouseId)
+        const prefix = warehouse ? warehouse.warehouseCode : 'LOC'
+        const random = Math.floor(Math.random() * 900) + 100
+        this.locTemp.locationCode = prefix + '-' + random
+      }
+    },
     // 仓库业务
     getList() {
       this.listLoading = true
@@ -254,7 +302,8 @@ export default {
     },
     getAllWarehouses() {
       getAllWarehouses().then(response => {
-        this.allWarehouses = response.data
+        // 兼容直接返回数组和封装在 list/records 中的情况
+        this.allWarehouses = response.data.records || response.data.list || response.data || []
       })
     },
     handleFilter() {
@@ -266,6 +315,7 @@ export default {
         id: undefined,
         warehouseCode: '',
         warehouseName: '',
+        address: '',
         warehouseType: '成品仓',
         manager: '',
         status: 1
@@ -273,6 +323,9 @@ export default {
     },
     handleCreate() {
       this.resetTemp()
+      // 如果没有默认选择仓库类型，手动设置一个以触发第一次编码生成
+      this.temp.warehouseType = '成品仓'
+      this.generateCode()
       this.dialogStatus = 'create'
       this.dialogFormVisible = true
       this.$nextTick(() => {

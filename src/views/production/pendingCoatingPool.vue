@@ -1,84 +1,49 @@
 <template>
-  <div class="app-container">
-    <!-- 页面标题 -->
-    <el-card shadow="never" style="margin-bottom: 15px">
-      <div slot="header" class="clearfix">
-        <span style="font-weight: bold; font-size: 16px">待排订单池</span>
-        <div style="float: right">
-          <el-button
-            type="primary"
-            size="small"
-            icon="el-icon-plus"
-            @click="handleAdd"
-          >
-            添加订单到池
-          </el-button>
-          <el-button
-            type="success"
-            size="small"
-            icon="el-icon-s-operation"
-            @click="handleGenerateTasks"
-          >
-            生成涂布任务
-          </el-button>
+  <div class="app-container pending-pool-page">
+    <!-- 统计栏 -->
+    <div class="stat-row">
+      <div class="stat-header">
+        <span class="title">待排订单池</span>
+        <div class="actions">
+          <el-button type="primary" size="small" icon="el-icon-plus" @click="handleAdd">添加订单</el-button>
+          <el-button type="success" size="small" icon="el-icon-s-operation" @click="handleGenerateTasks">生成涂布任务</el-button>
         </div>
       </div>
-
-      <!-- 统计卡片 -->
-      <el-row :gutter="20">
+      <el-row :gutter="10" class="stat-body">
         <el-col :span="6">
-          <div class="stat-card">
-            <div class="stat-icon" style="background: #e6a23c">
-              <i class="el-icon-time" />
-            </div>
-            <div class="stat-info">
-              <div class="stat-label">{{ (displayStats && displayStats.label) || '等待中' }}</div>
-              <div class="stat-value">{{ (displayStats && displayStats.value) || 0 }}</div>
-            </div>
+          <div class="mini-stat-card">
+            <span class="label">{{ (displayStats && displayStats.label) || '等待中' }}</span>
+            <span class="value">{{ (displayStats && displayStats.value) || 0 }}</span>
           </div>
         </el-col>
         <el-col :span="6">
-          <div class="stat-card">
-            <div class="stat-icon" style="background: #409eff">
-              <i class="el-icon-s-flag" />
-            </div>
-            <div class="stat-info">
-              <div class="stat-label">已排程</div>
-              <div class="stat-value">{{ stats.scheduled || 0 }}</div>
-            </div>
+          <div class="mini-stat-card">
+            <span class="label">已排程</span>
+            <span class="value">{{ stats.scheduled || 0 }}</span>
           </div>
         </el-col>
         <el-col :span="6">
-          <div class="stat-card">
-            <div class="stat-icon" style="background: #67c23a">
-              <i class="el-icon-check" />
-            </div>
-            <div class="stat-info">
-              <div class="stat-label">已完成</div>
-              <div class="stat-value">{{ stats.completed || 0 }}</div>
-            </div>
+          <div class="mini-stat-card">
+            <span class="label">已完成</span>
+            <span class="value">{{ stats.completed || 0 }}</span>
           </div>
         </el-col>
         <el-col :span="6">
-          <div class="stat-card">
-            <div class="stat-icon" style="background: #f56c6c">
-              <i class="el-icon-warning-outline" />
-            </div>
-            <div class="stat-info">
-              <div class="stat-label">涂布料号数</div>
-              <div class="stat-value">{{ stats.materialCount || 0 }}</div>
-            </div>
+          <div class="mini-stat-card">
+            <span class="label">涂布料号</span>
+            <span class="value">{{ stats.materialCount || 0 }}</span>
           </div>
         </el-col>
       </el-row>
-    </el-card>
+    </div>
 
-    <!-- 按料号分组展示 -->
-    <el-card shadow="never">
-      <el-tabs v-model="activeTab" @tab-click="handleTabClick">
+    <!-- 主列表 -->
+    <div class="pool-content-box">
+      <el-tabs v-model="activeTab" class="custom-flat-tabs" @tab-click="handleTabClick">
         <!-- 涂布汇总视图 -->
         <el-tab-pane label="涂布汇总" name="byMaterial">
-          <el-collapse v-model="activeNames" accordion>
+          <div class="scroll-viewport">
+            <el-collapse v-model="activeNames" accordion>
             <el-collapse-item
               v-for="material in materialGroups"
               :key="material.materialCode"
@@ -101,7 +66,7 @@
               </template>
 
               <!-- 该料号的待涂布订单列表 -->
-              <el-table :data="material.orders" border stripe size="small">
+              <el-table :data="material.orders" border stripe size="small" max-height="400">
                 <el-table-column type="index" label="序号" width="60" align="center" />
                 <el-table-column prop="orderNo" label="订单号" width="140" />
                 <el-table-column prop="customerName" label="客户名称" width="150" show-overflow-tooltip />
@@ -165,14 +130,17 @@
           </el-collapse>
         </el-tab-pane>
 
-        <!-- 复卷汇总视图：按料号+长度聚合，方便集中复卷 -->
+        <!-- 复卷汇总视图 -->
         <el-tab-pane label="复卷汇总" name="rewindSummary">
-          <el-table
-            v-loading="loading"
-            :data="rewindingGroups"
-            border
-            stripe
-          >
+          <div class="table-viewport">
+            <el-table
+              v-loading="loading"
+              :data="rewindingGroups"
+              border
+              stripe
+              height="100%"
+              style="width: 100%"
+            >
             <el-table-column type="index" label="序号" width="70" align="center" />
             <el-table-column prop="materialCode" label="料号" width="140" sortable />
             <el-table-column prop="materialName" label="料号名称" min-width="180" show-overflow-tooltip sortable />
@@ -205,44 +173,48 @@
         </el-tab-pane>
 
         <!-- 全部订单列表视图 -->
-        <el-tab-pane label="全部订单" name="allOrders">
-          <el-form :inline="true" :model="queryParams" size="small">
-            <el-form-item label="订单号">
-              <el-input
-                v-model="queryParams.orderNo"
-                placeholder="请输入订单号"
-                clearable
-                style="width: 180px"
-              />
-            </el-form-item>
-            <el-form-item label="料号">
-              <el-input
-                v-model="queryParams.materialCode"
-                placeholder="请输入料号"
-                clearable
-                style="width: 150px"
-              />
-            </el-form-item>
-            <el-form-item label="状态">
-              <el-select v-model="queryParams.poolStatus" placeholder="全部" clearable style="width: 120px">
-                <el-option label="等待中" value="WAITING" />
-                <el-option label="已排程" value="SCHEDULED" />
-                <el-option label="已完成" value="COMPLETED" />
-              </el-select>
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" icon="el-icon-search" @click="handleQuery">查询</el-button>
-              <el-button icon="el-icon-refresh" @click="handleReset">重置</el-button>
-            </el-form-item>
-          </el-form>
+        <el-tab-pane label="allOrders" name="allOrders">
+          <div class="search-box">
+            <el-form :inline="true" :model="queryParams" size="small">
+              <el-form-item label="订单号">
+                <el-input
+                  v-model="queryParams.orderNo"
+                  placeholder="请输入订单号"
+                  clearable
+                  style="width: 150px"
+                />
+              </el-form-item>
+              <el-form-item label="料号">
+                <el-input
+                  v-model="queryParams.materialCode"
+                  placeholder="请输入料号"
+                  clearable
+                  style="width: 150px"
+                />
+              </el-form-item>
+              <el-form-item label="状态">
+                <el-select v-model="queryParams.poolStatus" placeholder="全部" clearable style="width: 100px">
+                  <el-option label="等待中" value="WAITING" />
+                  <el-option label="已排程" value="SCHEDULED" />
+                  <el-option label="已完成" value="COMPLETED" />
+                </el-select>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" icon="el-icon-search" @click="handleQuery">查询</el-button>
+                <el-button icon="el-icon-refresh" @click="handleReset">重置</el-button>
+              </el-form-item>
+            </el-form>
+          </div>
 
-          <el-table
-            v-loading="loading"
-            :data="poolList"
-            border
-            stripe
-            style="margin-top: 15px"
-          >
+          <div class="table-viewport">
+            <el-table
+              v-loading="loading"
+              :data="poolList"
+              border
+              stripe
+              height="100%"
+              style="width: 100%"
+            >
             <el-table-column type="index" label="序号" width="60" align="center" />
             <el-table-column prop="orderNo" label="订单号" width="140" />
             <el-table-column prop="customerName" label="客户名称" width="150" show-overflow-tooltip />
@@ -288,13 +260,13 @@
             :page-size="queryParams.pageSize"
             :total="total"
             layout="total, sizes, prev, pager, next, jumper"
-            style="margin-top: 15px; text-align: right"
+            class="pagination-container"
             @size-change="handleSizeChange"
             @current-change="handlePageChange"
           />
         </el-tab-pane>
       </el-tabs>
-    </el-card>
+    </div>
 
     <!-- 订单详情对话框 -->
     <el-dialog
@@ -690,6 +662,106 @@ export default {
 </script>
 
 <style scoped>
+.app-container.pending-pool-page {
+  padding: 0 !important;
+  height: calc(100vh - 84px);
+  display: flex;
+  flex-direction: column;
+  background-color: #f0f2f5;
+}
+
+.stat-row {
+  margin: 10px;
+  background: #fff;
+  border-radius: 4px;
+  padding: 10px 15px;
+  flex-shrink: 0;
+}
+
+.stat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.stat-header .title {
+  font-weight: bold;
+  font-size: 15px;
+}
+
+.mini-stat-card {
+  background: #f8f9fb;
+  padding: 8px 12px;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mini-stat-card .label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.mini-stat-card .value {
+  font-size: 18px;
+  font-weight: bold;
+  color: #303133;
+}
+
+.pool-content-box {
+  flex: 1;
+  margin: 0 10px 10px 10px;
+  background: #fff;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+.custom-flat-tabs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.custom-flat-tabs ::v-deep .el-tabs__header {
+  margin: 0;
+  padding: 0 15px;
+  background: #fff;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.custom-flat-tabs ::v-deep .el-tabs__content {
+  flex: 1;
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0;
+}
+
+.custom-flat-tabs ::v-deep .el-tab-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.search-box {
+  padding: 10px 15px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.table-viewport {
+  flex: 1;
+  padding: 10px;
+}
+
+.scroll-viewport {
+  flex: 1;
+  padding: 10px;
+  overflow-y: auto;
+}
+
 .stat-card {
   display: flex;
   align-items: center;

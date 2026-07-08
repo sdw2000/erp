@@ -281,7 +281,10 @@
           <el-table-column label="物料名称" width="180">
             <template slot-scope="scope">
               <el-input v-if="!scope.row.orderItemId" v-model="scope.row.materialName" size="small" placeholder="输入物料名称" />
-              <span v-else>{{ scope.row.materialName }}</span>
+              <div v-else>
+                <span>{{ scope.row.materialName }}</span>
+                <el-tag v-if="scope.row.isOverReported" type="danger" size="mini" effect="dark" style="margin-left: 5px;">超报</el-tag>
+              </div>
             </template>
           </el-table-column>
           <el-table-column label="规格" width="180">
@@ -399,17 +402,29 @@
     <el-dialog title="物流追踪" :visible.sync="trackingVisible" width="700px" :show-close="true">
       <div v-loading="trackingLoading">
         <div v-if="trackingInfo">
-          <el-descriptions :column="2" border size="small" class="tracking-descriptions">
-            <el-descriptions-item label="快递公司">{{ trackingInfo.carrierName || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="快递单号">{{ trackingInfo.carrierNo || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="物流状态">
-              <el-tag :type="getStatusType(trackingInfo.status)" size="small">{{ trackingInfo.status || '-' }}</el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item label="最后更新">{{ trackingInfo.lastUpdate || '-' }}</el-descriptions-item>
-          </el-descriptions>
+          <div style="margin-bottom: 20px; border: 1px solid #ebeef5; padding: 15px; border-radius: 4px;">
+            <el-row :gutter="20">
+              <el-col :span="12" style="font-size: 14px; color: #606266; margin-bottom: 10px;">
+                <b>快递公司：</b>{{ trackingInfo.carrierName || '-' }}
+              </el-col>
+              <el-col :span="12" style="font-size: 14px; color: #606266; margin-bottom: 10px;">
+                <b>快递单号：</b>{{ trackingInfo.carrierNo || '-' }}
+              </el-col>
+              <el-col :span="12" style="font-size: 14px; color: #606266;">
+                <b>物流状态：</b>
+                <el-tag :type="getStatusType(trackingInfo.status)" size="small">{{ trackingInfo.status || '-' }}</el-tag>
+              </el-col>
+              <el-col :span="12" style="font-size: 14px; color: #606266;">
+                <b>最后更新：</b>{{ trackingInfo.lastUpdate || '-' }}
+              </el-col>
+            </el-row>
+          </div>
 
           <el-divider content-position="left">物流轨迹</el-divider>
-          <el-empty v-if="!trackingInfo.traces || trackingInfo.traces.length === 0" description="暂无物流轨迹" :image-size="90" />
+          <div v-if="!trackingInfo.traces || trackingInfo.traces.length === 0" style="text-align: center; color: #909399; padding: 40px 0;">
+            <i class="el-icon-warning-outline" style="font-size: 40px; margin-bottom: 10px;"></i>
+            <p>暂无物流轨迹</p>
+          </div>
           <el-timeline v-else>
             <el-timeline-item
               v-for="(trace, index) in trackingInfo.traces"
@@ -453,7 +468,10 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="!unshippedOrderLoading && unshippedOrders.length === 0" description="未找到未发货订单" :image-size="90" />
+      <div v-if="!unshippedOrderLoading && unshippedOrders.length === 0" style="text-align: center; color: #909399; padding: 40px 0;">
+        <i class="el-icon-search" style="font-size: 40px; margin-bottom: 10px;"></i>
+        <p>未找到未发货订单</p>
+      </div>
       <div style="margin-top: 10px; text-align: right;">
         <el-pagination
           :current-page="unshippedPage.current"
@@ -906,7 +924,7 @@ export default {
     this.fetchCompanyInfo()
     this.fetchCarriers()
     this.fetchCustomers()
-    
+
     // 统一由 handleRouteOrderEntry 决定是否立刻加载数据以及加载什么数据
     this.handleRouteOrderEntry(this.$route, true)
   },
@@ -917,7 +935,7 @@ export default {
   methods: {
     handleRouteOrderEntry(route, autoOpen = false) {
       const query = (route && route.query) || {}
-      
+
       // 1. 处理来自订单页面的跳转
       const fromOrders = String(query.fromOrders || '').trim() === '1'
       const orderNo = this.normalizeSearchKeyword(query.orderNo)
@@ -1310,12 +1328,10 @@ export default {
             this.page.total = rows.length || 0
           }
 
-          this.tableData = rows
-
           // 后端已在 /delivery/list 中并行返回了客户简称(customerShortName)、客户代码(customerCode)以及
           // 所有明细(items)及其关联的规格(spec)、厚度、宽度、长度等信息。
           // 此前此处有大量的 await fetchCustomers() 和 Promise.all 导致 N+1 问题，现已移除，显著提升加载速度。
-          this.tableData = this.tableData.map(row => {
+          this.tableData = rows.map(row => {
             return {
               ...row,
               deliveryDate: this.normalizeNoticeDeliveryDate(row.deliveryDate),
@@ -1687,6 +1703,9 @@ export default {
                 spec: `${oItem.thickness || 0}μm*${oItem.width || 0}mm*${oItem.length || 0}m`,
                 quantity: qty, // 默认填充未发货数量，用户可修改
                 _maxQty: qty,
+                rolls: oItem.rolls,
+                producedQty: producedQty,
+                isOverReported: rpCustomer && producedQty > (oItem.rolls || 0),
                 areaSize: unitArea ? Number((unitArea * qty).toFixed(2)) : 0,
                 unitArea: unitArea,
                 boxCount: 0,
@@ -3631,7 +3650,6 @@ export default {
 <style scoped>
 .delivery-notice-container {
   padding: 20px;
-  overflow-x: hidden;
 }
 
 .page-header {

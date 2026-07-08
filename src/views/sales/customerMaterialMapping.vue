@@ -69,6 +69,7 @@
         <el-table-column prop="customerMaterialCode" label="客户料号" min-width="170" />
         <el-table-column prop="customerMaterialName" label="客户物料名称" min-width="180" show-overflow-tooltip />
         <el-table-column prop="customerSpec" label="客户规格" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="shelfLife" label="保质期(天)" width="100" align="center" />
         <el-table-column label="状态" width="90" align="center">
           <template slot-scope="scope">
             <el-tag :type="Number(scope.row.isActive) === 1 ? 'success' : 'info'">
@@ -185,6 +186,9 @@
         <el-form-item label="客户规格">
           <el-input v-model.trim="form.customerSpec" placeholder="可为空，建议手工填写客户标签规格" />
         </el-form-item>
+        <el-form-item label="保质期(天)">
+          <el-input-number v-model="form.shelfLife" :min="0" :step="1" :precision="0" style="width:100%" placeholder="为空则采用系统默认" />
+        </el-form-item>
         <el-form-item label="状态">
           <el-switch v-model="form.isActive" :active-value="1" :inactive-value="0" />
         </el-form-item>
@@ -228,6 +232,7 @@ function defaultForm() {
     customerMaterialCode: '',
     customerMaterialName: '',
     customerSpec: '',
+    shelfLife: null,
     isActive: 1,
     remark: ''
   }

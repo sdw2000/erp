@@ -1,224 +1,347 @@
 <template>
-  <div class="app-container manual-schedule-page" :style="{ height: pageHeight + 'px' }">
+  <div class="app-container manual-schedule-page" :style="{ minHeight: 'calc(100vh - 100px)' }">
     <el-tabs v-model="activeTab" type="border-card" @tab-click="onTabChange">
       <!-- Tab 1: 订单排程主页 -->
       <el-tab-pane label="订单排程" name="orders">
-        <el-card shadow="never">
-          <div slot="header">
-            <span>待排程订单列表</span>
-            <span class="pending-summary-text">
-              （已选{{ pendingSelectedStats.rolls }}卷 / {{ pendingSelectedStats.area.toFixed(2) }}㎡，默认目标{{ pendingDailyAreaTarget }}㎡）
-            </span>
-            <el-button
-              style="float: right; margin-left: 8px"
-              type="success"
-              size="small"
-              icon="el-icon-search"
-              @click="handleBatchScanStock"
-            >查找库存并锁定</el-button>
-            <el-button
-              style="float: right; margin-left: 8px"
-              type="warning"
-              size="small"
-              plain
-              @click="toggleShowCompletedRows"
-            >{{ showCompletedRows ? '隐藏已拍完' : '显示已拍完' }}</el-button>
-            <div style="float: right; display: inline-flex; align-items: center; margin-left: 8px;">
-              <el-input
-                v-model.trim="pendingQuery.materialCode"
-                style="width: 220px"
-                size="small"
-                clearable
-                placeholder="输入料号搜索欠单"
-                @keyup.enter.native="handlePendingMaterialSearch"
-                @clear="handlePendingMaterialClear"
-              >
-                <el-button slot="append" icon="el-icon-search" @click="handlePendingMaterialSearch" />
-              </el-input>
-              <span
-                v-if="pendingQuery.materialCode"
-                style="line-height: 32px; color: #409EFF; margin-left: 8px; white-space: nowrap;"
-              >欠料总平米数（当前料号）：{{ Number(pendingMaterialOweArea || 0).toFixed(2) }}㎡</span>
+        <el-card shadow="never" class="header-card">
+          <div slot="header" class="section-header">
+            <div class="header-left">
+              <span class="header-title">待排程订单列表</span>
+              <span class="pending-summary-text">
+                已选 <strong>{{ pendingSelectedStats.rolls }}</strong> 卷 / <strong>{{ pendingSelectedStats.area.toFixed(2) }}</strong> ㎡
+                <el-divider direction="vertical" />
+                默认目标 <strong>{{ pendingDailyAreaTarget }}</strong> ㎡
+              </span>
             </div>
-            <el-button style="float: right" type="primary" size="small" icon="el-icon-refresh" @click="loadOrders">刷新</el-button>
+            <div class="header-right">
+              <div class="search-input-group">
+                <el-autocomplete
+                  v-model.trim="pendingQuery.orderNo"
+                  style="width: 180px"
+                  size="small"
+                  clearable
+                  placeholder="输入订单号"
+                  :fetch-suggestions="queryPendingOrderNoSuggestions"
+                  :trigger-on-focus="false"
+                  @keyup.enter.native="handlePendingHeaderSearch"
+                  @clear="handlePendingHeaderSearch"
+                  @select="handlePendingOrderNoSelect"
+                />
+                <el-autocomplete
+                  v-model.trim="pendingQuery.materialCode"
+                  style="width: 220px"
+                  size="small"
+                  clearable
+                  placeholder="输入料号"
+                  :fetch-suggestions="queryPendingMaterialSuggestions"
+                  :trigger-on-focus="false"
+                  @keyup.enter.native="handlePendingHeaderSearch"
+                  @clear="handlePendingHeaderSearch"
+                  @select="handlePendingMaterialSelect"
+                />
+                <el-select
+                  v-model="pendingQuery.status"
+                  size="small"
+                  style="width: 180px"
+                  placeholder="筛选状态"
+                  @change="handlePendingHeaderSearch"
+                >
+                  <el-option label="全部状态" value="ALL" />
+                  <el-option label="未排程" value="UNSCHEDULED" />
+                  <el-option label="已排程未完成" value="SCHEDULED_UNFINISHED" />
+                  <el-option label="已排程已完成" value="SCHEDULED_COMPLETED" />
+                </el-select>
+                <el-button type="primary" size="small" icon="el-icon-search" @click="handlePendingHeaderSearch">查询</el-button>
+                <el-tag v-if="pendingQuery.materialCode" size="small" type="info" effect="plain" style="margin-left: 0">
+                  当前料号欠料：<strong>{{ Number(pendingMaterialOweArea || 0).toFixed(2) }} ㎡</strong>
+                </el-tag>
+              </div>
+
+              <el-button-group>
+                <el-button
+                  type="success"
+                  size="small"
+                  icon="el-icon-search"
+                  @click="handleBatchScanStock"
+                >库存锁定</el-button>
+                <el-button
+                  type="warning"
+                  size="small"
+                  plain
+                  @click="toggleShowCompletedRows"
+                >{{ showCompletedRows ? '隐藏已排' : '查看全部' }}</el-button>
+                <el-button type="primary" size="small" icon="el-icon-refresh" @click="loadOrders">刷新</el-button>
+              </el-button-group>
+            </div>
           </div>
 
           <el-alert
             v-if="pendingLockRiskSummary.riskRows > 0"
             type="warning"
+            show-icon
             :closable="false"
-            style="margin-bottom: 10px"
+            class="mb-10"
             :title="`锁料风险提醒：当前有 ${pendingLockRiskSummary.riskRows} 条待排订单存在未锁定面积，共 ${pendingLockRiskSummary.riskArea} ㎡。建议优先锁料后再确认排程。`"
           />
 
-          <el-table
-            ref="pendingTable"
-            v-loading="loading"
-            :data="orderList"
-            :row-key="pendingRowKey"
-            :span-method="orderListSpanMethod"
-            border
-            stripe
-            style="width: 100%"
-            :max-height="tableMaxHeight"
-            class="manual-schedule-table manual-schedule-orders-table"
-            :row-class-name="tableRowClassName"
-            @selection-change="handlePendingSelectionChange"
-          >
-            <el-table-column type="selection" :reserve-selection="true" width="40" align="center" />
-            <el-table-column type="index" label="序号" width="54" align="center" />
-            <el-table-column prop="order_no" label="订单编号" min-width="132" column-key="order_no" show-overflow-tooltip>
-              <template slot-scope="scope">
-                <el-button type="text" @click="handleOrderNoClick(scope.row)">{{ scope.row.order_no || '-' }}</el-button>
-              </template>
-            </el-table-column>
-            <el-table-column label="订单信息" align="center" header-align="center" class-name="group-col" header-class-name="group-header">
-              <el-table-column label="客户 / 产品 / 规格" min-width="250" class-name="order-card-col" header-class-name="order-card-header" column-key="material_code">
+          <div class="table-main-area">
+            <el-table
+              ref="pendingTable"
+              v-loading="loading"
+              :data="orderList"
+              :row-key="pendingRowKey"
+              :span-method="orderListSpanMethod"
+              border
+              stripe
+              style="width: 100%"
+              :max-height="tableHeight"
+              class="manual-schedule-table manual-schedule-orders-table"
+              :row-class-name="tableRowClassName"
+              :default-sort="{ prop: pendingSort.prop, order: pendingSort.order }"
+              @selection-change="handlePendingSelectionChange"
+              @sort-change="handlePendingSortChange"
+            >
+              <el-table-column type="selection" :reserve-selection="true" width="40" align="center" />
+              <el-table-column type="index" label="序号" width="54" align="center" />
+              <el-table-column prop="order_no" label="订单编号" min-width="132" column-key="order_no" show-overflow-tooltip>
                 <template slot-scope="scope">
-                  <div class="order-info-card">
-                    <div class="order-info-line order-info-customer">
-                      <span class="order-info-label">客户</span>
-                      <span class="order-info-value">{{ scope.row.customer_name || '-' }}</span>
-                    </div>
-                    <div class="order-info-line">
-                      <span class="order-info-label">产品</span>
-                      <span class="order-info-value code">{{ scope.row.material_code || '-' }}</span>
-                    </div>
-                    <div class="order-info-line">
-                      <span class="order-info-label">规格</span>
-                      <span class="order-info-value">{{ formatOrderSpec(scope.row) || '-' }}</span>
-                    </div>
+                  <div class="order-no-cell">
+                    <el-button type="text" @click="handleOrderNoClick(scope.row)">{{ scope.row.order_no || '-' }}</el-button>
+                    <el-tooltip content="复制订单号" placement="top" :open-delay="300">
+                      <el-button
+                        v-if="scope.row.order_no"
+                        type="text"
+                        icon="el-icon-document-copy"
+                        class="copy-order-no-btn"
+                        @click.stop="copyOrderNo(scope.row.order_no)"
+                      />
+                    </el-tooltip>
                   </div>
                 </template>
               </el-table-column>
-            </el-table-column>
-            <el-table-column label="排程信息" align="center" header-align="center" class-name="group-col" header-class-name="group-header">
-              <el-table-column label="本次排程" width="98" align="center" sortable="custom" column-key="schedule_qty">
-                <template slot-scope="scope">
-                  <el-input
-                    v-model.number="scope.row.schedule_qty"
-                    min="0"
-                    :max="Number(scope.row.remaining_qty)"
-                    size="mini"
-                    inputmode="numeric"
-                  />
-                </template>
+              <el-table-column prop="order_date" label="下单时间" width="108" align="center" sortable="custom" column-key="order_date">
+                <template slot-scope="scope">{{ scope.row.order_date | formatDate }}</template>
               </el-table-column>
-              <el-table-column label="工序时间" min-width="176" align="left" column-key="process_schedule">
+              <el-table-column label="订单信息" align="center" header-align="center" class-name="group-col" header-class-name="group-header">
+                <el-table-column label="客户 / 产品 / 规格" min-width="250" class-name="order-card-col" header-class-name="order-card-header" column-key="material_code">
+                  <template slot-scope="scope">
+                    <div class="order-info-card">
+                      <div class="order-info-line order-info-customer">
+                        <span class="order-info-label">客户</span>
+                        <span class="order-info-value">{{ scope.row.customer_name || '-' }}</span>
+                      </div>
+                      <div class="order-info-line">
+                        <span class="order-info-label">产品</span>
+                        <span class="order-info-value code">{{ scope.row.material_code || '-' }}</span>
+                      </div>
+                      <div class="order-info-line">
+                        <span class="order-info-label">规格</span>
+                        <span class="order-info-value">{{ formatOrderSpec(scope.row) || '-' }}</span>
+                      </div>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table-column>
+              <el-table-column label="排程信息" align="center" header-align="center" class-name="group-col" header-class-name="group-header">
+                <el-table-column label="本次排程" width="98" align="center" sortable="custom" column-key="schedule_qty">
+                  <template slot-scope="scope">
+                    <el-input
+                      v-model.number="scope.row.schedule_qty"
+                      min="0"
+                      :max="Number(scope.row.remaining_qty)"
+                      size="mini"
+                      inputmode="numeric"
+                    />
+                  </template>
+                </el-table-column>
+                <el-table-column label="工序时间" min-width="176" align="left" column-key="process_schedule">
+                  <template slot-scope="scope">
+                    <div class="process-time-card">
+                      <div class="process-time-line">
+                        <span class="process-time-label">涂布</span>
+                        <span
+                          class="process-time-value"
+                          :class="{
+                            'process-time-editable': canEditPendingProcessTime(scope.row, 'COATING'),
+                            'process-time-selected': isPendingProcessTimeSelected(scope.row, 'COATING')
+                          }"
+                          :title="canEditPendingProcessTime(scope.row, 'COATING') ? '单击编辑时间' : ''"
+                          @click.stop="enablePendingProcessTimeEdit(scope.row, 'COATING')"
+                        >
+                          <el-date-picker
+                            v-if="isPendingProcessTimeEditing(scope.row, 'COATING')"
+                            v-model="scope.row.coating_date"
+                            :ref="pendingProcessPickerRef(scope.row, 'COATING')"
+                            class="process-time-picker"
+                            type="datetime"
+                            size="mini"
+                            placeholder="选择时间"
+                            format="yyyy-MM-dd HH:mm"
+                            value-format="yyyy-MM-dd HH:mm:ss"
+                            @change="handlePendingCoatingDateChange(scope.row)"
+                            @visible-change="(visible) => !visible && closePendingProcessTimeEdit(scope.row, 'COATING')"
+                          />
+                          <el-tag v-else-if="scope.row.coating_date" type="success" size="mini">{{ scope.row.coating_date | formatDate }}</el-tag>
+                          <span v-else class="process-time-empty">点击设置</span>
+                          <i
+                            v-if="canEditPendingProcessTime(scope.row, 'COATING') && !isPendingProcessTimeEditing(scope.row, 'COATING')"
+                            class="el-icon-edit process-time-edit-icon"
+                          />
+                        </span>
+                      </div>
+                      <div class="process-time-line">
+                        <span class="process-time-label">复卷</span>
+                        <span
+                          class="process-time-value"
+                          :class="{
+                            'process-time-editable': canEditPendingProcessTime(scope.row, 'REWINDING'),
+                            'process-time-selected': isPendingProcessTimeSelected(scope.row, 'REWINDING')
+                          }"
+                          :title="canEditPendingProcessTime(scope.row, 'REWINDING') ? '单击编辑时间' : ''"
+                          @click.stop="enablePendingProcessTimeEdit(scope.row, 'REWINDING')"
+                        >
+                          <el-date-picker
+                            v-if="isPendingProcessTimeEditing(scope.row, 'REWINDING')"
+                            v-model="scope.row.rewinding_date"
+                            :ref="pendingProcessPickerRef(scope.row, 'REWINDING')"
+                            class="process-time-picker"
+                            type="datetime"
+                            size="mini"
+                            placeholder="选择时间"
+                            format="yyyy-MM-dd HH:mm"
+                            value-format="yyyy-MM-dd HH:mm:ss"
+                            :disabled="scope.row.__updatingProcessTime"
+                            @change="handlePendingRewindingDateChange(scope.row)"
+                            @visible-change="(visible) => !visible && closePendingProcessTimeEdit(scope.row, 'REWINDING')"
+                          />
+                          <el-tag v-else-if="scope.row.rewinding_date" type="primary" size="mini">{{ scope.row.rewinding_date | formatDate }}</el-tag>
+                          <span v-else class="process-time-empty">点击设置</span>
+                          <i
+                            v-if="canEditPendingProcessTime(scope.row, 'REWINDING') && !isPendingProcessTimeEditing(scope.row, 'REWINDING')"
+                            class="el-icon-edit process-time-edit-icon"
+                          />
+                        </span>
+                      </div>
+                      <div class="process-time-line">
+                        <span class="process-time-label">分切</span>
+                        <span
+                          class="process-time-value"
+                          :class="{
+                            'process-time-editable': canEditPendingProcessTime(scope.row, 'SLITTING'),
+                            'process-time-selected': isPendingProcessTimeSelected(scope.row, 'SLITTING')
+                          }"
+                          :title="canEditPendingProcessTime(scope.row, 'SLITTING') ? '单击编辑时间' : ''"
+                          @click.stop="enablePendingProcessTimeEdit(scope.row, 'SLITTING')"
+                        >
+                          <el-date-picker
+                            v-if="isPendingProcessTimeEditing(scope.row, 'SLITTING')"
+                            v-model="scope.row.packaging_date"
+                            :ref="pendingProcessPickerRef(scope.row, 'SLITTING')"
+                            class="process-time-picker"
+                            type="datetime"
+                            size="mini"
+                            placeholder="选择时间"
+                            format="yyyy-MM-dd HH:mm"
+                            value-format="yyyy-MM-dd HH:mm:ss"
+                            :disabled="scope.row.__updatingProcessTime"
+                            @change="handlePendingSlittingDateChange(scope.row)"
+                            @visible-change="(visible) => !visible && closePendingProcessTimeEdit(scope.row, 'SLITTING')"
+                          />
+                          <el-tag v-else-if="scope.row.packaging_date" type="warning" size="mini">{{ scope.row.packaging_date | formatDate }}</el-tag>
+                          <span v-else class="process-time-empty">点击设置</span>
+                          <i
+                            v-if="canEditPendingProcessTime(scope.row, 'SLITTING') && !isPendingProcessTimeEditing(scope.row, 'SLITTING')"
+                            class="el-icon-edit process-time-edit-icon"
+                          />
+                        </span>
+                      </div>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table-column>
+              <el-table-column label="数量信息" align="center" header-align="center" class-name="group-col" header-class-name="group-header">
+                <el-table-column label="卷数概览" width="112" align="center" column-key="order_qty">
+                  <template slot-scope="scope">
+                    <div class="summary-cell summary-cell-compact">
+                      <div><span>订单</span><strong>{{ scope.row.order_qty }}</strong></div>
+                      <div><span>未排</span><strong>{{ scope.row.remaining_qty }}</strong></div>
+                      <div><span>已完</span><strong>{{ scope.row.completed_qty }}</strong></div>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column label="面积概览(㎡)" width="138" align="center" column-key="owe_area">
+                  <template slot-scope="scope">
+                    <div class="summary-cell">
+                      <div><span>欠平</span><strong>{{ scope.row.owe_area }}</strong></div>
+                      <div><span>已锁</span><strong>{{ Number(scope.row.locked_area_total || 0).toFixed(2) }}</strong></div>
+                      <div><span>未锁</span><strong>{{ Number(scope.row.unlocked_area || 0).toFixed(2) }}</strong></div>
+                      <div><span>建议</span><strong :class="Number(scope.row.unlocked_area || 0) > 0 ? 'text-warning' : 'text-success'">{{ Number(scope.row.unlocked_area || 0).toFixed(2) }}</strong></div>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table-column>
+              <el-table-column label="状态信息" align="center" header-align="center" class-name="group-col" header-class-name="group-header">
+                <el-table-column prop="priority_score" label="优先级" width="72" align="right" class-name="narrow-col" header-class-name="narrow-col" column-key="priority_score" />
+                <el-table-column label="完成" width="64" align="center" class-name="narrow-col" header-class-name="narrow-col" column-key="is_completed">
+                  <template slot-scope="scope">
+                    <el-tag :type="scope.row.is_completed === 'Y' ? 'success' : 'info'">
+                      {{ scope.row.is_completed }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="锁定状态" width="92" align="center" class-name="narrow-col" header-class-name="narrow-col">
+                  <template slot-scope="scope">
+                    <el-tag :type="lockStatusType(scope.row.lock_status)">{{ lockStatusText(scope.row.lock_status) }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="齐套状态" width="92" align="center" class-name="narrow-col" header-class-name="narrow-col">
+                  <template slot-scope="scope">
+                    <el-tag :type="readinessStatusType(scope.row.readiness_status_code)">{{ readinessStatusText(scope.row.readiness_status_code, scope.row.readiness_status_text) }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="锁料风险" width="88" align="center" class-name="narrow-col" header-class-name="narrow-col">
+                  <template slot-scope="scope">
+                    <el-badge v-if="hasLockRisk(scope.row)" is-dot type="danger">
+                      <span style="font-size: 12px; color: #F56C6C;">风险</span>
+                    </el-badge>
+                    <span v-else style="font-size: 12px; color: #67C23A;">正常</span>
+                  </template>
+                </el-table-column>
+              </el-table-column>
+              <el-table-column label="操作" width="118" align="center">
                 <template slot-scope="scope">
-                  <div class="process-time-card">
-                    <div class="process-time-line">
-                      <span class="process-time-label">涂布</span>
-                      <span class="process-time-value">
-                        <el-tag v-if="scope.row.schedule_type === 'STOCK'" type="success" size="mini">够料</el-tag>
-                        <el-tag v-else-if="isRowTerminated(scope.row)" type="danger" size="mini">已终止</el-tag>
-                        <el-tag v-else-if="scope.row.coating_date" type="success" size="mini">{{ scope.row.coating_date | formatDate }}</el-tag>
-                        <el-button v-else type="text" class="process-time-action" @click="handleCoatingDateFocus(scope.row)">算涂布</el-button>
-                      </span>
-                    </div>
-                    <div class="process-time-line">
-                      <span class="process-time-label">复卷</span>
-                      <span class="process-time-value">
-                        <el-tag v-if="isRowTerminated(scope.row)" type="danger" size="mini">已终止</el-tag>
-                        <el-tag v-else-if="scope.row.rewinding_date" type="primary" size="mini">{{ scope.row.rewinding_date | formatDate }}</el-tag>
-                        <el-button v-else-if="canJumpToRewinding(scope.row)" type="text" class="process-time-action" @click="handleRewindingDateFocus(scope.row)">去复卷排程</el-button>
-                        <span v-else class="process-time-empty">-</span>
-                      </span>
-                    </div>
-                    <div class="process-time-line">
-                      <span class="process-time-label">分切</span>
-                      <span class="process-time-value">
-                        <el-tag v-if="isRowTerminated(scope.row)" type="danger" size="mini">已终止</el-tag>
-                        <el-tag v-else-if="scope.row.packaging_date" type="warning" size="mini">{{ scope.row.packaging_date | formatDate }}</el-tag>
-                        <el-button v-else-if="canJumpToSlitting(scope.row)" type="text" class="process-time-action" @click="handlePackagingDateFocus(scope.row)">去分切排程</el-button>
-                        <span v-else class="process-time-empty">-</span>
-                      </span>
-                    </div>
+                  <div class="op-actions">
+                    <el-button
+                      class="op-main-btn"
+                      size="mini"
+                      :disabled="isReadinessBlocked(scope.row)"
+                      @click="handleConfirmSchedule(scope.row)"
+                    >
+                      确认
+                    </el-button>
+                    <el-dropdown size="mini" trigger="click" @command="handleOrderActionCommand">
+                      <el-button class="op-more-btn" size="mini" :disabled="!canOpenOrderMore(scope.row)">更多<i class="el-icon-arrow-down el-icon--right" /></el-button>
+                      <el-dropdown-menu slot="dropdown">
+                        <el-dropdown-item :command="{ action: 'stock', row: scope.row }">选库存</el-dropdown-item>
+                        <el-dropdown-item :command="{ action: 'coating', row: scope.row }">计算涂布</el-dropdown-item>
+                        <el-dropdown-item :command="{ action: 'directReport', row: scope.row }">直接报工</el-dropdown-item>
+                        <el-dropdown-item :command="{ action: 'materialIssue', row: scope.row }">领料登记</el-dropdown-item>
+                        <el-dropdown-item :command="{ action: 'urgentPreempt', row: scope.row }">急单插单抢料</el-dropdown-item>
+                        <el-dropdown-item v-if="canRollbackPending(scope.row)" :command="{ action: 'rollback', row: scope.row }" divided>回退到未排程</el-dropdown-item>
+                        <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空单行数据</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </el-dropdown>
                   </div>
                 </template>
               </el-table-column>
-            </el-table-column>
-            <el-table-column label="数量信息" align="center" header-align="center" class-name="group-col" header-class-name="group-header">
-              <el-table-column label="卷数概览" width="112" align="center" column-key="order_qty">
-                <template slot-scope="scope">
-                  <div class="summary-cell summary-cell-compact">
-                    <div><span>订单</span><strong>{{ scope.row.order_qty }}</strong></div>
-                    <div><span>未排</span><strong>{{ scope.row.remaining_qty }}</strong></div>
-                    <div><span>已完</span><strong>{{ scope.row.completed_qty }}</strong></div>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column label="面积概览(㎡)" width="138" align="center" column-key="owe_area">
-                <template slot-scope="scope">
-                  <div class="summary-cell">
-                    <div><span>欠平</span><strong>{{ scope.row.owe_area }}</strong></div>
-                    <div><span>已锁</span><strong>{{ Number(scope.row.locked_area_total || 0).toFixed(2) }}</strong></div>
-                    <div><span>未锁</span><strong>{{ Number(scope.row.unlocked_area || 0).toFixed(2) }}</strong></div>
-                    <div><span>建议</span><strong :class="Number(scope.row.unlocked_area || 0) > 0 ? 'text-warning' : 'text-success'">{{ Number(scope.row.unlocked_area || 0).toFixed(2) }}</strong></div>
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table-column>
-            <el-table-column label="状态信息" align="center" header-align="center" class-name="group-col" header-class-name="group-header">
-              <el-table-column prop="priority_score" label="优先级" width="72" align="right" class-name="narrow-col" header-class-name="narrow-col" column-key="priority_score" />
-              <el-table-column label="完成" width="64" align="center" class-name="narrow-col" header-class-name="narrow-col" column-key="is_completed">
-                <template slot-scope="scope">
-                  <el-tag :type="scope.row.is_completed === 'Y' ? 'success' : 'info'">
-                    {{ scope.row.is_completed }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="锁定状态" width="92" align="center" class-name="narrow-col" header-class-name="narrow-col">
-                <template slot-scope="scope">
-                  <el-tag :type="lockStatusType(scope.row.lock_status)">{{ lockStatusText(scope.row.lock_status) }}</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="齐套状态" width="92" align="center" class-name="narrow-col" header-class-name="narrow-col">
-                <template slot-scope="scope">
-                  <el-tag :type="readinessStatusType(scope.row.readiness_status_code)">{{ readinessStatusText(scope.row.readiness_status_code, scope.row.readiness_status_text) }}</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="锁料风险" width="88" align="center" class-name="narrow-col" header-class-name="narrow-col">
-                <template slot-scope="scope">
-                  <el-badge v-if="hasLockRisk(scope.row)" is-dot type="danger">
-                    <span style="font-size: 12px; color: #F56C6C;">风险</span>
-                  </el-badge>
-                  <span v-else style="font-size: 12px; color: #67C23A;">正常</span>
-                </template>
-              </el-table-column>
-            </el-table-column>
-            <el-table-column label="操作" width="118" align="center">
-              <template slot-scope="scope">
-                <div class="op-actions">
-                  <el-button
-                    class="op-main-btn"
-                    size="mini"
-                    :disabled="isReadinessBlocked(scope.row)"
-                    @click="handleConfirmSchedule(scope.row)"
-                  >
-                    确认
-                  </el-button>
-                  <el-dropdown size="mini" trigger="click" @command="handleOrderActionCommand">
-                    <el-button class="op-more-btn" size="mini" :disabled="Number(scope.row.remaining_qty) <= 0">更多<i class="el-icon-arrow-down el-icon--right" /></el-button>
-                    <el-dropdown-menu slot="dropdown">
-                      <el-dropdown-item :command="{ action: 'stock', row: scope.row }">选库存</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'coating', row: scope.row }">计算涂布</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'directReport', row: scope.row }">直接报工</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'materialIssue', row: scope.row }">领料登记</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'urgentPreempt', row: scope.row }">急单插单抢料</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空单行数据</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </el-dropdown>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
+            </el-table>
+          </div>
 
-          <div style="margin-top: 12px; text-align: right;">
+          <div class="pagination-container" style="text-align: right;">
             <el-pagination
               :current-page="pendingPage"
               :page-size="pendingPageSize"
-              :page-sizes="[20, 50, 100, 200]"
+              :page-sizes="pageSizes"
               layout="total, sizes, prev, pager, next, jumper"
               :total="pendingTotal"
               @size-change="handlePendingSizeChange"
@@ -440,283 +563,295 @@
 
       <!-- Tab 2: 涂布排程 -->
       <el-tab-pane label="涂布排程" name="coating">
-        <el-card shadow="never">
-          <div slot="header">
-            <span>涂布排程列表</span>
-            <el-input
-              v-model.trim="coatingQuery.materialCode"
-              size="small"
-              clearable
-              placeholder="按料号搜索"
-              style="float: right; width: 200px; margin-left: 8px"
-              @keyup.enter.native="handleCoatingMaterialSearch"
-              @clear="handleCoatingMaterialSearch"
-            >
-              <el-button slot="append" icon="el-icon-search" @click="handleCoatingMaterialSearch" />
-            </el-input>
-            <el-select
-              v-model="coatingLineFilter"
-              size="small"
-              clearable
-              placeholder="线别筛选"
-              style="float: right; width: 170px; margin-left: 8px"
-              @change="handleCoatingLineFilterChange"
-            >
-              <el-option label="全部线别" value="" />
-              <el-option
-                v-for="eq in equipmentList"
-                :key="String(eq.id)"
-                :label="eq.equipmentName || ('机台' + eq.id)"
-                :value="String(eq.id)"
-              />
-            </el-select>
-            <el-button style="float: right; margin-left: 8px" type="warning" size="small" icon="el-icon-printer" @click="openSchedulePrintDialog('coating')">打印</el-button>
-            <el-button style="float: right; margin-left: 8px" type="success" size="small" icon="el-icon-plus" @click="handleAddManualCoating">新增手工排程</el-button>
-            <el-button style="float: right" type="primary" size="small" icon="el-icon-refresh" @click="loadCoatingSchedules(true)">刷新</el-button>
+        <el-card shadow="never" class="header-card">
+          <div slot="header" class="section-header">
+            <div class="header-left">
+              <span class="header-title">涂布排程列表</span>
+            </div>
+            <div class="header-right">
+              <div class="search-input-group">
+                <el-select
+                  v-model="coatingLineFilter"
+                  size="small"
+                  clearable
+                  placeholder="全线别"
+                  style="width: 140px"
+                  @change="handleCoatingLineFilterChange"
+                >
+                  <el-option label="全部线别" value="" />
+                  <el-option
+                    v-for="eq in equipmentList"
+                    :key="String(eq.id)"
+                    :label="eq.equipmentName || ('机台' + eq.id)"
+                    :value="String(eq.id)"
+                  />
+                </el-select>
+                <el-input
+                  v-model.trim="coatingQuery.materialCode"
+                  size="small"
+                  clearable
+                  placeholder="按料号搜索"
+                  style="width: 200px"
+                  @keyup.enter.native="handleCoatingMaterialSearch"
+                  @clear="handleCoatingMaterialSearch"
+                >
+                  <el-button slot="append" icon="el-icon-search" @click="handleCoatingMaterialSearch" />
+                </el-input>
+              </div>
+
+              <el-button-group>
+                <el-button type="success" size="small" icon="el-icon-plus" @click="handleAddManualCoating">手工排程</el-button>
+                <el-button type="warning" size="small" icon="el-icon-printer" @click="openSchedulePrintDialog('coating')">打印</el-button>
+                <el-button type="primary" size="small" icon="el-icon-refresh" @click="loadCoatingSchedules(true)">刷新</el-button>
+              </el-button-group>
+            </div>
           </div>
 
-          <el-table
-            ref="coatingTable"
-            v-loading="coatingLoading"
-            :data="coatingList"
-            class="manual-schedule-table process-schedule-table"
-            size="mini"
-            border
-            stripe
-            :fit="false"
-            style="width: 100%"
-            :max-height="tableMaxHeight"
-            :row-class-name="coatingRowClassName"
-            @selection-change="handleCoatingPrintSelectionChange"
-            @sort-change="handleCoatingSortChange"
-          >
-            <el-table-column type="selection" width="40" align="center" />
-            <el-table-column prop="schedule_id" label="排程号" width="98" align="center" sortable="custom" column-key="schedule_id">
-              <template slot-scope="scope">
-                {{ scope.row.id || scope.row.schedule_id || '-' }}
-              </template>
-            </el-table-column>
-            <el-table-column label="关联订单号" width="170" show-overflow-tooltip sortable="custom" column-key="related_order_nos">
-              <template slot-scope="scope">
-                <el-button type="text" @click="handleOrderNoClick(scope.row)">
-                  {{ scope.row.related_order_nos || scope.row.order_nos || scope.row.order_no || '-' }}
-                </el-button>
-              </template>
-            </el-table-column>
-            <el-table-column prop="material_code" label="产品编码" width="230" show-overflow-tooltip sortable="custom" column-key="material_code">
-              <template slot-scope="scope">
-                <el-autocomplete
-                  v-if="scope.row.__editing && scope.row.__manual"
-                  v-model="scope.row.material_code"
-                  size="small"
-                  :fetch-suggestions="queryTapeSpecByMaterialCode"
-                  popper-class="manual-material-autocomplete-popper"
-                  placeholder="请输入料号"
-                  :trigger-on-focus="false"
-                  @input="handleManualCoatingMaterialInput(scope.row, $event)"
-                  @select="handleManualCoatingMaterialSelect(scope.row, $event)"
-                >
-                  <template slot-scope="{ item }">
-                    <div style="display:flex;flex-direction:column;gap:2px;line-height:1.35;">
-                      <span style="font-weight:600;color:#303133;white-space:normal;word-break:break-all;">{{ item.materialCode }}</span>
-                      <span style="color:#909399;white-space:normal;word-break:break-all;">{{ item.productName || '-' }}</span>
-                    </div>
-                  </template>
-                </el-autocomplete>
-                <span v-else>{{ scope.row.material_code || '-' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="material_name" label="产品名称" width="130" show-overflow-tooltip sortable="custom" column-key="material_name" />
-            <el-table-column label="厚度(μm)" width="92" align="center" sortable="custom" column-key="thickness">
-              <template slot-scope="scope">
-                {{ formatThickness(scope.row) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="涂布宽度(mm)" width="122" align="center" sortable="custom" column-key="coating_width">
-              <template slot-scope="scope">
-                <el-input-number
-                  v-if="scope.row.__editing"
-                  v-model="scope.row.coating_width"
-                  :fit="false"
-                  :min="0"
-                  :step="1"
-                  size="small"
-                  controls-position="right"
-                  @change="handleCoatingWidthChange(scope.row)"
-                />
-                <span v-else>{{ scope.row.coating_width || '-' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="涂布长度(米)" width="122" align="center" sortable="custom" column-key="coating_length">
-              <template slot-scope="scope">
-                <el-input-number
-                  v-if="scope.row.__editing"
-                  v-model="scope.row.coating_length"
-                  :min="0"
-                  :step="1"
-                  size="small"
-                  controls-position="right"
-                  @change="handleCoatingLengthChange(scope.row)"
-                />
-                <span v-else>{{ scope.row.coating_length || '-' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="涂布速度(米/分)" width="118" align="center" sortable="custom" column-key="coating_speed">
-              <template slot-scope="scope">
-                <el-input-number
-                  v-if="scope.row.__editing"
-                  v-model="scope.row.manual_coating_speed"
-                  :min="0"
-                  :step="1"
-                  size="mini"
-                  controls-position="right"
-                  placeholder="可手输"
-                  @change="handleCoatingLengthChange(scope.row)"
-                />
-                <span v-else>{{ formatCoatingSpeed(scope.row) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="计划开始" width="172" align="center" sortable="custom" column-key="coating_schedule_date">
-              <template slot-scope="scope">
-                <el-date-picker
-                  v-if="scope.row.__editing"
-                  v-model="scope.row.coating_schedule_date"
-                  type="datetime"
-                  size="small"
-                  placeholder="选择日期时间"
-                  format="yyyy-MM-dd HH:mm"
-                  value-format="yyyy-MM-dd HH:mm:ss"
-                  @change="handleCoatingDateChange(scope.row, { fromUser: true })"
-                />
-                <span v-else>{{ formatDateTime(scope.row.coating_schedule_date) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="插单方式" width="110" align="center">
-              <template slot-scope="scope">
-                <el-select
-                  v-if="scope.row.__editing"
-                  v-model="scope.row.insert_mode"
-                  size="small"
-                  @change="handleCoatingInsertModeChange(scope.row)"
-                >
-                  <el-option label="按时间后" value="AFTER_TIME" />
-                  <el-option label="按订单后" value="AFTER_ORDER" />
-                </el-select>
-                <span v-else>{{ formatInsertMode(scope.row.insert_mode) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="插单锚点" width="220" align="center" show-overflow-tooltip>
-              <template slot-scope="scope">
-                <el-select
-                  v-if="scope.row.__editing && scope.row.insert_mode === 'AFTER_ORDER'"
-                  v-model="scope.row.anchor_schedule_id"
-                  size="small"
-                  filterable
-                  clearable
-                  placeholder="选择在哪单后"
-                  @change="handleCoatingAnchorChange(scope.row)"
-                >
-                  <el-option
-                    v-for="anchor in getCoatingAnchorOptions(scope.row)"
-                    :key="anchor.id"
-                    :label="coatingAnchorLabel(anchor)"
-                    :value="anchor.id"
-                  />
-                </el-select>
-                <span v-else>{{ displayCoatingAnchor(scope.row) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="迁移策略" width="110" align="center">
-              <template slot-scope="scope">
-                <el-select
-                  v-if="scope.row.__editing"
-                  v-model="scope.row.rebalance_mode"
-                  size="small"
-                  @change="handleCoatingDateChange(scope.row)"
-                >
-                  <el-option label="人工选跨线" value="MANUAL_CROSS_LINE" />
-                  <el-option label="同线顺延" value="SAME_LINE" />
-                </el-select>
-                <span v-else>{{ formatRebalanceMode(scope.row.rebalance_mode) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="用时" width="92" align="center" sortable="custom" column-key="coating_duration">
-              <template slot-scope="scope">
-                {{ formatCoatingDuration(scope.row) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="计划米数" width="90" align="right" sortable="custom" column-key="coating_planned_meters">
-              <template slot-scope="scope">
-                {{ Number(getCoatingPlannedMeters(scope.row) || 0).toFixed(2) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="已报工米数" width="96" align="right" sortable="custom" column-key="coating_report_qty">
-              <template slot-scope="scope">
-                {{ Number(scope.row.coating_report_qty || 0).toFixed(2) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="完成率" width="84" align="center" sortable="custom" column-key="coating_completion_rate">
-              <template slot-scope="scope">
-                {{ formatProcessCompletionRate(scope.row.coating_report_qty, getCoatingPlannedMeters(scope.row)) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="机台" width="146" align="center" sortable="custom" column-key="coating_equipment">
-              <template slot-scope="scope">
-                <el-select
-                  v-if="scope.row.__editing"
-                  v-model="scope.row.coating_equipment"
-                  size="small"
-                  placeholder="选择机台"
-                  @change="handleCoatingEquipmentChange(scope.row)"
-                  @visible-change="handleCoatingEquipmentDropdownVisible(scope.row, $event)"
-                >
-                  <el-option
-                    v-for="eq in getCoatingEquipmentOptions(scope.row)"
-                    :key="eq.id"
-                    :label="coatingEquipmentOptionLabel(eq)"
-                    :value="String(eq.id)"
-                    :disabled="!!eq.unavailableReason"
-                  />
-                </el-select>
-                <span v-else>{{ equipmentName(scope.row.coating_equipment) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="status" label="状态" width="92" align="center" sortable="custom" column-key="status">
-              <template slot-scope="scope">
-                <el-tag :type="statusType(resolveCoatingDisplayStatus(scope.row))">
-                  {{ statusText(resolveCoatingDisplayStatus(scope.row)) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="132" align="center">
-              <template slot-scope="scope">
-                <div class="op-actions">
-                  <el-button
-                    class="op-main-btn"
-                    :fit="false"
-                    size="mini"
-                    :disabled="scope.row.__editing && (!scope.row.coating_equipment || (scope.row.insert_mode === 'AFTER_ORDER' && !scope.row.anchor_schedule_id))"
-                    @click="handleCoatingEditAction(scope.row)"
-                  >
-                    {{ scope.row.__editing ? '保存' : '修改' }}
+          <div class="table-main-area">
+            <el-table
+              ref="coatingTable"
+              v-loading="coatingLoading"
+              :data="coatingList"
+              class="manual-schedule-table process-schedule-table"
+              size="mini"
+              border
+              stripe
+              :fit="false"
+              style="width: 100%"
+              :max-height="tableHeight"
+              :row-class-name="coatingRowClassName"
+              @selection-change="handleCoatingPrintSelectionChange"
+              @sort-change="handleCoatingSortChange"
+            >
+              <el-table-column type="selection" width="40" align="center" />
+              <el-table-column prop="schedule_id" label="排程号" width="98" align="center" sortable="custom" column-key="schedule_id">
+                <template slot-scope="scope">
+                  {{ scope.row.id || scope.row.schedule_id || '-' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="关联订单号" width="170" show-overflow-tooltip sortable="custom" column-key="related_order_nos">
+                <template slot-scope="scope">
+                  <el-button type="text" @click="handleOrderNoClick(scope.row)">
+                    {{ scope.row.related_order_nos || scope.row.order_nos || scope.row.order_no || '-' }}
                   </el-button>
-                  <el-dropdown size="mini" trigger="click" :disabled="isRewindingLocked(scope.row)" @command="handleScheduleActionCommand">
-                    <el-button class="op-more-btn" size="mini" :disabled="isRewindingLocked(scope.row)">更多<i class="el-icon-arrow-down el-icon--right" /></el-button>
-                    <el-dropdown-menu slot="dropdown">
-                      <el-dropdown-item :command="{ action: 'reduce', row: scope.row }">减量</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'terminate', row: scope.row }" divided>终止</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空单行数据</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </el-dropdown>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div style="margin-top: 12px; text-align: right;">
+                </template>
+              </el-table-column>
+              <el-table-column prop="material_code" label="产品编码" width="230" show-overflow-tooltip sortable="custom" column-key="material_code">
+                <template slot-scope="scope">
+                  <el-autocomplete
+                    v-if="scope.row.__editing && scope.row.__manual"
+                    v-model="scope.row.material_code"
+                    size="small"
+                    :fetch-suggestions="queryTapeSpecByMaterialCode"
+                    popper-class="manual-material-autocomplete-popper"
+                    placeholder="请输入料号"
+                    :trigger-on-focus="false"
+                    @input="handleManualCoatingMaterialInput(scope.row, $event)"
+                    @select="handleManualCoatingMaterialSelect(scope.row, $event)"
+                  >
+                    <template slot-scope="{ item }">
+                      <div style="display:flex;flex-direction:column;gap:2px;line-height:1.35;">
+                        <span style="font-weight:600;color:#303133;white-space:normal;word-break:break-all;">{{ item.materialCode }}</span>
+                        <span style="color:#909399;white-space:normal;word-break:break-all;">{{ item.productName || '-' }}</span>
+                      </div>
+                    </template>
+                  </el-autocomplete>
+                  <span v-else>{{ scope.row.material_code || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="material_name" label="产品名称" width="130" show-overflow-tooltip sortable="custom" column-key="material_name" />
+              <el-table-column label="厚度(μm)" width="92" align="center" sortable="custom" column-key="thickness">
+                <template slot-scope="scope">
+                  {{ formatThickness(scope.row) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="涂布宽度(mm)" width="122" align="center" sortable="custom" column-key="coating_width">
+                <template slot-scope="scope">
+                  <el-input-number
+                    v-if="scope.row.__editing"
+                    v-model="scope.row.coating_width"
+                    :fit="false"
+                    :min="0"
+                    :step="1"
+                    size="small"
+                    controls-position="right"
+                    @change="handleCoatingWidthChange(scope.row)"
+                  />
+                  <span v-else>{{ scope.row.coating_width || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="涂布长度(米)" width="122" align="center" sortable="custom" column-key="coating_length">
+                <template slot-scope="scope">
+                  <el-input-number
+                    v-if="scope.row.__editing"
+                    v-model="scope.row.coating_length"
+                    :min="0"
+                    :step="1"
+                    size="small"
+                    controls-position="right"
+                    @change="handleCoatingLengthChange(scope.row)"
+                  />
+                  <span v-else>{{ scope.row.coating_length || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="涂布速度(米/分)" width="118" align="center" sortable="custom" column-key="coating_speed">
+                <template slot-scope="scope">
+                  <el-input-number
+                    v-if="scope.row.__editing"
+                    v-model="scope.row.manual_coating_speed"
+                    :min="0"
+                    :step="1"
+                    size="mini"
+                    controls-position="right"
+                    placeholder="可手输"
+                    @change="handleCoatingLengthChange(scope.row)"
+                  />
+                  <span v-else>{{ formatCoatingSpeed(scope.row) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="计划开始" width="172" align="center" sortable="custom" column-key="coating_schedule_date">
+                <template slot-scope="scope">
+                  <el-date-picker
+                    v-if="scope.row.__editing"
+                    v-model="scope.row.coating_schedule_date"
+                    type="datetime"
+                    size="small"
+                    placeholder="选择日期时间"
+                    format="yyyy-MM-dd HH:mm"
+                    value-format="yyyy-MM-dd HH:mm:ss"
+                    @change="handleCoatingDateChange(scope.row, { fromUser: true })"
+                  />
+                  <span v-else>{{ formatDateTime(scope.row.coating_schedule_date) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="插单方式" width="110" align="center">
+                <template slot-scope="scope">
+                  <el-select
+                    v-if="scope.row.__editing"
+                    v-model="scope.row.insert_mode"
+                    size="small"
+                    @change="handleCoatingInsertModeChange(scope.row)"
+                  >
+                    <el-option label="按时间后" value="AFTER_TIME" />
+                    <el-option label="按订单后" value="AFTER_ORDER" />
+                  </el-select>
+                  <span v-else>{{ formatInsertMode(scope.row.insert_mode) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="插单锚点" width="220" align="center" show-overflow-tooltip>
+                <template slot-scope="scope">
+                  <el-select
+                    v-if="scope.row.__editing && scope.row.insert_mode === 'AFTER_ORDER'"
+                    v-model="scope.row.anchor_schedule_id"
+                    size="small"
+                    filterable
+                    clearable
+                    placeholder="选择在哪单后"
+                    @change="handleCoatingAnchorChange(scope.row)"
+                  >
+                    <el-option
+                      v-for="anchor in getCoatingAnchorOptions(scope.row)"
+                      :key="anchor.id"
+                      :label="coatingAnchorLabel(anchor)"
+                      :value="anchor.id"
+                    />
+                  </el-select>
+                  <span v-else>{{ displayCoatingAnchor(scope.row) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="迁移策略" width="110" align="center">
+                <template slot-scope="scope">
+                  <el-select
+                    v-if="scope.row.__editing"
+                    v-model="scope.row.rebalance_mode"
+                    size="small"
+                    @change="handleCoatingDateChange(scope.row)"
+                  >
+                    <el-option label="人工选跨线" value="MANUAL_CROSS_LINE" />
+                    <el-option label="同线顺延" value="SAME_LINE" />
+                  </el-select>
+                  <span v-else>{{ formatRebalanceMode(scope.row.rebalance_mode) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="用时" width="92" align="center" sortable="custom" column-key="coating_duration">
+                <template slot-scope="scope">
+                  {{ formatCoatingDuration(scope.row) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="计划米数" width="90" align="right" sortable="custom" column-key="coating_planned_meters">
+                <template slot-scope="scope">
+                  {{ Number(getCoatingPlannedMeters(scope.row) || 0).toFixed(2) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="已报工米数" width="96" align="right" sortable="custom" column-key="coating_report_qty">
+                <template slot-scope="scope">
+                  {{ Number(scope.row.coating_report_qty || 0).toFixed(2) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="完成率" width="84" align="center" sortable="custom" column-key="coating_completion_rate">
+                <template slot-scope="scope">
+                  {{ formatProcessCompletionRate(scope.row.coating_report_qty, getCoatingPlannedMeters(scope.row)) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="机台" width="146" align="center" sortable="custom" column-key="coating_equipment">
+                <template slot-scope="scope">
+                  <el-select
+                    v-if="scope.row.__editing"
+                    v-model="scope.row.coating_equipment"
+                    size="small"
+                    placeholder="选择机台"
+                    @change="handleCoatingEquipmentChange(scope.row)"
+                    @visible-change="handleCoatingEquipmentDropdownVisible(scope.row, $event)"
+                  >
+                    <el-option
+                      v-for="eq in getCoatingEquipmentOptions(scope.row)"
+                      :key="eq.id"
+                      :label="coatingEquipmentOptionLabel(eq)"
+                      :value="String(eq.id)"
+                      :disabled="!!eq.unavailableReason"
+                    />
+                  </el-select>
+                  <span v-else>{{ equipmentName(scope.row.coating_equipment) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="status" label="状态" width="92" align="center" sortable="custom" column-key="status">
+                <template slot-scope="scope">
+                  <el-tag :type="statusType(resolveCoatingDisplayStatus(scope.row))">
+                    {{ statusText(resolveCoatingDisplayStatus(scope.row)) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="132" align="center">
+                <template slot-scope="scope">
+                  <div class="op-actions">
+                    <el-button
+                      class="op-main-btn"
+                      :fit="false"
+                      size="mini"
+                      :disabled="scope.row.__editing && (!scope.row.coating_equipment || (scope.row.insert_mode === 'AFTER_ORDER' && !scope.row.anchor_schedule_id))"
+                      @click="handleCoatingEditAction(scope.row)"
+                    >
+                      {{ scope.row.__editing ? '保存' : '修改' }}
+                    </el-button>
+                    <el-dropdown size="mini" trigger="click" :disabled="isRewindingLocked(scope.row)" @command="handleScheduleActionCommand">
+                      <el-button class="op-more-btn" size="mini" :disabled="isRewindingLocked(scope.row)">更多<i class="el-icon-arrow-down el-icon--right" /></el-button>
+                      <el-dropdown-menu slot="dropdown">
+                        <el-dropdown-item :command="{ action: 'reduce', row: scope.row }">减量</el-dropdown-item>
+                        <el-dropdown-item :command="{ action: 'terminate', row: scope.row }" divided>终止</el-dropdown-item>
+                        <el-dropdown-item v-if="scope.row.status === 'TERMINATED'" :command="{ action: 'resume', row: scope.row }">恢复</el-dropdown-item>
+                        <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空单行数据</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </el-dropdown>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          <div class="pagination-container" style="text-align: right;">
             <el-pagination
               :current-page="coatingPage"
               :page-size="coatingPageSize"
-              :page-sizes="[20, 50, 100, 200]"
+              :page-sizes="pageSizes"
               layout="total, sizes, prev, pager, next, jumper"
               :total="coatingTotal"
               @size-change="handleCoatingSizeChange"
@@ -728,218 +863,229 @@
 
       <!-- Tab 3: 复卷排程 -->
       <el-tab-pane label="复卷排程" name="rewinding">
-        <el-card shadow="never">
-          <div slot="header">
-            <span>待复卷订单列表（按涂布日期排序）</span>
-            <el-button style="float: right; margin-left: 8px" type="warning" size="small" icon="el-icon-printer" @click="openSchedulePrintDialog('rewinding')">打印</el-button>
-            <el-button style="float: right; margin-left: 8px" type="success" size="small" icon="el-icon-plus" @click="handleAddManualRewinding">手动添加</el-button>
-            <el-button style="float: right" type="primary" size="small" icon="el-icon-refresh" @click="loadRewindingOrders">刷新</el-button>
+        <el-card shadow="never" class="header-card">
+          <div slot="header" class="section-header">
+            <div class="header-left">
+              <span class="header-title">复卷订单排程</span>
+              <span class="pending-summary-text">按涂布日期排序</span>
+            </div>
+            <div class="header-right">
+              <el-button-group>
+                <el-button type="success" size="small" icon="el-icon-plus" @click="handleAddManualRewinding">手动添加</el-button>
+                <el-button type="warning" size="small" icon="el-icon-printer" @click="openSchedulePrintDialog('rewinding')">打印</el-button>
+                <el-button type="primary" size="small" icon="el-icon-refresh" @click="loadRewindingOrders">刷新</el-button>
+              </el-button-group>
+            </div>
           </div>
           <el-alert
             v-if="rewindingLockSummary.unlockedRows > 0"
             type="warning"
+            show-icon
             :closable="false"
-            style="margin-bottom: 10px"
+            class="mb-10"
             :title="`锁料提醒：当前有 ${rewindingLockSummary.unlockedRows} 条待复卷订单存在未锁定面积，共 ${rewindingLockSummary.unlockedArea} ㎡。请优先处理锁料后再确认排程。`"
           />
 
-          <el-table
-            ref="rewindingTable"
-            v-loading="rewindingLoading"
-            :data="rewindingList"
-            class="manual-schedule-table process-schedule-table"
-            size="mini"
-            border
-            stripe
-            style="width: 100%"
-            :max-height="tableMaxHeight"
-            :row-class-name="rewindingRowClassName"
-            @selection-change="handleRewindingPrintSelectionChange"
-            @sort-change="handleRewindingSortChange"
-          >
-            <el-table-column type="selection" width="40" align="center" />
-            <el-table-column type="index" label="序号" width="52" align="center" />
-            <el-table-column prop="schedule_id" label="排程号" width="102" align="center" sortable="custom" column-key="schedule_id">
-              <template slot-scope="scope">
-                <el-input-number
-                  v-if="scope.row.__editing && scope.row.__manual"
-                  v-model="scope.row.schedule_id"
-                  :min="1"
-                  :step="1"
-                  size="mini"
-                  controls-position="right"
-                />
-                <span v-else>{{ scope.row.schedule_id || '-' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="coating_date" label="涂布时间" width="124" sortable="custom" column-key="coating_date">
-              <template slot-scope="scope">
-                <el-tag v-if="scope.row.schedule_type === 'STOCK'" type="success">有料</el-tag>
-                <el-tag v-else type="success" class="two-line-time-tag">
-                  <span class="two-line-time-text">{{ timeWindowLine(formatCoatingTimeWindow(scope.row), 0) }}</span>
-                  <span class="two-line-time-text">{{ timeWindowLine(formatCoatingTimeWindow(scope.row), 1) }}</span>
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="订单号" width="112" sortable="custom" column-key="order_no">
-              <template slot-scope="scope">
-                <el-button type="text" @click="handleOrderNoClick(scope.row)">{{ scope.row.order_no || '-' }}</el-button>
-              </template>
-            </el-table-column>
-            <el-table-column prop="customer_name" label="客户" width="86" sortable="custom" column-key="customer_name" show-overflow-tooltip />
-            <el-table-column prop="material_code" label="产品编码" width="230" class-name="wrap-col" header-class-name="wrap-col" show-overflow-tooltip sortable="custom" column-key="material_code">
-              <template slot-scope="scope">
-                <el-autocomplete
-                  v-if="scope.row.__editing && scope.row.__manual"
-                  v-model="scope.row.material_code"
-                  size="small"
-                  :fetch-suggestions="queryTapeSpecByMaterialCode"
-                  popper-class="manual-material-autocomplete-popper"
-                  placeholder="请输入料号"
-                  :trigger-on-focus="false"
-                  @input="handleManualRewindingMaterialInput(scope.row, $event)"
-                  @select="handleManualRewindingMaterialSelect(scope.row, $event)"
-                >
-                  <template slot-scope="{ item }">
-                    <div style="display:flex;flex-direction:column;gap:2px;line-height:1.35;">
-                      <span style="font-weight:600;color:#303133;white-space:normal;word-break:break-all;">{{ item.materialCode }}</span>
-                      <span style="color:#909399;white-space:normal;word-break:break-all;">{{ item.productName || '-' }}</span>
-                    </div>
-                  </template>
-                </el-autocomplete>
-                <span v-else>{{ scope.row.material_code || '-' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="material_name" label="产品名称" width="132" class-name="wrap-col" header-class-name="wrap-col" show-overflow-tooltip sortable="custom" column-key="material_name" />
-            <el-table-column label="规格(厚*宽*长)" width="132" align="right" class-name="wrap-col" header-class-name="wrap-col" sortable="custom" column-key="spec">
-              <template slot-scope="scope">
-                {{ formatOrderSpec(scope.row) }}
-              </template>
-            </el-table-column>
-            <el-table-column prop="schedule_qty" label="卷数" width="72" align="right" sortable="custom" column-key="schedule_qty">
-              <template slot-scope="scope">
-                {{ Number(scope.row.schedule_qty || 0) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="已排复卷(㎡)" width="108" align="right" sortable="custom" column-key="rewinding_area">
-              <template slot-scope="scope">
-                {{ formatArea(getPlannedRewindingArea(scope.row)) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="复卷宽度" width="112" align="center" sortable="custom" column-key="rewinding_width">
-              <template slot-scope="scope">
-                <el-input-number
-                  v-if="scope.row.__editing"
-                  v-model="scope.row.rewinding_width"
-                  :min="1"
-                  :step="1"
-                  size="mini"
-                  controls-position="right"
-                />
-                <span v-else>{{ scope.row.rewinding_width || '-' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="复卷数量" width="86" align="right" sortable="custom" column-key="rewinding_roll_count">
-              <template slot-scope="scope">
-                {{ getRewindingRollCount(scope.row) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="复卷速度(米/分)" width="118" align="center" sortable="custom" column-key="rewinding_speed">
-              <template slot-scope="scope">
-                <el-input-number
-                  v-if="scope.row.__editing"
-                  v-model="scope.row.manual_rewinding_speed"
-                  :min="0"
-                  :step="1"
-                  size="mini"
-                  controls-position="right"
-                  placeholder="可手输"
-                  @change="handleRewindingDateChange(scope.row)"
-                />
-                <span v-else>{{ formatRewindingSpeed(scope.row) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="计划开始" width="170" sortable="custom" column-key="rewinding_date">
-              <template slot-scope="scope">
-                <el-date-picker
-                  v-if="scope.row.__editing"
-                  v-model="scope.row.rewinding_date"
-                  type="datetime"
-                  size="small"
-                  placeholder="选择日期"
-                  format="yyyy-MM-dd HH:mm"
-                  value-format="yyyy-MM-dd HH:mm:ss"
-                  @change="handleRewindingDateChange(scope.row)"
-                />
-                <span v-else>{{ formatDateTime(scope.row.rewinding_date) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="复卷用时" width="92" align="center" sortable="custom" column-key="rewinding_duration">
-              <template slot-scope="scope">
-                {{ formatRewindingDuration(scope.row) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="锁料提醒" width="108" align="center">
-              <template slot-scope="scope">
-                <el-tag v-if="getUnlockedArea(scope.row) > 0" type="warning">未锁{{ getUnlockedArea(scope.row).toFixed(0) }}㎡</el-tag>
-                <el-tag v-else type="success">已锁定</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="rewinding_equipment" label="复卷机台" width="124" sortable="custom" column-key="rewinding_equipment">
-              <template slot-scope="scope">
-                <el-select
-                  v-if="scope.row.__editing"
-                  v-model="scope.row.rewinding_equipment"
-                  size="small"
-                  placeholder="机台号"
-                  @change="handleRewindingEquipmentChange(scope.row)"
-                  @visible-change="handleRewindingEquipmentDropdownVisible(scope.row, $event)"
-                >
-                  <el-option
-                    v-for="eq in getRewindingEquipmentOptions(scope.row)"
-                    :key="eq.id"
-                    :label="rewindingEquipmentOptionLabel(eq)"
-                    :value="eq.equipmentCode"
-                    :disabled="!!eq.unavailableReason"
-                  />
-                </el-select>
-                <span v-else>{{ scope.row.rewinding_equipment || '-' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="状态" width="84" align="center" sortable="custom" column-key="status">
-              <template slot-scope="scope">
-                <el-tag :type="formatSlittingStatus(scope.row.status).type">{{ formatSlittingStatus(scope.row.status).label }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="132" align="center">
-              <template slot-scope="scope">
-                <div class="op-actions">
-                  <el-button
-                    class="op-main-btn"
+          <div class="table-main-area">
+            <el-table
+              ref="rewindingTable"
+              v-loading="rewindingLoading"
+              :data="rewindingList"
+              class="manual-schedule-table process-schedule-table"
+              size="mini"
+              border
+              stripe
+              style="width: 100%"
+              :max-height="tableHeight"
+              :row-class-name="rewindingRowClassName"
+              @selection-change="handleRewindingPrintSelectionChange"
+              @sort-change="handleRewindingSortChange"
+            >
+              <el-table-column type="selection" width="40" align="center" />
+              <el-table-column type="index" label="序号" width="52" align="center" />
+              <el-table-column prop="schedule_id" label="排程号" width="102" align="center" sortable="custom" column-key="schedule_id">
+                <template slot-scope="scope">
+                  <el-input-number
+                    v-if="scope.row.__editing && scope.row.__manual"
+                    v-model="scope.row.schedule_id"
+                    :min="1"
+                    :step="1"
                     size="mini"
-                    :disabled="scope.row.__editing && (!scope.row.rewinding_date || !scope.row.rewinding_equipment)"
-                    @click="handleRewindingEditAction(scope.row)"
+                    controls-position="right"
+                  />
+                  <span v-else>{{ scope.row.schedule_id || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="coating_date" label="涂布时间" width="124" sortable="custom" column-key="coating_date">
+                <template slot-scope="scope">
+                  <el-tag v-if="scope.row.schedule_type === 'STOCK'" type="success">有料</el-tag>
+                  <el-tag v-else type="success" class="two-line-time-tag">
+                    <span class="two-line-time-text">{{ timeWindowLine(formatCoatingTimeWindow(scope.row), 0) }}</span>
+                    <span class="two-line-time-text">{{ timeWindowLine(formatCoatingTimeWindow(scope.row), 1) }}</span>
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="订单号" width="112" sortable="custom" column-key="order_no">
+                <template slot-scope="scope">
+                  <el-button type="text" @click="handleOrderNoClick(scope.row)">{{ scope.row.order_no || '-' }}</el-button>
+                </template>
+              </el-table-column>
+              <el-table-column prop="customer_name" label="客户" width="86" sortable="custom" column-key="customer_name" show-overflow-tooltip />
+              <el-table-column prop="material_code" label="产品编码" width="230" class-name="wrap-col" header-class-name="wrap-col" show-overflow-tooltip sortable="custom" column-key="material_code">
+                <template slot-scope="scope">
+                  <el-autocomplete
+                    v-if="scope.row.__editing && scope.row.__manual"
+                    v-model="scope.row.material_code"
+                    size="small"
+                    :fetch-suggestions="queryTapeSpecByMaterialCode"
+                    popper-class="manual-material-autocomplete-popper"
+                    placeholder="请输入料号"
+                    :trigger-on-focus="false"
+                    @input="handleManualRewindingMaterialInput(scope.row, $event)"
+                    @select="handleManualRewindingMaterialSelect(scope.row, $event)"
                   >
-                    {{ scope.row.__editing ? '确认' : '修改' }}
-                  </el-button>
-                  <el-dropdown size="mini" trigger="click" @command="handleScheduleActionCommand">
-                    <el-button class="op-more-btn" size="mini">更多<i class="el-icon-arrow-down el-icon--right" /></el-button>
-                    <el-dropdown-menu slot="dropdown">
-                      <el-dropdown-item :command="{ action: 'report', row: scope.row, processType: 'REWINDING' }">报工</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'reduce', row: scope.row }">减量</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'terminate', row: scope.row }" divided>终止</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空单行数据</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </el-dropdown>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div style="margin-top: 12px; text-align: right;">
+                    <template slot-scope="{ item }">
+                      <div style="display:flex;flex-direction:column;gap:2px;line-height:1.35;">
+                        <span style="font-weight:600;color:#303133;white-space:normal;word-break:break-all;">{{ item.materialCode }}</span>
+                        <span style="color:#909399;white-space:normal;word-break:break-all;">{{ item.productName || '-' }}</span>
+                      </div>
+                    </template>
+                  </el-autocomplete>
+                  <span v-else>{{ scope.row.material_code || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="material_name" label="产品名称" width="132" class-name="wrap-col" header-class-name="wrap-col" show-overflow-tooltip sortable="custom" column-key="material_name" />
+              <el-table-column label="规格(厚*宽*长)" width="132" align="right" class-name="wrap-col" header-class-name="wrap-col" sortable="custom" column-key="spec">
+                <template slot-scope="scope">
+                  {{ formatOrderSpec(scope.row) }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="schedule_qty" label="卷数" width="72" align="right" sortable="custom" column-key="schedule_qty">
+                <template slot-scope="scope">
+                  {{ Number(scope.row.schedule_qty || 0) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="已排复卷(㎡)" width="108" align="right" sortable="custom" column-key="rewinding_area">
+                <template slot-scope="scope">
+                  {{ formatArea(getPlannedRewindingArea(scope.row)) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="复卷宽度" width="112" align="center" sortable="custom" column-key="rewinding_width">
+                <template slot-scope="scope">
+                  <el-input-number
+                    v-if="scope.row.__editing"
+                    v-model="scope.row.rewinding_width"
+                    :min="1"
+                    :step="1"
+                    size="mini"
+                    controls-position="right"
+                  />
+                  <span v-else>{{ scope.row.rewinding_width || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="复卷数量" width="86" align="right" sortable="custom" column-key="rewinding_roll_count">
+                <template slot-scope="scope">
+                  {{ getRewindingRollCount(scope.row) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="复卷速度(米/分)" width="118" align="center" sortable="custom" column-key="rewinding_speed">
+                <template slot-scope="scope">
+                  <el-input-number
+                    v-if="scope.row.__editing"
+                    v-model="scope.row.manual_rewinding_speed"
+                    :min="0"
+                    :step="1"
+                    size="mini"
+                    controls-position="right"
+                    placeholder="可手输"
+                    @change="handleRewindingDateChange(scope.row)"
+                  />
+                  <span v-else>{{ formatRewindingSpeed(scope.row) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="计划开始" width="170" sortable="custom" column-key="rewinding_date">
+                <template slot-scope="scope">
+                  <el-date-picker
+                    v-if="scope.row.__editing"
+                    v-model="scope.row.rewinding_date"
+                    type="datetime"
+                    size="small"
+                    placeholder="选择日期"
+                    format="yyyy-MM-dd HH:mm"
+                    value-format="yyyy-MM-dd HH:mm:ss"
+                    @change="handleRewindingDateChange(scope.row)"
+                  />
+                  <span v-else>{{ formatDateTime(scope.row.rewinding_date) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="复卷用时" width="92" align="center" sortable="custom" column-key="rewinding_duration">
+                <template slot-scope="scope">
+                  {{ formatRewindingDuration(scope.row) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="锁料提醒" width="108" align="center">
+                <template slot-scope="scope">
+                  <el-tag v-if="getUnlockedArea(scope.row) > 0" type="warning">未锁{{ getUnlockedArea(scope.row).toFixed(0) }}㎡</el-tag>
+                  <el-tag v-else type="success">已锁定</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="rewinding_equipment" label="复卷机台" width="124" sortable="custom" column-key="rewinding_equipment">
+                <template slot-scope="scope">
+                  <el-select
+                    v-if="scope.row.__editing"
+                    v-model="scope.row.rewinding_equipment"
+                    size="small"
+                    placeholder="机台号"
+                    @change="handleRewindingEquipmentChange(scope.row)"
+                    @visible-change="handleRewindingEquipmentDropdownVisible(scope.row, $event)"
+                  >
+                    <el-option
+                      v-for="eq in getRewindingEquipmentOptions(scope.row)"
+                      :key="eq.id"
+                      :label="rewindingEquipmentOptionLabel(eq)"
+                      :value="eq.equipmentCode"
+                      :disabled="!!eq.unavailableReason"
+                    />
+                  </el-select>
+                  <span v-else>{{ scope.row.rewinding_equipment || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="84" align="center" sortable="custom" column-key="status">
+                <template slot-scope="scope">
+                  <el-tag :type="formatSlittingStatus(scope.row.status).type">{{ formatSlittingStatus(scope.row.status).label }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="132" align="center">
+                <template slot-scope="scope">
+                  <div class="op-actions">
+                    <el-button
+                      class="op-main-btn"
+                      size="mini"
+                      :disabled="scope.row.__editing && (!scope.row.rewinding_date || !scope.row.rewinding_equipment)"
+                      @click="handleRewindingEditAction(scope.row)"
+                    >
+                      {{ scope.row.__editing ? '确认' : '修改' }}
+                    </el-button>
+                    <el-dropdown size="mini" trigger="click" @command="handleScheduleActionCommand">
+                      <el-button class="op-more-btn" size="mini">更多<i class="el-icon-arrow-down el-icon--right" /></el-button>
+                      <el-dropdown-menu slot="dropdown">
+                        <el-dropdown-item :command="{ action: 'report', row: scope.row, processType: 'REWINDING' }">报工</el-dropdown-item>
+                        <el-dropdown-item :command="{ action: 'reduce', row: scope.row }">减量</el-dropdown-item>
+                        <el-dropdown-item :command="{ action: 'terminate', row: scope.row }" divided>终止</el-dropdown-item>
+                        <el-dropdown-item v-if="scope.row.status === 'TERMINATED'" :command="{ action: 'resume', row: scope.row }">恢复</el-dropdown-item>
+                        <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空单行数据</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </el-dropdown>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          <div class="pagination-container" style="text-align: right;">
             <el-pagination
               :current-page="rewindingPage"
               :page-size="rewindingPageSize"
-              :page-sizes="[20, 50, 100, 200]"
+              :page-sizes="pageSizes"
               layout="total, sizes, prev, pager, next, jumper"
               :total="rewindingTotal"
               @size-change="handleRewindingSizeChange"
@@ -951,237 +1097,274 @@
 
       <!-- Tab 4: 分切排程 -->
       <el-tab-pane label="分切排程" name="slitting">
-        <el-card shadow="never">
-          <div slot="header">
-            <span>分切已排列表</span>
-            <el-button style="float:right;margin-right:8px" type="warning" size="small" icon="el-icon-printer" @click="openSchedulePrintDialog('slitting')">打印</el-button>
-            <el-button style="float:right;margin-right:8px" type="success" size="small" icon="el-icon-plus" @click="openManualSlittingDialog">手动添加</el-button>
-            <el-input
-              v-model="slittingQuery.orderNo"
-              size="small"
-              clearable
-              placeholder="按订单号搜索"
-              style="float:right;width:180px;margin-right:8px"
-              @keyup.enter.native="handleSlittingSearch"
-            />
-            <el-button style="float:right;margin-right:8px" size="small" @click="resetSlittingSearch">重置</el-button>
-            <el-button style="float:right;margin-right:8px" type="primary" size="small" icon="el-icon-search" @click="handleSlittingSearch">查询</el-button>
-            <el-button style="float: right" type="primary" size="small" icon="el-icon-refresh" @click="loadSlittingSchedules">刷新</el-button>
+        <el-card shadow="never" class="header-card">
+          <div slot="header" class="section-header">
+            <div class="header-left">
+              <span class="header-title">分切排程列表</span>
+            </div>
+            <div class="header-right">
+              <div class="search-input-group">
+                <el-input
+                  v-model="slittingQuery.orderNo"
+                  size="small"
+                  clearable
+                  placeholder="按订单号搜索"
+                  style="width: 150px"
+                  @keyup.enter.native="handleSlittingSearch"
+                />
+                <el-select
+                  v-model="slittingQuery.status"
+                  size="small"
+                  clearable
+                  placeholder="已排未完成"
+                  style="width: 130px; margin-left: 5px;"
+                  @change="handleSlittingSearch"
+                >
+                  <el-option label="所有状态" value="" />
+                  <el-option label="已排未完成" value="UNFINISHED" />
+                  <el-option label="待分切（未开工）" value="UNSTARTED" />
+                  <el-option label="进行中（已开工）" value="IN_PROGRESS" />
+                  <el-option label="已完成" value="COMPLETED" />
+                  <el-option label="已终止" value="TERMINATED" />
+                </el-select>
+                <el-button-group style="margin-left: 5px;">
+                  <el-button size="small" icon="el-icon-refresh-left" @click="resetSlittingSearch">重置</el-button>
+                  <el-button type="primary" size="small" icon="el-icon-search" @click="handleSlittingSearch">查询</el-button>
+                </el-button-group>
+              </div>
+
+              <el-divider direction="vertical" />
+
+              <el-button-group>
+                <el-button type="success" size="small" icon="el-icon-plus" @click="openManualSlittingDialog">手动追加</el-button>
+                <el-button type="warning" size="small" icon="el-icon-printer" @click="openSchedulePrintDialog('slitting')">打印排程</el-button>
+                <el-button type="primary" size="small" icon="el-icon-refresh" @click="loadSlittingSchedules">刷新列表</el-button>
+              </el-button-group>
+            </div>
           </div>
           <el-alert
             v-if="slittingLockSummary.unlockedRows > 0"
             type="warning"
+            show-icon
             :closable="false"
-            style="margin-bottom: 10px"
+            class="mb-10"
             :title="`锁料提醒：当前有 ${slittingLockSummary.unlockedRows} 条待分切订单存在未锁定面积，共 ${slittingLockSummary.unlockedArea} ㎡。建议先处理锁料风险。`"
           />
-          <el-table
-            ref="slittingTable"
-            v-loading="slittingLoading"
-            :data="slittingList"
-            class="manual-schedule-table process-schedule-table"
-            size="mini"
-            border
-            stripe
-            style="width: 100%"
-            :max-height="tableMaxHeight"
-            :row-class-name="slittingRowClassName"
-            @selection-change="handleSlittingPrintSelectionChange"
-            @sort-change="handleSlittingSortChange"
-          >
-            <el-table-column type="selection" width="40" align="center" />
-            <el-table-column type="index" label="序号" width="52" align="center" />
-            <el-table-column prop="schedule_id" label="排程号" width="102" align="center" sortable="custom" column-key="schedule_id">
-              <template slot-scope="scope">
-                <el-input-number
-                  v-if="scope.row.__editing && scope.row.__manual"
-                  v-model="scope.row.schedule_id"
-                  :min="1"
-                  :step="1"
-                  size="mini"
-                  controls-position="right"
-                />
-                <span v-else>{{ scope.row.schedule_id || '-' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="复卷时间" width="124" sortable="custom" column-key="rewinding_time">
-              <template slot-scope="scope">
-                <el-tag type="success" class="two-line-time-tag">
-                  <span class="two-line-time-text">{{ timeWindowLine(formatRewindingTimeWindow(scope.row), 0) }}</span>
-                  <span class="two-line-time-text">{{ timeWindowLine(formatRewindingTimeWindow(scope.row), 1) }}</span>
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="订单号" width="112" sortable="custom" column-key="order_no">
-              <template slot-scope="scope">
-                <el-button type="text" @click="handleOrderNoClick(scope.row)">{{ scope.row.order_no || '-' }}</el-button>
-              </template>
-            </el-table-column>
-            <el-table-column prop="material_code" label="料号" width="230" class-name="wrap-col" header-class-name="wrap-col" show-overflow-tooltip sortable="custom" column-key="material_code">
-              <template slot-scope="scope">
-                <el-autocomplete
-                  v-if="scope.row.__editing && scope.row.__manual"
-                  v-model="scope.row.material_code"
-                  size="small"
-                  :fetch-suggestions="queryTapeSpecByMaterialCode"
-                  popper-class="manual-material-autocomplete-popper"
-                  placeholder="请输入料号"
-                  :trigger-on-focus="false"
-                  @input="handleManualSlittingMaterialInput(scope.row, $event)"
-                  @select="handleManualSlittingMaterialSelect(scope.row, $event)"
-                >
-                  <template slot-scope="{ item }">
-                    <div style="display:flex;flex-direction:column;gap:2px;line-height:1.35;">
-                      <span style="font-weight:600;color:#303133;white-space:normal;word-break:break-all;">{{ item.materialCode }}</span>
-                      <span style="color:#909399;white-space:normal;word-break:break-all;">{{ item.productName || '-' }}</span>
-                    </div>
-                  </template>
-                </el-autocomplete>
-                <span v-else>{{ scope.row.material_code || '-' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="material_name" label="产品名称" width="132" class-name="wrap-col" header-class-name="wrap-col" show-overflow-tooltip sortable="custom" column-key="material_name" />
-            <el-table-column label="产品规格" width="132" align="right" sortable="custom" column-key="spec">
-              <template slot-scope="scope">
-                {{ formatOrderSpec(scope.row) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="分切卷数" width="84" align="right" sortable="custom" column-key="schedule_qty">
-              <template slot-scope="scope">
-                {{ Number(scope.row.schedule_qty || 0) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="已报工卷数" width="96" align="right" sortable="custom" column-key="slitting_report_qty">
-              <template slot-scope="scope">
-                {{ Number(scope.row.slitting_report_qty || 0).toFixed(2) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="已报工面积(㎡)" width="120" align="right">
-              <template slot-scope="scope">
-                {{ formatArea(calcReportedAreaBySpec(scope.row, scope.row.slitting_report_qty)) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="完成率" width="84" align="center" sortable="custom" column-key="slitting_completion_rate">
-              <template slot-scope="scope">
-                {{ formatProcessCompletionRate(scope.row.slitting_report_qty, scope.row.schedule_qty) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="分切速度(卷/分)" width="118" align="center" sortable="custom" column-key="slitting_speed">
-              <template slot-scope="scope">
-                <el-input-number
-                  v-if="scope.row.__editing"
-                  v-model="scope.row.manual_slitting_speed"
-                  :min="0"
-                  :step="1"
-                  size="mini"
-                  controls-position="right"
-                  placeholder="可手输"
-                  @change="handleSlittingDateChange(scope.row)"
-                />
-                <span v-else>{{ formatSlittingSpeed(scope.row) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="计划时间" width="170" align="center" sortable="custom" column-key="packaging_date">
-              <template slot-scope="scope">
-                <el-date-picker
-                  v-if="scope.row.__editing"
-                  v-model="scope.row.packaging_date"
-                  type="date"
-                  size="small"
-                  placeholder=""
-                  format="yyyy-MM-dd"
-                  value-format="yyyy-MM-dd"
-                  @change="handleSlittingDateChange(scope.row)"
-                />
-                <span v-else>{{ formatDateOnly(scope.row.packaging_date) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="耗时" width="92" align="center" sortable="custom" column-key="slitting_duration">
-              <template slot-scope="scope">
-                {{ formatSlittingDuration(scope.row) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="锁料提醒" width="108" align="center">
-              <template slot-scope="scope">
-                <el-tag v-if="getUnlockedArea(scope.row) > 0" type="warning">未锁{{ getUnlockedArea(scope.row).toFixed(0) }}㎡</el-tag>
-                <el-tag v-else type="success">已锁定</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="机台号" width="124" align="center" sortable="custom" column-key="slitting_equipment">
-              <template slot-scope="scope">
-                <el-select
-                  v-if="scope.row.__editing"
-                  v-model="scope.row.slitting_equipment"
-                  size="small"
-                  placeholder="机台号"
-                  @change="handleSlittingEquipmentChange(scope.row)"
-                  @visible-change="handleSlittingEquipmentDropdownVisible(scope.row, $event)"
-                >
-                  <el-option
-                    v-for="eq in getSlittingEquipmentOptions(scope.row)"
-                    :key="eq.id"
-                    :label="slittingEquipmentOptionLabel(eq)"
-                    :value="eq.equipmentCode"
-                    :disabled="!!eq.unavailableReason"
-                  />
-                </el-select>
-                <span v-else>{{ scope.row.slitting_equipment || '-' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="包装班组" width="140" align="center" sortable="custom" column-key="packaging_team">
-              <template slot-scope="scope">
-                <el-select
-                  v-if="scope.row.__editing"
-                  v-model="scope.row.packaging_team"
-                  size="small"
-                  clearable
-                  filterable
-                  placeholder="选择班组"
-                >
-                  <el-option
-                    v-for="team in packagingTeamList"
-                    :key="team.id"
-                    :label="team.teamName"
-                    :value="team.teamName"
-                  />
-                </el-select>
-                <span v-else>{{ packagingTeamName(scope.row.packaging_team) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="状态" width="84" align="center" sortable="custom" column-key="status">
-              <template slot-scope="scope">
-                <el-tag :type="formatSlittingStatus(resolveSlittingDisplayStatus(scope.row)).type">{{ formatSlittingStatus(resolveSlittingDisplayStatus(scope.row)).label }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="132" align="center">
-              <template slot-scope="scope">
-                <div class="op-actions">
-                  <el-button
-                    class="op-main-btn"
+          <div class="table-main-area">
+            <el-table
+              ref="slittingTable"
+              v-loading="slittingLoading"
+              :data="slittingList"
+              class="manual-schedule-table process-schedule-table"
+              size="mini"
+              border
+              stripe
+              style="width: 100%"
+              :max-height="tableHeight"
+              :row-class-name="slittingRowClassName"
+              @selection-change="handleSlittingPrintSelectionChange"
+              @sort-change="handleSlittingSortChange"
+            >
+              <el-table-column type="selection" width="40" align="center" />
+              <el-table-column type="index" label="序号" width="52" align="center" />
+              <el-table-column prop="schedule_id" label="排程号" width="102" align="center" sortable="custom" column-key="schedule_id">
+                <template slot-scope="scope">
+                  <el-input-number
+                    v-if="scope.row.__editing && scope.row.__manual"
+                    v-model="scope.row.schedule_id"
+                    :min="1"
+                    :step="1"
                     size="mini"
-                    :disabled="scope.row.__editing && !scope.row.packaging_date"
-                    @click="handleSlittingEditAction(scope.row)"
+                    controls-position="right"
+                  />
+                  <span v-else>{{ scope.row.schedule_id || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="复卷时间" width="124" sortable="custom" column-key="rewinding_time">
+                <template slot-scope="scope">
+                  <el-tag type="success" class="two-line-time-tag">
+                    <span class="two-line-time-text">{{ timeWindowLine(formatRewindingTimeWindow(scope.row), 0) }}</span>
+                    <span class="two-line-time-text">{{ timeWindowLine(formatRewindingTimeWindow(scope.row), 1) }}</span>
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="订单号" width="112" sortable="custom" column-key="order_no">
+                <template slot-scope="scope">
+                  <el-button type="text" @click="handleOrderNoClick(scope.row)">{{ scope.row.order_no || '-' }}</el-button>
+                </template>
+              </el-table-column>
+              <el-table-column label="交货日期" width="80" align="center" sortable="custom" column-key="delivery_date">
+                <template slot-scope="scope">
+                  <span class="date-text">{{ scope.row.delivery_date | formatDate }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="material_code" label="料号" width="230" class-name="wrap-col" header-class-name="wrap-col" show-overflow-tooltip sortable="custom" column-key="material_code">
+                <template slot-scope="scope">
+                  <el-autocomplete
+                    v-if="scope.row.__editing && scope.row.__manual"
+                    v-model="scope.row.material_code"
+                    size="small"
+                    :fetch-suggestions="queryTapeSpecByMaterialCode"
+                    popper-class="manual-material-autocomplete-popper"
+                    placeholder="请输入料号"
+                    :trigger-on-focus="false"
+                    @input="handleManualSlittingMaterialInput(scope.row, $event)"
+                    @select="handleManualSlittingMaterialSelect(scope.row, $event)"
                   >
-                    {{ scope.row.__editing ? '确认' : '修改' }}
-                  </el-button>
-                  <el-dropdown size="mini" trigger="click" @command="handleScheduleActionCommand">
-                    <el-button class="op-more-btn" size="mini">更多<i class="el-icon-arrow-down el-icon--right" /></el-button>
-                    <el-dropdown-menu slot="dropdown">
-                      <el-dropdown-item :command="{ action: 'report', row: scope.row, processType: 'SLITTING' }">报工</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'reduce', row: scope.row }">减量</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'terminate', row: scope.row }" divided>终止</el-dropdown-item>
-                      <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空单行数据</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </el-dropdown>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div style="margin-top: 12px; text-align: right;">
+                    <template slot-scope="{ item }">
+                      <div style="display:flex;flex-direction:column;gap:2px;line-height:1.35;">
+                        <span style="font-weight:600;color:#303133;white-space:normal;word-break:break-all;">{{ item.materialCode }}</span>
+                        <span style="color:#909399;white-space:normal;word-break:break-all;">{{ item.productName || '-' }}</span>
+                      </div>
+                    </template>
+                  </el-autocomplete>
+                  <span v-else>{{ scope.row.material_code || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="material_name" label="产品名称" width="132" class-name="wrap-col" header-class-name="wrap-col" show-overflow-tooltip sortable="custom" column-key="material_name" />
+              <el-table-column label="产品规格" width="132" align="right" sortable="custom" column-key="spec">
+                <template slot-scope="scope">
+                  {{ formatOrderSpec(scope.row) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="分切卷数" width="84" align="right" sortable="custom" column-key="schedule_qty">
+                <template slot-scope="scope">
+                  {{ Number(scope.row.schedule_qty || 0) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="已报工卷数" width="96" align="right" sortable="custom" column-key="slitting_report_qty">
+                <template slot-scope="scope">
+                  {{ Number(scope.row.slitting_report_qty || 0).toFixed(2) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="已报工面积(㎡)" width="120" align="right">
+                <template slot-scope="scope">
+                  {{ formatArea(calcReportedAreaBySpec(scope.row, scope.row.slitting_report_qty)) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="完成率" width="84" align="center" sortable="custom" column-key="slitting_completion_rate">
+                <template slot-scope="scope">
+                  {{ formatProcessCompletionRate(scope.row.slitting_report_qty, scope.row.schedule_qty) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="分切速度(卷/分)" width="118" align="center" sortable="custom" column-key="slitting_speed">
+                <template slot-scope="scope">
+                  <el-input-number
+                    v-if="scope.row.__editing"
+                    v-model="scope.row.manual_slitting_speed"
+                    :min="0"
+                    :step="1"
+                    size="mini"
+                    controls-position="right"
+                    placeholder="可手输"
+                    @change="handleSlittingDateChange(scope.row)"
+                  />
+                  <span v-else>{{ formatSlittingSpeed(scope.row) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="计划时间" width="170" align="center" sortable="custom" column-key="packaging_date">
+                <template slot-scope="scope">
+                  <el-date-picker
+                    v-if="scope.row.__editing"
+                    v-model="scope.row.packaging_date"
+                    type="date"
+                    size="small"
+                    placeholder=""
+                    format="yyyy-MM-dd"
+                    value-format="yyyy-MM-dd"
+                    @change="handleSlittingDateChange(scope.row)"
+                  />
+                  <span v-else>{{ formatDateOnly(scope.row.packaging_date) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="耗时" width="92" align="center" sortable="custom" column-key="slitting_duration">
+                <template slot-scope="scope">
+                  {{ formatSlittingDuration(scope.row) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="锁料提醒" width="108" align="center">
+                <template slot-scope="scope">
+                  <el-tag v-if="getUnlockedArea(scope.row) > 0" type="warning">未锁{{ getUnlockedArea(scope.row).toFixed(0) }}㎡</el-tag>
+                  <el-tag v-else type="success">已锁定</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="机台号" width="124" align="center" sortable="custom" column-key="slitting_equipment">
+                <template slot-scope="scope">
+                  <el-select
+                    v-if="scope.row.__editing"
+                    v-model="scope.row.slitting_equipment"
+                    size="small"
+                    placeholder="机台号"
+                    @change="handleSlittingEquipmentChange(scope.row)"
+                    @visible-change="handleSlittingEquipmentDropdownVisible(scope.row, $event)"
+                  >
+                    <el-option
+                      v-for="eq in getSlittingEquipmentOptions(scope.row)"
+                      :key="eq.id"
+                      :label="slittingEquipmentOptionLabel(eq)"
+                      :value="eq.equipmentCode"
+                      :disabled="!!eq.unavailableReason"
+                    />
+                  </el-select>
+                  <span v-else>{{ scope.row.slitting_equipment || '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="包装班组" width="140" align="center" sortable="custom" column-key="packaging_team">
+                <template slot-scope="scope">
+                  <el-select
+                    v-if="scope.row.__editing"
+                    v-model="scope.row.packaging_team"
+                    size="small"
+                    clearable
+                    filterable
+                    placeholder="选择班组"
+                  >
+                    <el-option
+                      v-for="team in packagingTeamList"
+                      :key="team.id"
+                      :label="team.teamName"
+                      :value="team.teamName"
+                    />
+                  </el-select>
+                  <span v-else>{{ packagingTeamName(scope.row.packaging_team) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="84" align="center" sortable="custom" column-key="status">
+                <template slot-scope="scope">
+                  <el-tag :type="formatSlittingStatus(resolveSlittingDisplayStatus(scope.row)).type">{{ formatSlittingStatus(resolveSlittingDisplayStatus(scope.row)).label }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="132" align="center">
+                <template slot-scope="scope">
+                  <div class="op-actions">
+                    <el-button
+                      class="op-main-btn"
+                      size="mini"
+                      :disabled="scope.row.__editing && !scope.row.packaging_date"
+                      @click="handleSlittingEditAction(scope.row)"
+                    >
+                      {{ scope.row.__editing ? '确认' : '修改' }}
+                    </el-button>
+                    <el-dropdown size="mini" trigger="click" @command="handleScheduleActionCommand">
+                      <el-button class="op-more-btn" size="mini">更多<i class="el-icon-arrow-down el-icon--right" /></el-button>
+                      <el-dropdown-menu slot="dropdown">
+                        <el-dropdown-item :command="{ action: 'report', row: scope.row, processType: 'SLITTING' }">报工</el-dropdown-item>
+                        <el-dropdown-item :command="{ action: 'reduce', row: scope.row }">减量</el-dropdown-item>
+                        <el-dropdown-item :command="{ action: 'terminate', row: scope.row }" divided>终止</el-dropdown-item>
+                        <el-dropdown-item v-if="scope.row.status === 'TERMINATED'" :command="{ action: 'resume', row: scope.row }">恢复</el-dropdown-item>
+                        <el-dropdown-item :command="{ action: 'reset', row: scope.row }" divided>清空单行数据</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </el-dropdown>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          <div class="pagination-container" style="text-align: right;">
             <el-pagination
               :current-page="slittingPage"
               :page-size="slittingPageSize"
-              :page-sizes="[20, 50, 100, 200]"
+              :page-sizes="pageSizes"
               layout="total, sizes, prev, pager, next, jumper"
               :total="slittingTotal"
               @size-change="handleSlittingSizeChange"
@@ -1189,6 +1372,13 @@
             />
           </div>
         </el-card>
+      </el-tab-pane>
+
+      <!-- Tab 5: 欠料统计 -->
+      <el-tab-pane label="欠料统计" name="shortage">
+        <keep-alive>
+          <shortage-analysis v-if="activeTab === 'shortage'" :external-table-height="shortageTableHeight" />
+        </keep-alive>
       </el-tab-pane>
     </el-tabs>
 
@@ -1310,20 +1500,45 @@
         </el-form-item>
       </el-form>
 
-      <div style="margin-bottom: 8px; font-weight: 600;">历史报工</div>
-      <el-table v-loading="workReportLoading" :data="workReportList" border size="mini" max-height="280">
+      <div style="margin-bottom: 8px; font-weight: 600; display:flex; align-items:center; justify-content:space-between;">
+        <span>历史报工</span>
+        <span style="font-size: 12px; color: #909399;">共 {{ workReportDisplayList.length }} 条</span>
+      </div>
+      <div style="display:flex; gap:8px; margin-bottom: 8px; flex-wrap: wrap;">
+        <div
+          v-for="item in workReportProcessSummary"
+          :key="item.type"
+          style="padding: 6px 10px; border:1px solid #EBEEF5; border-radius: 4px; background: #FAFAFA; font-size: 12px; color: #606266;"
+        >
+          <span style="font-weight: 600;">{{ item.label }}</span>
+          <span style="margin-left: 6px;">{{ item.count }}条</span>
+          <span style="margin-left: 6px;">{{ item.qty }}卷</span>
+          <span style="margin-left: 6px;">{{ item.area }}㎡</span>
+        </div>
+      </div>
+      <el-table v-loading="workReportLoading" :data="workReportDisplayList" border size="mini" max-height="320">
         <el-table-column type="index" label="#" width="50" align="center" />
-        <el-table-column prop="start_time" label="开始时间" width="140">
-          <template slot-scope="scope">{{ formatDateTime(scope.row.start_time) }}</template>
+        <el-table-column label="工序" width="88" align="center">
+          <template slot-scope="scope">
+            <el-tag size="mini" :type="scope.row.process_type === 'COATING' ? '' : (scope.row.process_type === 'REWINDING' ? 'warning' : 'success')">
+              {{ getProcessTypeLabel(scope.row.process_type || workReportForm.processType) }}
+            </el-tag>
+          </template>
         </el-table-column>
-        <el-table-column prop="end_time" label="结束时间" width="140">
-          <template slot-scope="scope">{{ formatDateTime(scope.row.end_time) }}</template>
+        <el-table-column label="报工时间" width="148">
+          <template slot-scope="scope">{{ formatDateTime(scope.row.end_time || scope.row.start_time || scope.row.created_at) }}</template>
         </el-table-column>
-        <el-table-column prop="produced_qty" label="生产数量" width="110" align="right" />
-        <el-table-column label="生产面积(㎡)" width="120" align="right">
+        <el-table-column prop="order_no" label="订单号" width="120" show-overflow-tooltip />
+        <el-table-column prop="order_detail_id" label="明细号" width="90" align="center" />
+        <el-table-column prop="spec_desc" label="规格" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="produced_qty" label="卷数" width="88" align="right" />
+        <el-table-column label="平米数" width="100" align="right">
           <template slot-scope="scope">{{ formatArea(computeWorkReportArea(scope.row)) }}</template>
         </el-table-column>
-        <el-table-column prop="operator_name" label="操作人" width="120" />
+        <el-table-column prop="shift_code" label="班次" width="72" align="center">
+          <template slot-scope="scope">{{ scope.row.shift_code || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="operator_name" label="报工人" width="96" align="center" />
         <el-table-column label="下工序" width="90" align="center">
           <template slot-scope="scope">
             <el-tag :type="Number(scope.row.proceed_next_process || 0) === 1 ? 'success' : 'warning'" size="mini">
@@ -1331,15 +1546,15 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120" align="center">
+        <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="created_at" label="录入时间" width="140">
+          <template slot-scope="scope">{{ formatDateTime(scope.row.created_at) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" align="center" fixed="right">
           <template slot-scope="scope">
             <el-button type="text" size="mini" @click="editWorkReportRow(scope.row)">修改</el-button>
             <el-button type="text" size="mini" style="color:#F56C6C" @click="deleteWorkReportRow(scope.row)">删除</el-button>
           </template>
-        </el-table-column>
-        <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="created_at" label="录入时间" width="140">
-          <template slot-scope="scope">{{ formatDateTime(scope.row.created_at) }}</template>
         </el-table-column>
       </el-table>
 
@@ -1476,8 +1691,10 @@
     <el-dialog
       title="手动添加分切排程（按订单选择）"
       :visible.sync="manualSlittingDialogVisible"
-      width="920px"
+      width="970px"
       :close-on-click-modal="false"
+      :append-to-body="false"
+      custom-class="manual-slitting-dialog"
       @close="handleManualSlittingDialogClose"
     >
       <el-form :inline="true" style="margin-bottom: 10px;">
@@ -1494,6 +1711,10 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" size="small" icon="el-icon-search" @click="loadManualSlittingCandidates">查询</el-button>
+        </el-form-item>
+        <el-form-item>
+          <el-button size="small" @click="selectAllManualSlittingCandidates">全选当前</el-button>
+          <el-button size="small" @click="clearManualSlittingSelection">清除选择</el-button>
         </el-form-item>
       </el-form>
 
@@ -1535,6 +1756,9 @@
               :min="1"
               :max="Math.max(1, Number(scope.row.remaining_qty || 0))"
               :disabled="!scope.row._selected"
+              @change="(val) => handleManualSlittingQtyChange(scope.row, val)"
+              @click.native.stop
+              @mousedown.native.stop
               size="mini"
               controls-position="right"
             />
@@ -1542,8 +1766,16 @@
         </el-table-column>
       </el-table>
 
-      <div style="margin-top: 10px; color: #606266;">
-        已选明细：{{ manualSlittingSelectedRows.length }} 条
+      <div style="margin-top: 10px; color: #606266; display: flex; justify-content: space-between; align-items: center;">
+        <span>已选明细：{{ manualSlittingSelectedRows.length }} 条</span>
+        <el-pagination
+          small
+          :current-page="manualSlittingPage"
+          :page-size="manualSlittingPageSize"
+          layout="prev, pager, next"
+          :total="manualSlittingTotal"
+          @current-change="handleManualSlittingPageChange"
+        />
       </div>
 
       <div slot="footer">
@@ -1653,6 +1885,7 @@ import {
   terminateSchedule,
   reduceSchedule,
   urgentLock,
+  resetScheduleByOrderDetail,
   resetScheduleBySchedule,
   reportWork,
   getReportWorkList,
@@ -1661,7 +1894,9 @@ import {
   issueProcessMaterial,
   getOrderItemsReadiness,
   updateReportWork,
-  deleteReportWork
+  deleteReportWork,
+  getShortageAnalysis,
+  resumeSchedule
 } from '@/api/manualSchedule'
 import { getEquipmentList, getEquipmentScheduleConfigList } from '@/api/equipment'
 import { getProcessParamsList, getProcessParams } from '@/api/processParams'
@@ -1672,11 +1907,14 @@ import { getOrderDetailForProduction } from '@/api/sales'
 import { getAllActiveTeams } from '@/api/staff'
 import { parseTime } from '@/utils'
 import QRCode from 'qrcode'
+import uiConfig from '@/config/ui'
+import ShortageAnalysis from './shortageAnalysis.vue'
 
 const SLITTING_SORT_STORAGE_KEY = 'manualSchedule:slittingSort:v1'
 
 export default {
   name: 'ManualSchedule',
+  components: { ShortageAnalysis },
   filters: {
     formatDate(val) {
       if (!val) return '-'
@@ -1699,15 +1937,20 @@ export default {
       rewindingLoading: false,
       slittingLoading: false,
       orderList: [],
-      pageHeight: 700,
+      pageHeight: 800,
+      tableHeight: 500,
+      shortageTableHeight: 500,
       tableMaxHeight: 560,
+      pageSizes: uiConfig.pageSizes,
       pendingPage: 1,
-      pendingPageSize: 20,
+      pendingPageSize: uiConfig.defaultPageSize,
       pendingTotal: 0,
       pendingRawList: [],
       pendingMaterialOweArea: 0,
       pendingQuery: {
-        materialCode: ''
+        orderNo: '',
+        materialCode: '',
+        status: 'ALL'
       },
       pendingSelectionMap: {},
       pendingManualOffMap: {},
@@ -1722,14 +1965,14 @@ export default {
       materialSuggestionQuerySeq: 0,
       showCompletedRows: false,
       pendingSort: {
-        prop: 'priority_score',
+        prop: 'order_date',
         order: 'descending'
       },
       coatingList: [],
       highlightCoatingScheduleId: null,
       highlightCoatingTimer: null,
       coatingPage: 1,
-      coatingPageSize: 20,
+      coatingPageSize: uiConfig.defaultPageSize,
       coatingTotal: 0,
       coatingSort: {
         prop: null,
@@ -1746,7 +1989,7 @@ export default {
       highlightSlittingDetailId: null,
       highlightSlittingTimer: null,
       rewindingPage: 1,
-      rewindingPageSize: 20,
+      rewindingPageSize: uiConfig.defaultPageSize,
       rewindingTotal: 0,
       rewindingSort: {
         prop: null,
@@ -1758,14 +2001,15 @@ export default {
       },
       rewindingScheduledList: [],
       rewindingScheduledPage: 1,
-      rewindingScheduledPageSize: 20,
+      rewindingScheduledPageSize: uiConfig.defaultPageSize,
       rewindingScheduledTotal: 0,
       slittingList: [],
       slittingPage: 1,
-      slittingPageSize: 20,
+      slittingPageSize: uiConfig.defaultPageSize,
       slittingTotal: 0,
       slittingQuery: {
-        orderNo: ''
+        orderNo: '',
+        status: 'UNFINISHED'
       },
       slittingSort: {
         prop: null,
@@ -1794,8 +2038,25 @@ export default {
       manualSlittingSearchTimer: null,
       manualSlittingCandidates: [],
       manualSlittingSelectedRows: [],
+      manualSlittingSelectionMap: {},
+      manualSlittingPage: 1,
+      manualSlittingPageSize: 30,
+      manualSlittingTotal: 0,
       manualSlittingQuery: {
         orderNo: ''
+      },
+      shortageList: [],
+      shortageLoading: false,
+      shortageTotal: 0,
+      shortageSort: {
+        prop: '',
+        order: ''
+      },
+      shortageQuery: {
+        materialCode: '',
+        page: 1,
+        size: 20,
+        isGrouped: false
       },
       equipmentList: [],
       rewindingEquipmentList: [],
@@ -1929,8 +2190,45 @@ export default {
     workReportRemainingQtyHint() {
       const planned = Number(this.workReportPlannedQty || 0)
       if (!(planned > 0)) return -1
-      const reported = this.sumWorkReportProducedQty(this.workReportList)
+      const reported = this.sumWorkReportProducedQty(this.workReportList, this.workReportForm.processType)
       return Number(Math.max(planned - reported, 0).toFixed(2))
+    },
+    workReportDisplayList() {
+      const orderMap = {
+        COATING: 1,
+        REWINDING: 2,
+        SLITTING: 3
+      }
+      return [...(this.workReportList || [])].sort((a, b) => {
+        const pa = orderMap[String(a.process_type || '').toUpperCase()] || 99
+        const pb = orderMap[String(b.process_type || '').toUpperCase()] || 99
+        if (pa !== pb) return pa - pb
+        const ta = new Date(a.end_time || a.start_time || a.created_at || 0).getTime() || 0
+        const tb = new Date(b.end_time || b.start_time || b.created_at || 0).getTime() || 0
+        if (tb !== ta) return tb - ta
+        return Number(b.id || 0) - Number(a.id || 0)
+      })
+    },
+    workReportProcessSummary() {
+      const seed = ['COATING', 'REWINDING', 'SLITTING'].map(type => ({
+        type,
+        label: this.getProcessTypeLabel(type),
+        count: 0,
+        qty: 0,
+        area: 0
+      }))
+      const map = {}
+      seed.forEach(item => {
+        map[item.type] = item
+      })
+      ;(this.workReportList || []).forEach(row => {
+        const type = String((row && row.process_type) || '').toUpperCase()
+        if (!map[type]) return
+        map[type].count += 1
+        map[type].qty = Number((map[type].qty + Number((row && row.produced_qty) || 0)).toFixed(2))
+        map[type].area = Number((map[type].area + Number(this.computeWorkReportArea(row) || 0)).toFixed(2))
+      })
+      return seed
     }
   },
   mounted() {
@@ -1979,33 +2277,34 @@ export default {
       const appMain = document.querySelector('.app-main')
       if (!appMain) return
       this._appMainOverflowY = appMain.style.overflowY
-      this._appMainOverflow = appMain.style.overflow
+      this._appMainOverflowX = appMain.style.overflowX
       appMain.style.overflowY = 'hidden'
-      appMain.style.overflow = 'hidden'
+      appMain.style.overflowX = 'auto'
     },
     unlockOuterScroll() {
       const appMain = document.querySelector('.app-main')
       if (!appMain) return
       appMain.style.overflowY = this._appMainOverflowY || ''
-      appMain.style.overflow = this._appMainOverflow || ''
+      appMain.style.overflowX = this._appMainOverflowX || ''
     },
     updateTableMaxHeight() {
       this.$nextTick(() => {
-        const rootRect = this.$el.getBoundingClientRect()
-        this.pageHeight = Math.max(520, Math.floor(window.innerHeight - rootRect.top - 4))
+        const winHeight = window.innerHeight
+        const headerHeight = 84
+        this.pageHeight = Math.max(520, winHeight - headerHeight - 10)
 
-        const activePane = this.$el.querySelector('.el-tab-pane.is-active')
-        if (!activePane) {
-          this.tableMaxHeight = Math.max(320, this.pageHeight - 180)
-          return
+        // 不同 Tab 的头部区域高度不同，分别设置预留值提升可视区域利用率
+        const reserveByTab = {
+          orders: 250,
+          coating: 240,
+          rewinding: 240,
+          slitting: 240,
+          shortage: 180
         }
+        const activeReserve = Number(reserveByTab[this.activeTab] || 240)
 
-        const paneRect = activePane.getBoundingClientRect()
-        const pager = activePane.querySelector('.el-pagination')
-        const pagerHeight = pager ? pager.offsetHeight : 0
-        // 预留：分页高度 + 卡片内边距 + 安全间距
-        const reserve = pagerHeight + 72
-        this.tableMaxHeight = Math.max(300, Math.floor(window.innerHeight - paneRect.top - reserve))
+        this.tableHeight = Math.max(360, this.pageHeight - activeReserve)
+        this.shortageTableHeight = Math.max(460, this.pageHeight - 170)
 
         this.$nextTick(() => {
           this.syncActiveTableLayout()
@@ -2016,30 +2315,12 @@ export default {
       const table = this.$refs[refName]
       if (table && typeof table.doLayout === 'function') {
         table.doLayout()
-        this.syncTableScroll(refName)
       }
     },
     relayoutTable(refName) {
       this.$nextTick(() => {
         this.doTableLayout(refName)
-        setTimeout(() => this.doTableLayout(refName), 80)
-        setTimeout(() => this.doTableLayout(refName), 220)
       })
-    },
-    syncTableScroll(refName) {
-      const table = this.$refs[refName]
-      if (!table || !table.$el) return
-      const body = table.$el.querySelector('.el-table__body-wrapper')
-      const header = table.$el.querySelector('.el-table__header-wrapper')
-      if (!body || !header) return
-
-      if (!body.__manualHeaderSyncHandler) {
-        body.__manualHeaderSyncHandler = () => {
-          header.scrollLeft = body.scrollLeft
-        }
-        body.addEventListener('scroll', body.__manualHeaderSyncHandler, { passive: true })
-      }
-      header.scrollLeft = body.scrollLeft
     },
     syncActiveTableLayout() {
       if (this.activeTab === 'orders') {
@@ -2052,6 +2333,7 @@ export default {
         this.doTableLayout('slittingTable')
       }
     },
+    // 格式化库存分配显示
     formatStockAllocations(value) {
       if (!value) return ''
       try {
@@ -2168,10 +2450,10 @@ export default {
       this.orderSpanData = spans
     },
     orderListSpanMethod({ row, column, rowIndex, columnIndex }) {
-      // 只需要合并“序号”和“订单编号”列
-      // 序号是第2列 (index 1), 订单编号是第3列 (index 2)
+      // 只合并“序号”列
+      // 序号是第2列 (index 1)
       // 注意：第1列 (index 0) 是 selection checkbox，不要合并
-      if (columnIndex === 1 || columnIndex === 2) {
+      if (columnIndex === 1) {
         const span = this.orderSpanData[rowIndex]
         if (span !== undefined) {
           return {
@@ -2183,6 +2465,31 @@ export default {
     },
     formatArea(value) {
       return Number(value || 0).toFixed(2)
+    },
+    async copyOrderNo(orderNo) {
+      const text = String(orderNo || '').trim()
+      if (!text) {
+        this.$message.warning('订单号为空，无法复制')
+        return
+      }
+      try {
+        if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text)
+        } else {
+          const textarea = document.createElement('textarea')
+          textarea.value = text
+          textarea.setAttribute('readonly', 'readonly')
+          textarea.style.position = 'fixed'
+          textarea.style.left = '-9999px'
+          document.body.appendChild(textarea)
+          textarea.select()
+          document.execCommand('copy')
+          document.body.removeChild(textarea)
+        }
+        this.$message.success('订单号已复制')
+      } catch (e) {
+        this.$message.error('复制失败，请手动复制')
+      }
     },
     pendingRowKey(row) {
       return String(row.order_detail_id || row.id || '')
@@ -2395,6 +2702,187 @@ export default {
       }
       this.handleCalculateCoating(row)
     },
+    pendingProcessPickerRef(row, processType) {
+      const key = this.pendingRowKey(row) || `${Number((row && row.order_detail_id) || 0)}`
+      const process = String(processType || '').toUpperCase()
+      return `pending-process-picker-${process}-${key}`
+    },
+    pendingProcessEditFlag(processType) {
+      const process = String(processType || '').toUpperCase()
+      if (process === 'COATING') return '__editingPendingCoatingTime'
+      if (process === 'REWINDING') return '__editingPendingRewindingTime'
+      return '__editingPendingSlittingTime'
+    },
+    pendingProcessSelectedFlag(processType) {
+      const process = String(processType || '').toUpperCase()
+      if (process === 'COATING') return '__selectedPendingCoatingTime'
+      if (process === 'REWINDING') return '__selectedPendingRewindingTime'
+      return '__selectedPendingSlittingTime'
+    },
+    isPendingProcessTimeEditing(row, processType) {
+      if (!row) return false
+      const key = this.pendingProcessEditFlag(processType)
+      return !!row[key]
+    },
+    isPendingProcessTimeSelected(row, processType) {
+      if (!row) return false
+      const key = this.pendingProcessSelectedFlag(processType)
+      return !!row[key]
+    },
+    selectPendingProcessTimeCell(row, processType) {
+      if (!row) return
+      this.$set(row, '__selectedPendingCoatingTime', false)
+      this.$set(row, '__selectedPendingRewindingTime', false)
+      this.$set(row, '__selectedPendingSlittingTime', false)
+      const key = this.pendingProcessSelectedFlag(processType)
+      this.$set(row, key, true)
+    },
+    canEditPendingProcessTime(row, processType) {
+      if (!row) return false
+      return true
+    },
+    closePendingProcessTimeEdit(row, processType) {
+      if (!row) return
+      const key = this.pendingProcessEditFlag(processType)
+      this.$set(row, key, false)
+    },
+    enablePendingProcessTimeEdit(row, processType) {
+      if (!row) return
+      if (!this.canEditPendingProcessTime(row, processType)) return
+      this.closePendingProcessTimeEdit(row, 'COATING')
+      this.closePendingProcessTimeEdit(row, 'REWINDING')
+      this.closePendingProcessTimeEdit(row, 'SLITTING')
+      this.selectPendingProcessTimeCell(row, processType)
+
+      const key = this.pendingProcessEditFlag(processType)
+      this.$set(row, key, true)
+
+      this.$nextTick(() => {
+        const refName = this.pendingProcessPickerRef(row, processType)
+        const picker = this.$refs[refName]
+        const target = Array.isArray(picker) ? picker[0] : picker
+        if (target && typeof target.focus === 'function') {
+          target.focus()
+        }
+      })
+    },
+    normalizePendingProcessDate(value) {
+      const rounded = this.roundToTenMinuteDateTime(value)
+      return rounded || this.toDateTimeString(value) || ''
+    },
+    handlePendingCoatingDateChange(row) {
+      if (!row || String(row.schedule_type || '').toUpperCase() === 'STOCK') return
+      const normalized = this.normalizePendingProcessDate(row.coating_date)
+      if (normalized) {
+        this.$set(row, 'coating_date', normalized)
+      }
+      this.closePendingProcessTimeEdit(row, 'COATING')
+    },
+    findRewindingRowInListByPending(row) {
+      const scheduleId = Number((row && row.schedule_id) || 0)
+      const detailId = Number((row && row.order_detail_id) || 0)
+      const rows = this.rewindingList || []
+      if (scheduleId > 0) {
+        const matchedBySchedule = rows.find(r => Number((r && (r.schedule_id || r.id)) || 0) === scheduleId)
+        if (matchedBySchedule) return matchedBySchedule
+      }
+      if (detailId > 0) {
+        const matchedByDetail = rows.find(r => Number((r && r.order_detail_id) || 0) === detailId)
+        if (matchedByDetail) return matchedByDetail
+      }
+      const covered = rows.find(r => this.isRewindingRowCoveredByOrder(r, row))
+      return covered || null
+    },
+    async resolveRewindingRowForPending(row) {
+      if (!row) return null
+      let target = this.findRewindingRowInListByPending(row)
+      if (target) return target
+
+      const detailId = Number((row && row.order_detail_id) || 0)
+      if (detailId <= 0) return null
+      const targetPage = await this.findRewindingPageByDetailId(detailId, row)
+      this.rewindingPage = targetPage
+      await this.loadRewindingOrders()
+      target = this.findRewindingRowInListByPending(row)
+      return target || null
+    },
+    async handlePendingRewindingDateChange(row) {
+      if (!row) return
+      const normalized = this.normalizePendingProcessDate(row.rewinding_date)
+      if (!normalized) {
+        this.$message.warning('请选择复卷时间')
+        this.closePendingProcessTimeEdit(row, 'REWINDING')
+        return
+      }
+      this.$set(row, '__updatingProcessTime', true)
+      this.$set(row, 'rewinding_date', normalized)
+      try {
+        const rewindingRow = await this.resolveRewindingRowForPending(row)
+        if (rewindingRow) {
+          this.$set(rewindingRow, 'rewinding_date', normalized)
+          if (!rewindingRow.rewinding_equipment && row.rewinding_equipment) {
+            this.$set(rewindingRow, 'rewinding_equipment', row.rewinding_equipment)
+          }
+          if (rewindingRow.rewinding_equipment) {
+            await this.handleUpdateRewindingSchedule(rewindingRow)
+          }
+        }
+      } finally {
+        this.$set(row, '__updatingProcessTime', false)
+        this.closePendingProcessTimeEdit(row, 'REWINDING')
+      }
+    },
+    findSlittingRowInListByPending(row) {
+      const scheduleId = Number((row && row.schedule_id) || 0)
+      const detailId = Number((row && row.order_detail_id) || 0)
+      const rows = this.slittingList || []
+      if (scheduleId > 0) {
+        const matchedBySchedule = rows.find(r => Number((r && (r.schedule_id || r.id)) || 0) === scheduleId)
+        if (matchedBySchedule) return matchedBySchedule
+      }
+      if (detailId > 0) {
+        const matchedByDetail = rows.find(r => Number((r && r.order_detail_id) || 0) === detailId)
+        if (matchedByDetail) return matchedByDetail
+      }
+      return null
+    },
+    async resolveSlittingRowForPending(row) {
+      if (!row) return null
+      let target = this.findSlittingRowInListByPending(row)
+      if (target) return target
+
+      const detailId = Number((row && row.order_detail_id) || 0)
+      if (detailId <= 0) return null
+      const targetPage = await this.findSlittingPageByDetailId(detailId)
+      this.slittingPage = targetPage
+      await this.loadSlittingSchedules()
+      target = this.findSlittingRowInListByPending(row)
+      return target || null
+    },
+    async handlePendingSlittingDateChange(row) {
+      if (!row) return
+      const normalized = this.normalizePendingProcessDate(row.packaging_date)
+      if (!normalized) {
+        this.$message.warning('请选择分切时间')
+        this.closePendingProcessTimeEdit(row, 'SLITTING')
+        return
+      }
+      this.$set(row, '__updatingProcessTime', true)
+      this.$set(row, 'packaging_date', normalized)
+      try {
+        const slittingRow = await this.resolveSlittingRowForPending(row)
+        if (slittingRow) {
+          this.$set(slittingRow, 'packaging_date', normalized)
+          if (!slittingRow.slitting_equipment && (row.slitting_equipment || row.rewinding_equipment)) {
+            this.$set(slittingRow, 'slitting_equipment', row.slitting_equipment || row.rewinding_equipment)
+          }
+          await this.handleUpdateSlittingSchedule(slittingRow)
+        }
+      } finally {
+        this.$set(row, '__updatingProcessTime', false)
+        this.closePendingProcessTimeEdit(row, 'SLITTING')
+      }
+    },
     canJumpToRewinding(row) {
       const routeType = this.getRouteType(row)
       if (routeType === 'COATING_SHIP') return false
@@ -2498,17 +2986,25 @@ export default {
       }
       return 0
     },
-    sumWorkReportProducedQty(list) {
+    sumWorkReportProducedQty(list, processType = null) {
       if (!Array.isArray(list) || !list.length) return 0
+      const targetType = processType ? String(processType).toUpperCase() : ''
       return Number(
-        list.reduce((sum, item) => sum + Number((item && item.produced_qty) || 0), 0).toFixed(2)
+        list.reduce((sum, item) => {
+          if (!item) return sum
+          if (targetType) {
+            const rowType = String(item.process_type || item.processType || '').toUpperCase()
+            if (rowType && rowType !== targetType) return sum
+          }
+          return sum + Number(item.produced_qty || item.producedQty || 0)
+        }, 0).toFixed(2)
       )
     },
     refreshWorkReportSuggestedQty() {
       if (this.workReportEditingId) return
       const planned = Number(this.workReportPlannedQty || 0)
       if (!(planned > 0)) return
-      const remain = Number(Math.max(planned - this.sumWorkReportProducedQty(this.workReportList), 0).toFixed(2))
+      const remain = Number(Math.max(planned - this.sumWorkReportProducedQty(this.workReportList, this.workReportForm.processType), 0).toFixed(2))
       this.workReportForm.producedQty = remain > 0 ? remain : null
     },
     getProcessTypeLabel(processType) {
@@ -2552,30 +3048,74 @@ export default {
       }
       this.workReportScanCode = ''
       this.workReportDialogVisible = true
-      if (scheduleId) {
-        await this.loadWorkReportList()
-      } else {
-        this.workReportList = []
-      }
+      await this.loadWorkReportList()
     },
     async loadWorkReportList() {
-      if (!this.workReportForm.scheduleId || !this.workReportForm.processType) {
+      const scheduleId = Number(this.workReportForm.scheduleId || 0)
+      const orderDetailId = Number(this.workReportForm.orderDetailId || 0)
+      if ((!(scheduleId > 0) && !(orderDetailId > 0) && !String(this.workReportForm.orderNo || '').trim()) || !this.workReportForm.processType) {
         this.workReportList = []
         return
       }
       this.workReportLoading = true
       try {
-        const res = await getReportWorkList({
-          scheduleId: this.workReportForm.scheduleId,
+        const queryBase = {
+          scheduleId: scheduleId > 0 ? scheduleId : null,
+          orderDetailId: orderDetailId > 0 ? orderDetailId : null,
+          orderNo: String(this.workReportForm.orderNo || '').trim() || null,
           processType: this.workReportForm.processType
-        })
-        if (res.code === 200 || res.code === 20000) {
-          this.workReportList = res.data || []
-          this.refreshWorkReportSuggestedQty()
-        } else {
-          this.workReportList = []
-          this.refreshWorkReportSuggestedQty()
         }
+        const currentType = String(this.workReportForm.processType || '').toUpperCase()
+        const processTypes = [currentType, 'SLITTING', 'REWINDING', 'COATING']
+          .filter(Boolean)
+          .filter((type, idx, arr) => arr.indexOf(type) === idx)
+
+        const merged = []
+        const seen = new Set()
+        const pushRows = (rows, fallbackType = '') => {
+          ;(rows || []).forEach((row, index) => {
+            const normalized = this.normalizeWorkReportRow(row, fallbackType)
+            const rawId = Number(normalized.id || 0)
+            const key = rawId > 0
+              ? `id:${rawId}`
+              : `${normalized.schedule_id || normalized.scheduleId || ''}_${normalized.process_type || ''}_${normalized.start_time || ''}_${normalized.end_time || ''}_${normalized.created_at || ''}_${Number(normalized.produced_qty || 0)}_${index}`
+            if (!seen.has(key)) {
+              seen.add(key)
+              merged.push(normalized)
+            }
+          })
+        }
+
+        for (const type of processTypes) {
+          const res = await getReportWorkList({ ...queryBase, processType: type })
+          if (!(res.code === 200 || res.code === 20000)) continue
+          const rows = (res.data && Array.isArray(res.data.records)) ? res.data.records : (Array.isArray(res.data) ? res.data : [])
+          pushRows(rows, type)
+        }
+
+        if (!merged.length) {
+          const candidateScheduleIds = this.collectWorkReportCandidateScheduleIds()
+          for (const sid of candidateScheduleIds) {
+            for (const type of processTypes) {
+              const sidRes = await getReportWorkList({ scheduleId: sid, processType: type })
+              if (!(sidRes.code === 200 || sidRes.code === 20000)) continue
+              const sidRows = (sidRes.data && Array.isArray(sidRes.data.records))
+                ? sidRes.data.records
+                : (Array.isArray(sidRes.data) ? sidRes.data : [])
+              pushRows(sidRows, type)
+            }
+          }
+        }
+
+        merged.sort((a, b) => {
+          const ta = new Date(a.end_time || a.start_time || a.created_at || 0).getTime() || 0
+          const tb = new Date(b.end_time || b.start_time || b.created_at || 0).getTime() || 0
+          if (tb !== ta) return tb - ta
+          return Number(b.id || 0) - Number(a.id || 0)
+        })
+
+        this.workReportList = merged
+        this.refreshWorkReportSuggestedQty()
       } catch (e) {
         this.workReportList = []
         this.refreshWorkReportSuggestedQty()
@@ -2583,6 +3123,49 @@ export default {
       } finally {
         this.workReportLoading = false
       }
+    },
+    normalizeWorkReportRow(row, fallbackProcessType = '') {
+      const item = row || {}
+      const processType = String(item.process_type || item.processType || fallbackProcessType || this.workReportForm.processType || '').toUpperCase()
+      return {
+        ...item,
+        id: Number(item.id || 0) || item.id,
+        schedule_id: Number(item.schedule_id || item.scheduleId || 0) || item.schedule_id || item.scheduleId || null,
+        order_detail_id: Number(item.order_detail_id || item.orderDetailId || this.workReportForm.orderDetailId || 0) || '',
+        process_type: processType,
+        start_time: item.start_time || item.startTime || '',
+        end_time: item.end_time || item.endTime || '',
+        created_at: item.created_at || item.createdAt || '',
+        produced_qty: Number(item.produced_qty || item.producedQty || 0),
+        operator_name: item.operator_name || item.operatorName || '',
+        shift_code: item.shift_code || item.shiftCode || '',
+        proceed_next_process: Number(item.proceed_next_process || item.proceedNextProcess || 0),
+        order_no: item.order_no || item.orderNo || this.workReportForm.orderNo || '',
+        spec_desc: item.spec_desc || item.specDesc || '',
+        remark: item.remark || ''
+      }
+    },
+    collectWorkReportCandidateScheduleIds() {
+      const orderNo = String((this.workReportForm && this.workReportForm.orderNo) || '').trim().toUpperCase()
+      if (!orderNo) return []
+      const allRows = []
+      if (Array.isArray(this.slittingList)) allRows.push(...this.slittingList)
+      if (Array.isArray(this.rewindingList)) allRows.push(...this.rewindingList)
+      if (Array.isArray(this.coatingList)) allRows.push(...this.coatingList)
+      if (Array.isArray(this.orderList)) allRows.push(...this.orderList)
+
+      const result = []
+      const seen = new Set()
+      allRows.forEach(row => {
+        const rowOrderNo = String((row && row.order_no) || '').trim().toUpperCase()
+        if (!rowOrderNo || rowOrderNo !== orderNo) return
+        const sid = this.resolveNumericScheduleId(row)
+        if (sid > 0 && !seen.has(sid)) {
+          seen.add(sid)
+          result.push(sid)
+        }
+      })
+      return result
     },
     async submitWorkReport() {
       if (!this.workReportForm.scheduleId && !this.workReportForm.orderDetailId) {
@@ -2656,7 +3239,7 @@ export default {
         scheduleId: this.workReportForm.scheduleId,
         orderDetailId: this.workReportForm.orderDetailId,
         orderNo: this.workReportForm.orderNo,
-        processType: this.workReportForm.processType,
+        processType: String(row.process_type || this.workReportForm.processType || '').toUpperCase() || this.workReportForm.processType,
         startTime: row.start_time || this.workReportForm.startTime,
         endTime: row.end_time || this.workReportForm.endTime,
         producedQty: Number(row.produced_qty || 0) > 0 ? Number(row.produced_qty) : this.workReportForm.producedQty,
@@ -3261,8 +3844,14 @@ export default {
       this.orderList = src
       this.calculateOrderSpans()
     },
-    handlePendingSortChange({ prop, order, column }) {
-      this.$message.info('待排程列表已固定按优先级从高到低排序')
+    handlePendingSortChange({ prop, order }) {
+      if (!prop || !order) {
+        this.pendingSort = { prop: 'order_date', order: 'descending' }
+      } else {
+        this.pendingSort = { prop, order }
+      }
+      this.pendingPage = 1
+      this.loadOrders()
     },
     getSortStringValue(value) {
       return String(value == null ? '' : value).toUpperCase()
@@ -3455,11 +4044,8 @@ export default {
         order: order || null
       }
       this.persistSlittingSortState()
-      if (key === 'schedule_id') {
-        this.loadSlittingSchedules()
-        return
-      }
-      this.applySlittingSort()
+      // 统一由后端排序，避免前端分页与排序不一致
+      this.loadSlittingSchedules()
     },
     getPlannedRewindingArea(row) {
       if (!row) return 0
@@ -3983,6 +4569,13 @@ export default {
       const productName = String(item.productName || '').trim()
       this.$set(row, 'material_code', materialCode)
       this.$set(row, 'material_name', productName)
+
+      // 同步设置 spec 字段
+      const thicknessVal = Number(item.thickness) || row.thickness
+      const widthVal = Number(item.width) || row.width || row.coating_width || row.rewinding_width
+      if (thicknessVal && widthVal) {
+        this.$set(row, 'spec', `${thicknessVal}μm*${widthVal}mm`)
+      }
 
       const width = Number(item.width)
       if (Number.isFinite(width) && width > 0) {
@@ -5296,6 +5889,7 @@ export default {
     async openManualSlittingDialog() {
       this.manualSlittingDialogVisible = true
       this.manualSlittingSelectedRows = []
+      this.manualSlittingSelectionMap = {}
       await this.loadManualSlittingCandidates()
     },
 
@@ -5327,8 +5921,8 @@ export default {
       this.manualSlittingLoading = true
       try {
         const res = await getPendingOrders({
-          current: 1,
-          size: 50,
+          current: this.manualSlittingPage,
+          size: this.manualSlittingPageSize,
           includeCompleted: false,
           orderNo: keyword
         })
@@ -5339,17 +5933,24 @@ export default {
         }
         const pageData = res.data || {}
         const records = pageData.records || pageData.list || []
-        this.manualSlittingCandidates = records
-          .filter(item => this.isManualSlittingCandidate(item))
-          .map(item => {
-            const maxQty = Math.max(1, Math.floor(Number(item.remaining_qty || 0)))
-            return {
-              ...item,
-              _selected: false,
-              _manual_qty: maxQty
-            }
-          })
-        this.manualSlittingSelectedRows = []
+        const candidates = records.filter(item => this.isManualSlittingCandidate(item))
+        this.manualSlittingTotal = Number(pageData.total || 0)
+        this.manualSlittingCandidates = candidates.map(item => {
+          const rowId = Number(item.order_detail_id || 0)
+          const maxQty = this.resolveManualSlittingAvailableQty(item)
+          const selectedState = this.manualSlittingSelectionMap[rowId] || null
+          const mappedQty = selectedState && Number(selectedState.qty || 0) > 0
+            ? Math.min(maxQty, Math.floor(Number(selectedState.qty || 0)))
+            : maxQty
+          return {
+            ...item,
+            _selected: !!(selectedState && selectedState.selected),
+            _manual_qty: mappedQty
+          }
+        })
+        this.$nextTick(() => {
+          this.syncManualSlittingSelectionToTable()
+        })
       } catch (e) {
         this.$message.error('查询订单失败')
         this.manualSlittingCandidates = []
@@ -5361,24 +5962,11 @@ export default {
 
     isManualSlittingCandidate(item) {
       if (!item) return false
-      const remainingQty = Number(item.remaining_qty || 0)
-      if (!(remainingQty > 0)) return false
+      const availableQty = this.resolveManualSlittingAvailableQty(item)
+      if (!(availableQty > 0)) return false
 
       const status = String(item.schedule_status || item.status || '').toUpperCase()
       if (['COMPLETED', 'CANCELLED', 'CANCELED', 'TERMINATED'].includes(status)) {
-        return false
-      }
-
-      // 已完成分切报工的明细，不应再出现在“手动添加分切排程”候选中
-      const orderQty = Number(item.order_qty || 0)
-      const slittingReportedQty = Number(item.slitting_report_qty || 0)
-      if (orderQty > 0 && slittingReportedQty >= orderQty) {
-        return false
-      }
-
-      // 已有分切计划时间/包装时间，视为已排到分切工序，不再重复显示
-      const hasSlittingPlan = !!(item.packaging_date || item.slitting_schedule_date)
-      if (hasSlittingPlan) {
         return false
       }
 
@@ -5390,27 +5978,100 @@ export default {
       return true
     },
 
+    resolveManualSlittingAvailableQty(item) {
+      const remainingQty = Number((item && item.remaining_qty) || 0)
+      const activeQty = Number((item && item.active_schedule_qty) || 0)
+      const backendAvailable = Number((item && item.available_schedule_qty) || 0)
+      const raw = Number.isFinite(backendAvailable)
+        ? backendAvailable
+        : (remainingQty - (Number.isFinite(activeQty) ? activeQty : 0))
+      return Math.max(0, Math.floor(Number.isFinite(raw) ? raw : 0))
+    },
+
     handleManualSlittingSelectionChange(selection) {
       this.manualSlittingSelectedRows = selection || []
       const selectedSet = new Set((selection || []).map(item => Number(item.order_detail_id || 0)))
       ;(this.manualSlittingCandidates || []).forEach(item => {
-        const picked = selectedSet.has(Number(item.order_detail_id || 0))
+        const rowId = Number(item.order_detail_id || 0)
+        const picked = selectedSet.has(rowId)
         this.$set(item, '_selected', picked)
         if (picked) {
-          const maxQty = Math.max(1, Math.floor(Number(item.remaining_qty || 0)))
+          const maxQty = this.resolveManualSlittingAvailableQty(item)
           const currentQty = Math.floor(Number(item._manual_qty || 0))
           if (!(currentQty > 0) || currentQty > maxQty) {
             this.$set(item, '_manual_qty', maxQty)
           }
+          this.$set(this.manualSlittingSelectionMap, rowId, {
+            selected: true,
+            qty: Math.max(1, Math.floor(Number(item._manual_qty || 0)))
+          })
+        } else {
+          this.$set(this.manualSlittingSelectionMap, rowId, {
+            selected: false,
+            qty: Math.max(1, Math.floor(Number(item._manual_qty || 0)))
+          })
         }
       })
     },
 
-    handleManualSlittingRowClick(row) {
+    handleManualSlittingQtyChange(row, value) {
+      if (!row) return
+      const rowId = Number(row.order_detail_id || 0)
+      if (!(rowId > 0)) return
+      const maxQty = this.resolveManualSlittingAvailableQty(row)
+      const finalQty = Math.min(maxQty, Math.max(1, Math.floor(Number(value || row._manual_qty || 0))))
+      this.$set(row, '_manual_qty', finalQty)
+      const current = this.manualSlittingSelectionMap[rowId] || {}
+      this.$set(this.manualSlittingSelectionMap, rowId, {
+        selected: row._selected === true || current.selected === true,
+        qty: finalQty
+      })
+    },
+
+    handleManualSlittingRowClick(row, column, event) {
+      const target = event && event.target ? event.target : null
+      if (target && typeof target.closest === 'function') {
+        if (target.closest('.el-input-number') || target.closest('.el-input') || target.closest('.el-checkbox')) {
+          return
+        }
+      }
       const table = this.$refs.manualSlittingOrderTable
       if (table && row) {
         table.toggleRowSelection(row, !row._selected)
       }
+    },
+
+    syncManualSlittingSelectionToTable() {
+      const table = this.$refs.manualSlittingOrderTable
+      if (!table) return
+      table.clearSelection()
+      ;(this.manualSlittingCandidates || []).forEach(row => {
+        if (row && row._selected) {
+          table.toggleRowSelection(row, true)
+        }
+      })
+      this.manualSlittingSelectedRows = (this.manualSlittingCandidates || []).filter(row => row && row._selected)
+    },
+
+    handleManualSlittingPageChange(page) {
+      this.manualSlittingPage = page
+      this.loadManualSlittingCandidates()
+    },
+
+    selectAllManualSlittingCandidates() {
+      const table = this.$refs.manualSlittingOrderTable
+      if (!table) return
+      const rows = this.manualSlittingCandidates || []
+      table.clearSelection()
+      rows.forEach(r => {
+        table.toggleRowSelection(r, true)
+      })
+    },
+
+    clearManualSlittingSelection() {
+      const table = this.$refs.manualSlittingOrderTable
+      if (!table) return
+      table.clearSelection()
     },
 
     async confirmManualSlittingSelection() {
@@ -5430,7 +6091,7 @@ export default {
               failCount += 1
               continue
             }
-            const maxQty = Math.floor(Number(row.remaining_qty || 0))
+            const maxQty = this.resolveManualSlittingAvailableQty(row)
             const pickQty = Math.floor(Number(row._manual_qty || 0))
             if (!(pickQty > 0) || pickQty > maxQty) {
               failCount += 1
@@ -5543,25 +6204,43 @@ export default {
       this.loading = true
       try {
         await this.loadPendingOweAreaSummary()
+        const includeCompleted = this.resolvePendingIncludeCompleted()
         const res = await getPendingOrders({
           current: this.pendingPage,
           size: this.pendingPageSize,
-          includeCompleted: this.showCompletedRows,
-          materialCode: (this.pendingQuery.materialCode || '').trim()
+          includeCompleted,
+          orderNo: (this.pendingQuery.orderNo || '').trim(),
+          materialCode: (this.pendingQuery.materialCode || '').trim(),
+          pendingStatus: this.pendingQuery.status || 'ALL',
+          sortProp: (this.pendingSort && this.pendingSort.prop) || 'order_date',
+          sortOrder: (this.pendingSort && this.pendingSort.order) || 'descending'
         })
         if (res.code === 200 || res.code === 20000) {
           const pageData = res.data || {}
           const records = pageData.records || pageData.list || []
+          const statusFilter = String((this.pendingQuery && this.pendingQuery.status) || 'ALL').toUpperCase()
           this.pendingTotal = Number(pageData.total || 0)
           const mapped = records.map(item => {
             const width = Number(item.width || 0)
             const length = Number(item.length || 0)
             const singleArea = width > 0 && length > 0 ? (width / 1000) * length : 0
             const orderQty = Number(item.order_qty || 0)
-            const remainingQty = Number(item.remaining_qty || 0)
-            const plannedQty = Math.max(0, Math.min(orderQty, remainingQty))
+            const scheduledQtyRaw = Number(item.scheduled_qty || 0)
             const completedQty = this.getReportedCompletedQty(item)
+            const remainingBySchedule = Math.max(0, orderQty - scheduledQtyRaw)
+            const remainingByCompletion = Math.max(0, orderQty - completedQty)
+            const remainingByFormula = Math.min(remainingBySchedule, remainingByCompletion)
+            const remainingQtyRaw = Number.isFinite(remainingByFormula)
+              ? remainingByFormula
+              : Number(item.remaining_qty || 0)
+            const activeScheduleQty = Number(item.active_schedule_qty || 0)
+            const availableScheduleQty = Math.max(
+              0,
+              remainingQtyRaw - activeScheduleQty
+            )
+            const plannedQty = Math.max(0, Math.min(orderQty, availableScheduleQty))
             const routeType = this.getRouteType(item)
+            const hasAnyProcessTime = !!(item.coating_date || item.rewinding_date || item.packaging_date)
 
             const row = {
               ...item,
@@ -5569,6 +6248,10 @@ export default {
               schedule_type: item.schedule_type,
               route_type: routeType,
               schedule_qty: plannedQty,
+              remaining_qty_raw: remainingQtyRaw,
+              active_schedule_qty: activeScheduleQty,
+              available_schedule_qty: availableScheduleQty,
+              remaining_qty: availableScheduleQty,
               coating_date: item.coating_date || '',
               rewinding_date: item.rewinding_date || '',
               packaging_date: item.packaging_date || '',
@@ -5576,22 +6259,39 @@ export default {
               order_remark: item.order_remark || '',
               single_area: singleArea.toFixed(2),
               production_area: (singleArea * plannedQty).toFixed(2),
-              owe_area: (singleArea * remainingQty).toFixed(2),
+              owe_area: (singleArea * availableScheduleQty).toFixed(2),
               locked_area_total: Number(item.locked_area_total || 0),
               unlocked_area: Number(item.unlocked_area || 0),
               lock_status: item.lock_status || 'UNLOCKED',
               readiness_status_code: String(item.readiness_status_code || '').toUpperCase() || 'UNKNOWN',
               readiness_status_text: item.readiness_status_text || '',
+              __has_process_time: hasAnyProcessTime,
               completed_qty: Number(completedQty.toFixed(2)),
               priority_score: Number(item.priority_score || 0).toFixed(1)
+            }
+            if (statusFilter === 'UNSCHEDULED') {
+              row.schedule_id = null
+              row.schedule_type = ''
+              row.schedule_status = ''
+              row.coating_date = ''
+              row.rewinding_date = ''
+              row.packaging_date = ''
             }
             row.is_completed = this.calcProductionCompleted(row) ? 'Y' : 'N'
             return row
           })
-          const enrichedMapped = await this.enrichMaterialNamesFromSpec(mapped)
-          const visibleMapped = this.showCompletedRows
-            ? enrichedMapped
-            : enrichedMapped.filter(row => !this.calcProductionCompleted(row))
+          let enrichedMapped = await this.enrichMaterialNamesFromSpec(mapped)
+          if (statusFilter === 'UNSCHEDULED') {
+            enrichedMapped = enrichedMapped.filter(row => Number(row.remaining_qty_raw || 0) > 0 && Number(row.active_schedule_qty || 0) <= 0 && !row.__has_process_time && row.is_completed !== 'Y')
+          } else if (statusFilter === 'SCHEDULED_UNFINISHED') {
+            enrichedMapped = enrichedMapped.filter(row => Number(row.remaining_qty_raw || 0) > 0 && row.is_completed !== 'Y')
+          } else if (statusFilter === 'SCHEDULED_COMPLETED') {
+            enrichedMapped = enrichedMapped.filter(row => row.is_completed === 'Y' || Number(row.remaining_qty_raw || 0) <= 0)
+          }
+          const shouldHideProductionCompleted = !this.showCompletedRows && statusFilter === 'ALL'
+          const visibleMapped = shouldHideProductionCompleted
+            ? enrichedMapped.filter(row => !this.calcProductionCompleted(row))
+            : enrichedMapped
           const visibleIdSet = new Set()
           visibleMapped.forEach(row => {
             const id = this.pendingRowKey(row)
@@ -5659,16 +6359,95 @@ export default {
       this.loadOrders()
     },
 
-    handlePendingMaterialSearch() {
+    handlePendingHeaderSearch() {
       this.pendingPage = 1
       this.loadOrders()
     },
 
-    handlePendingMaterialClear() {
-      this.pendingQuery.materialCode = ''
-      this.pendingMaterialOweArea = 0
-      this.pendingPage = 1
-      this.loadOrders()
+    async queryPendingOrderNoSuggestions(queryString, cb) {
+      const keyword = String(queryString || '').trim()
+      if (!keyword) {
+        cb([])
+        return
+      }
+      try {
+        const includeCompleted = this.resolvePendingIncludeCompleted()
+        const res = await getPendingOrders({
+          current: 1,
+          size: 30,
+          includeCompleted,
+          orderNo: keyword,
+          materialCode: (this.pendingQuery.materialCode || '').trim(),
+          pendingStatus: this.pendingQuery.status || 'ALL',
+          sortProp: 'order_date',
+          sortOrder: 'descending'
+        })
+        if (!(res.code === 200 || res.code === 20000)) {
+          cb([])
+          return
+        }
+        const records = (((res || {}).data || {}).records) || []
+        const seen = new Set()
+        const list = []
+        records.forEach(item => {
+          const value = String((item && item.order_no) || '').trim()
+          const key = value.toUpperCase()
+          if (!value || seen.has(key)) return
+          seen.add(key)
+          list.push({ value })
+        })
+        cb(list)
+      } catch (e) {
+        cb([])
+      }
+    },
+
+    async queryPendingMaterialSuggestions(queryString, cb) {
+      const keyword = String(queryString || '').trim()
+      if (!keyword) {
+        cb([])
+        return
+      }
+      try {
+        const includeCompleted = this.resolvePendingIncludeCompleted()
+        const res = await getPendingOrders({
+          current: 1,
+          size: 30,
+          includeCompleted,
+          orderNo: (this.pendingQuery.orderNo || '').trim(),
+          materialCode: keyword,
+          pendingStatus: this.pendingQuery.status || 'ALL',
+          sortProp: 'order_date',
+          sortOrder: 'descending'
+        })
+        if (!(res.code === 200 || res.code === 20000)) {
+          cb([])
+          return
+        }
+        const records = (((res || {}).data || {}).records) || []
+        const seen = new Set()
+        const list = []
+        records.forEach(item => {
+          const value = String((item && item.material_code) || '').trim()
+          const key = value.toUpperCase()
+          if (!value || seen.has(key)) return
+          seen.add(key)
+          list.push({ value })
+        })
+        cb(list)
+      } catch (e) {
+        cb([])
+      }
+    },
+
+    handlePendingOrderNoSelect(item) {
+      this.pendingQuery.orderNo = String((item && item.value) || '').trim()
+      this.handlePendingHeaderSearch()
+    },
+
+    handlePendingMaterialSelect(item) {
+      this.pendingQuery.materialCode = String((item && item.value) || '').trim()
+      this.handlePendingHeaderSearch()
     },
 
     async loadPendingOweAreaSummary() {
@@ -5678,7 +6457,11 @@ export default {
         return
       }
       try {
-        const res = await getPendingOrdersOweArea({ materialCode })
+        const res = await getPendingOrdersOweArea({
+          orderNo: String((this.pendingQuery && this.pendingQuery.orderNo) || '').trim(),
+          materialCode,
+          pendingStatus: (this.pendingQuery && this.pendingQuery.status) || 'ALL'
+        })
         if (res.code === 200 || res.code === 20000) {
           this.pendingMaterialOweArea = Number(res.data || 0)
         } else {
@@ -5698,6 +6481,14 @@ export default {
       this.showCompletedRows = !this.showCompletedRows
       this.pendingPage = 1
       this.loadOrders()
+    },
+
+    resolvePendingIncludeCompleted() {
+      const status = String((this.pendingQuery && this.pendingQuery.status) || 'ALL').toUpperCase()
+      if (status === 'SCHEDULED_COMPLETED' || status === 'ALL') {
+        return true
+      }
+      return !!this.showCompletedRows
     },
 
     // 加载设备列表
@@ -6330,6 +7121,7 @@ export default {
 
     resetSlittingSearch() {
       this.slittingQuery.orderNo = ''
+      this.slittingQuery.status = 'UNFINISHED'
       this.slittingPage = 1
       this.loadSlittingSchedules()
     },
@@ -6344,16 +7136,26 @@ export default {
         if (!Object.keys(this.slittingSpeedMap).length) {
           await this.loadSlittingSpeedMap()
         }
+        const selectedStatus = this.slittingQuery.status || 'UNFINISHED'
+        const statusParam = selectedStatus || null
         const res = await getSlittingSchedules({
           current: this.slittingPage,
           size: this.slittingPageSize,
           orderNo: (this.slittingQuery.orderNo || '').trim(),
+          status: statusParam,
           sortProp: (this.slittingSort && this.slittingSort.prop) || null,
           sortOrder: (this.slittingSort && this.slittingSort.order) || null
         })
         if (res.code === 200 || res.code === 20000) {
           const pageData = res.data || {}
           const records = pageData.records || pageData.list || []
+          const total = Number(pageData.total || 0)
+          const totalPages = Math.max(1, Math.ceil(total / Math.max(1, this.slittingPageSize)))
+          if (!records.length && total > 0 && this.slittingPage > totalPages) {
+            this.slittingPage = totalPages
+            await this.loadSlittingSchedules()
+            return
+          }
           const mappedSlitting = records.map(item => {
             const statusText = String(item.status || '').trim().toUpperCase()
             const hasPlan = this.hasSlittingPlan(item)
@@ -6363,23 +7165,27 @@ export default {
             if (planTime && String(planTime).length === 10) {
               planTime = `${planTime} 08:00:00`
             }
+            // 只有当状态为空或者处于待排原始状态时，才根据是否有计划判定状态
+            let finalStatus = statusText
+            if (!statusText || statusText === 'REWINDING_SCHEDULED') {
+              finalStatus = hasPlan ? 'SLITTING_SCHEDULED' : 'REWINDING_SCHEDULED'
+            }
             return {
               ...item,
-              status: hasPlan ? statusText : 'REWINDING_SCHEDULED',
+              status: finalStatus,
               packaging_date: planTime,
               slitting_equipment: item.slitting_equipment || '',
-              __editing: !isScheduled,
+              __editing: !isScheduled && statusText !== 'TERMINATED',
               __manual: false
             }
           })
           this.slittingList = await this.enrichMaterialNamesFromSpec(mappedSlitting)
           this.refreshSlittingLockSummary()
-          if ((this.slittingSort && this.slittingSort.prop) !== 'schedule_id') {
-            this.applySlittingSort()
-          }
+          
+          // 统一走后端排序，前端不再进行二次本地排序
           await this.ensureRewindingSpeedForRows(this.slittingList)
           await this.ensureSlittingSpeedForRows(this.slittingList)
-          this.slittingTotal = Number(pageData.total || 0)
+          this.slittingTotal = total
         } else {
           this.slittingList = []
           this.slittingLockSummary = { unlockedRows: 0, unlockedArea: 0 }
@@ -6864,7 +7670,26 @@ export default {
     },
 
     getScheduleId(row) {
-      return row.id || row.schedule_id
+      const id = this.resolveNumericScheduleId(row)
+      return id > 0 ? id : null
+    },
+
+    canOpenOrderMore(row) {
+      const remaining = Number((row && row.remaining_qty) || 0)
+      if (remaining > 0) return true
+      return this.canRollbackPending(row)
+    },
+
+    canRollbackPending(row) {
+      if (!row) return false
+      // 仅允许“已排程未完成”回退到未排程：
+      // active_schedule_qty > 0 且 生产完成标识不是Y
+      const activeScheduled = Number(row.active_schedule_qty || 0)
+      const completedFlag = String(row.is_completed || '').toUpperCase()
+      if (!(activeScheduled > 0) || completedFlag === 'Y') return false
+      const scheduleId = Number(this.getScheduleId(row) || 0)
+      const orderDetailId = Number((row && row.order_detail_id) || 0)
+      return scheduleId > 0 || orderDetailId > 0
     },
 
     handleScheduleActionCommand(payload) {
@@ -6875,6 +7700,8 @@ export default {
         this.handleTerminateSchedule(payload.row)
       } else if (payload.action === 'reduce') {
         this.handleReduceSchedule(payload.row)
+      } else if (payload.action === 'resume') {
+        this.handleResumeSchedule(payload.row)
       } else if (payload.action === 'reset') {
         this.handleResetSchedule(payload.row)
       }
@@ -6892,8 +7719,73 @@ export default {
         this.openMaterialIssueDialog(payload.row)
       } else if (payload.action === 'urgentPreempt') {
         this.handleUrgentPreempt(payload.row)
+      } else if (payload.action === 'rollback') {
+        this.handleRollbackPendingOrder(payload.row)
       } else if (payload.action === 'reset') {
         this.handleResetSchedule(payload.row)
+      }
+    },
+
+    async handleRollbackPendingOrder(row) {
+      if (!this.canRollbackPending(row)) {
+        this.$message.warning('仅支持“已排程未完成”回退到未排程')
+        return
+      }
+      const scheduleId = Number(this.getScheduleId(row) || 0)
+      const orderDetailId = Number((row && row.order_detail_id) || 0)
+      if (!(scheduleId > 0) && !(orderDetailId > 0)) {
+        this.$message.warning('未找到可回退的排程记录')
+        return
+      }
+
+      try {
+        const reasonPrompt = await this.$prompt('请输入回退原因（必填）', '回退到未排程', {
+          confirmButtonText: '下一步',
+          cancelButtonText: '取消',
+          inputPlaceholder: '如：计划调整，需要重新排程',
+          inputValidator: (value) => {
+            if (!value || !value.trim()) return '原因不能为空'
+            return true
+          }
+        })
+
+        await this.$confirm('将回退当前行排程并回滚已排程数量，使该订单重新进入“未排程”状态。是否继续？', '确认回退到未排程', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+
+        let res
+        if (scheduleId > 0) {
+          res = await resetScheduleBySchedule({
+            scheduleId,
+            reason: reasonPrompt.value,
+            operator: 'frontend'
+          })
+        } else {
+          res = await resetScheduleByOrderDetail({
+            orderDetailId,
+            reason: reasonPrompt.value,
+            operator: 'frontend'
+          })
+        }
+
+        if (res.code === 200 || res.code === 20000) {
+          this.$message.success('回退排程成功，订单已回到未完成可排程状态')
+          await Promise.all([
+            this.loadOrders(),
+            this.loadCoatingSchedules(),
+            this.loadRewindingSchedules(),
+            this.loadSlittingSchedules()
+          ])
+        } else {
+          this.$message.error(res.message || '回退排程失败')
+        }
+      } catch (error) {
+        if (error === 'cancel' || (error && error.message === 'cancel')) {
+          return
+        }
+        this.$message.error(this.parseApiError(error, '回退排程失败'))
       }
     },
 
@@ -7032,6 +7924,39 @@ export default {
           return
         }
         this.$message.error(this.parseApiError(error, '清空单行数据失败'))
+      }
+    },
+
+    async handleResumeSchedule(row) {
+      const scheduleId = this.getScheduleId(row)
+      if (!scheduleId) {
+        this.$message.warning('未找到排程ID')
+        return
+      }
+
+      try {
+        await this.$confirm('确定要恢复该已终止的排程吗？恢复后将重新进入待生产状态。', '恢复确认', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+
+        const res = await resumeSchedule({
+          scheduleId,
+          operator: this.$store.getters.name || 'frontend'
+        })
+
+        if (res.code === 200 || res.code === 20000) {
+          this.$message.success('排程已成功恢复')
+          this.onTabChange({ name: this.activeTab }) // 刷新当前Tab数据
+        } else {
+          this.$message.error(res.message || '恢复失败')
+        }
+      } catch (e) {
+        if (e !== 'cancel') {
+          console.error('[ResumeError]', e)
+          this.$message.error('操作失败: ' + (e.message || '未知错误'))
+        }
       }
     },
 
@@ -7187,8 +8112,7 @@ export default {
     },
 
     isReadinessBlocked(row) {
-      const code = String((row && row.readiness_status_code) || '').toUpperCase()
-      return code === 'SHORTAGE'
+      return false
     },
 
     statusType(status) {
@@ -7261,14 +8185,12 @@ export default {
 
     // 确认排程
     handleConfirmSchedule(row) {
-      if (this.isReadinessBlocked(row)) {
-        this.$message.warning('当前订单明细处于缺料状态，不能确认排程')
-        return
-      }
       const unlockedArea = this.getUnlockedArea(row)
+      const readinessCode = String((row && row.readiness_status_code) || '').toUpperCase()
+      const shortageHint = readinessCode === 'SHORTAGE' ? '当前明细为缺料状态，系统将按本次排程数量先行确认。' : ''
       const message = unlockedArea > 0
-        ? `当前订单仍有 ${unlockedArea.toFixed(2)} ㎡ 未锁定，继续确认后将进入排程流程。是否继续？`
-        : '确认要对该订单进行排程吗？'
+        ? `${shortageHint}${shortageHint ? ' ' : ''}当前订单仍有 ${unlockedArea.toFixed(2)} ㎡ 未锁定，继续确认后将进入排程流程。是否继续？`
+        : `${shortageHint}${shortageHint ? ' ' : ''}确认要对该订单进行排程吗？`
       this.$confirm(message, '提示', {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
@@ -7405,11 +8327,56 @@ export default {
       } else if (tab.name === 'slitting') {
         this.loadSlittingSchedules()
         this.relayoutTable('slittingTable')
+      } else if (tab.name === 'shortage') {
+        this.loadShortageAnalysis()
       }
       this.updateTableMaxHeight()
       this.$nextTick(() => {
         this.syncActiveTableLayout()
       })
+    },
+
+    loadShortageAnalysis() {
+      this.shortageLoading = true
+      const params = {
+        materialCode: this.shortageQuery.materialCode,
+        current: this.shortageQuery.page,
+        size: this.shortageQuery.size,
+        isGrouped: this.shortageQuery.isGrouped,
+        sortProp: this.shortageSort.prop || null,
+        sortOrder: this.shortageSort.order || null
+      }
+      getShortageAnalysis(params)
+        .then(res => {
+          if (res.data && res.data.records) {
+            this.shortageList = res.data.records
+            this.shortageTotal = Number(res.data.total)
+          } else {
+            this.shortageList = res.data || []
+            this.shortageTotal = this.shortageList.length
+          }
+        })
+        .finally(() => {
+          this.shortageLoading = false
+        })
+    },
+
+    handleShortageSizeChange(val) {
+      this.shortageQuery.size = val
+      this.shortageQuery.page = 1
+      this.loadShortageAnalysis()
+    },
+
+    handleShortagePageChange(val) {
+      this.shortageQuery.page = val
+      this.loadShortageAnalysis()
+    },
+
+    handleShortageSortChange({ prop, order }) {
+      this.shortageSort.prop = prop
+      this.shortageSort.order = order
+      this.shortageQuery.page = 1
+      this.loadShortageAnalysis()
     },
 
     // 订单表格行样式
@@ -7451,8 +8418,8 @@ export default {
   font-size: 12px;
 }
 .manual-schedule-table ::v-deep .el-table__cell .cell {
-  white-space: nowrap;
-  overflow: hidden;
+  white-space: nowrap !important; /* 恢复单行显示，强制触发表格横向滚动条 */
+  overflow: hidden !important;
   text-overflow: ellipsis;
   word-break: normal;
   font-size: 12px;
@@ -7470,10 +8437,10 @@ export default {
 
 .manual-schedule-table ::v-deep .el-table__cell .cell.el-tooltip {
   display: block;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  word-break: normal;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  word-break: break-word;
   font-size: 12px;
   line-height: 18px;
 }
@@ -7486,8 +8453,8 @@ export default {
 }
 
 .manual-schedule-table ::v-deep .el-table th > .cell {
-  white-space: nowrap;
-  overflow: hidden;
+  white-space: nowrap !important;
+  overflow: hidden !important;
   text-overflow: ellipsis;
   word-break: keep-all;
   line-height: 18px;
@@ -7555,45 +8522,21 @@ export default {
   padding: 8px;
 }
 
+/* Consistently using styles at the bottom of the file */
 .manual-schedule-page {
-  box-sizing: border-box;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  /* removed redundant definitions */
 }
 
-.manual-schedule-page ::v-deep .el-tabs {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.manual-schedule-page ::v-deep .el-tabs__content {
+.manual-schedule-page ::v-deep .el-table {
   flex: 1;
-  min-height: 0;
-  padding-bottom: 0;
-}
-
-.manual-schedule-page ::v-deep .el-tab-pane {
-  height: 100%;
-  overflow: auto;
-  padding-bottom: 4px;
-}
-
-.manual-schedule-page ::v-deep .el-card {
-  margin-bottom: 6px;
-}
-
-.manual-schedule-page ::v-deep .el-card__header {
-  padding: 10px 12px;
-}
-
-.manual-schedule-page ::v-deep .el-card__body {
-  padding: 10px 12px;
 }
 
 .manual-schedule-page ::v-deep .el-pagination {
   margin-top: 6px;
+}
+
+.manual-schedule-page ::v-deep .el-table__body-wrapper {
+  overflow-x: auto !important;
 }
 
 .manual-schedule-page ::v-deep .el-tag {
@@ -7769,9 +8712,46 @@ export default {
   align-items: center;
 }
 
+.process-time-editable {
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.process-time-editable:hover {
+  color: #409EFF;
+  background: #ecf5ff;
+}
+
+.process-time-selected {
+  background: #ecf5ff;
+  box-shadow: inset 0 0 0 1px #b3d8ff;
+}
+
+.process-time-edit-icon {
+  margin-left: 4px;
+  font-size: 12px;
+  color: #409EFF;
+  opacity: 0.7;
+}
+
 .process-time-action {
   padding: 0;
   font-size: 12px;
+}
+
+.process-time-picker {
+  width: 152px;
+}
+
+.process-time-picker ::v-deep .el-input__inner {
+  height: 24px;
+  line-height: 24px;
+  font-size: 12px;
+}
+
+.process-time-picker ::v-deep .el-input__icon {
+  line-height: 24px;
 }
 
 .process-time-empty {
@@ -7789,6 +8769,7 @@ export default {
 .mb-10 {
   margin-bottom: 10px;
 }
+
 .mt-10 {
   margin-top: 10px;
 }
@@ -7796,9 +8777,165 @@ export default {
   text-align: right;
 }
 
+.manual-schedule-page {
+  padding: 8px;
+  background-color: #f0f2f5;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 防止出现双滚动条 */
+  min-height: calc(100vh - 100px);
+  padding-bottom: 8px;
+}
+
+.manual-schedule-page ::v-deep .el-tabs--border-card {
+  border: none;
+  box-shadow: none;
+  border-radius: 4px;
+  background: transparent;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.manual-schedule-page ::v-deep .el-tabs--border-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+}
+
+.manual-schedule-page ::v-deep .el-tabs--border-card > .el-tabs__header {
+  background-color: #f8f9fb;
+  border-bottom: 1px solid #e4e7ed;
+  border-radius: 4px 4px 0 0;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.manual-schedule-page ::v-deep .el-tabs--border-card > .el-tabs__content {
+  padding: 0;
+  background: #fff;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden !important;
+}
+
+/* 恢复 Tab 的正常显示逻辑 */
+.manual-schedule-page ::v-deep .el-tab-pane {
+  height: 100%;
+  overflow: hidden !important;
+}
+
+.manual-schedule-page ::v-deep .el-tab-pane.is-active {
+  display: flex !important;
+  flex-direction: column;
+}
+
+.manual-schedule-page ::v-deep .el-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: none;
+}
+
+.manual-schedule-page ::v-deep .el-card__body {
+  padding: 0 !important;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: visible; /* 不裁剪子元素，让 .table-main-area 自己管理滚动 */
+}
+
+.table-main-area {
+  /* 接管全部滚动：横向不超出时自适应，超出时出现横向滚动条 */
+  flex: 1;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 给表格设置最小宽度以触发横向滚动（按需调整） */
+.manual-schedule-page ::v-deep .manual-schedule-table {
+  min-width: 1200px;
+}
+
+/* 使用全局分页与滚动条样式，避免局部覆盖导致样式不一致。若需要右对齐，可在容器上加 `pagination-container--right` 类。 */
+.manual-schedule-page ::v-deep .pagination-container {
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  position: sticky;
+  bottom: 0;
+  z-index: 260;
+  background: #fff;
+  border-top: 1px solid #ebeef5;
+  padding-top: 8px;
+}
+
+/* 让表格使用全局滚动条样式（避免自定义颜色覆盖） */
+.manual-schedule-page ::v-deep .el-table__body-wrapper {
+  overflow-x: auto;
+}
+
 .pending-summary-text {
-  margin-left: 8px;
+  margin-left: 12px;
+  color: #606266;
+  font-size: 13px;
+  font-weight: normal;
+}
+
+.pending-summary-text strong {
   color: #409EFF;
+}
+
+/* 头部容器布局优化 */
+.header-card {
+  margin-bottom: 0px;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+}
+
+.header-card ::v-deep .el-card__header {
+  padding: 10px 16px;
+  background-color: #f8f9fb;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 32px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.search-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .stock-scan-form {
@@ -7839,6 +8976,23 @@ export default {
   background-color: #d9f7be !important;
 }
 
+.order-no-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.copy-order-no-btn {
+  padding: 0;
+  font-size: 14px;
+}
+
+</style>
+
+<style>
+.manual-slitting-dialog .el-dialog__body {
+  overflow-x: auto;
+}
 </style>
 
 <style lang="scss">

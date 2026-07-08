@@ -35,6 +35,7 @@
       stripe
       border
       style="width: 100%; margin-top: 20px"
+      max-height="calc(100vh - 280px)"
       :default-sort="{ prop: 'createdAt', order: 'descending' }"
     >
       <el-table-column prop="orderNo" label="订单号" width="140" sortable />

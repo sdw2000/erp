@@ -1,6 +1,7 @@
 const { getToken } = require('./auth')
 
 function sanitizeData(data) {
+  if (Array.isArray(data)) return data
   const src = data && typeof data === 'object' ? data : {}
   const out = {}
   Object.keys(src).forEach((key) => {
@@ -37,6 +38,7 @@ function request(options) {
     wx.request({
       url: `${baseUrl}${options.url}`,
       method,
+      timeout: Number(options.timeout || 15000),
       data: payload,
       header: {
         'content-type': 'application/json',
@@ -52,6 +54,11 @@ function request(options) {
         }
       },
       fail(err) {
+        const isTimeout = err && (err.errMsg || '').toLowerCase().includes('timeout')
+        if (isTimeout) {
+          reject({ code: 408, msg: '请求超时，请检查网络后重试' })
+          return
+        }
         reject(err)
       }
     })

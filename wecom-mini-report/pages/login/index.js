@@ -8,7 +8,17 @@ Page({
     loading: false
   },
 
+  onLoad() {
+    console.log('Login Page Loaded');
+    console.log('Current Data:', this.data);
+  },
+
+  onReady() {
+    console.log('Login Page Ready');
+  },
+
   onShow() {
+    console.log('Login Page Showing');
     const app = getApp()
     const fixedBaseUrl = 'https://api.maxtritape.com'
     app.globalData.baseUrl = fixedBaseUrl

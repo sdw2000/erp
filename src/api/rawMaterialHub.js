@@ -107,6 +107,7 @@ function normalizeFilmRows(list = [], rawMetaMap = {}) {
     ...(rawMetaMap[normalizeMaterialCode(item.materialCode)] || {}),
     category: resolveMaterialCategory({
       materialCode: item.materialCode,
+      sourceType: 'film',
       explicitCategory: (rawMetaMap[normalizeMaterialCode(item.materialCode)] || {}).materialCategory
     }).label,
     sourceType: 'film',
@@ -127,6 +128,7 @@ function normalizeChemicalRows(list = [], rawMetaMap = {}) {
     ...(rawMetaMap[normalizeMaterialCode(item.materialCode)] || {}),
     category: resolveMaterialCategory({
       materialCode: item.materialCode,
+      sourceType: 'chemical',
       explicitCategory: (rawMetaMap[normalizeMaterialCode(item.materialCode)] || {}).materialCategory
     }).label,
     sourceType: 'chemical',

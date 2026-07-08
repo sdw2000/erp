@@ -189,7 +189,8 @@ export default {
         sundayDisabled: Number(config.sundayDisabled == null ? 1 : config.sundayDisabled),
         enabled: 1
       }))
-      this.$message.success('已应用到全部设备')
+      this.$message.success('已应用到全部设备，正在保存...')
+      await this.handleSave()
     },
     async handleSave() {
       this.saving = true
@@ -199,11 +200,11 @@ export default {
           id: row.id || null,
           equipmentId: row.equipmentId,
           equipmentCode: row.equipmentCode,
-          initialScheduleTime: config.initialScheduleTime || null,
-          cycleEndTime: config.cycleEndTime || null,
-          nextWeekStartTime: config.nextWeekStartTime || '08:00:00',
+          initialScheduleTime: row.initialScheduleTime || config.initialScheduleTime || null,
+          cycleEndTime: row.cycleEndTime || config.cycleEndTime || null,
+          nextWeekStartTime: row.nextWeekStartTime || config.nextWeekStartTime || '08:00:00',
           weekendRest: 0,
-          sundayDisabled: Number(config.sundayDisabled == null ? 1 : config.sundayDisabled),
+          sundayDisabled: Number(row.sundayDisabled == null ? (config.sundayDisabled == null ? 1 : config.sundayDisabled) : row.sundayDisabled),
           enabled: Number(row.enabled == null ? 1 : row.enabled),
           minStaffRequired: Number(row.minStaffRequired == null ? 1 : row.minStaffRequired),
           requiredSkillLevel: row.requiredSkillLevel || null,

@@ -1,14 +1,29 @@
-<view class="container">
-  <view class="card">
-    <view class="title">MES系统登录</view>
-    <view class="muted">请使用 MES 账号登录</view>
+<view class="login-bg">
+  <view class="header-section">
+    <view class="app-name">MES 制造执行系统</view>
+    <view class="app-desc">Workstation Login</view>
+  </view>
+  
+  <view class="login-card">
+    <view class="title">账号登录</view>
+    <view class="subtitle">Please enter your credentials</view>
 
-    <view class="label">账号</view>
-    <input class="input" value="{{username}}" placeholder="请输入账号" bindinput="onUsernameInput" />
+    <view class="login-form">
+      <view class="form-item">
+        <view class="form-label">账号</view>
+        <input class="input" value="{{username}}" placeholder="请输入工号/账号" bindinput="onUsernameInput" />
+      </view>
 
-    <view class="label">密码</view>
-    <input class="input" password value="{{password}}" placeholder="请输入密码" bindinput="onPasswordInput" />
+      <view class="form-item">
+        <view class="form-label">密码</view>
+        <input class="input" password value="{{password}}" placeholder="请输入登录密码" bindinput="onPasswordInput" />
+      </view>
 
-    <button class="btn-primary" loading="{{loading}}" bindtap="onLogin">登录</button>
+      <button class="btn-primary login-btn" loading="{{loading}}" bindtap="onLogin">立即登录</button>
+      
+      <view class="login-footer">
+        <text>如需开通账号，请联系系统管理员</text>
+      </view>
+    </view>
   </view>
 </view>

@@ -146,15 +146,36 @@
     <!-- 明细对话框 -->
     <el-dialog :visible.sync="detailDialogVisible" :title="`${currentChemical.materialName} - 库存明细`" width="90%">
       <div style="margin-bottom: 10px; text-align: right">
+        <el-select v-model="detailStatusFilter" size="mini" style="width: 160px; margin-right: 12px">
+          <el-option label="仅可用" value="available" />
+          <el-option label="仅锁定" value="locked" />
+          <el-option label="仅已用完" value="used" />
+          <el-option label="全部" value="all" />
+        </el-select>
         <el-button v-if="$hasRole('admin')" type="primary" size="mini" icon="el-icon-plus" @click="openCreateDetail">新增明细</el-button>
       </div>
-      <el-table :data="detailList" border stripe max-height="500">
+      <el-table :data="filteredDetailList" border stripe max-height="500">
         <el-table-column type="index" label="序号" width="60" align="center" />
         <el-table-column prop="batchNo" label="批次号" width="140" />
         <el-table-column prop="containerNo" label="桶号/包号" width="120" />
+        <el-table-column label="规格" min-width="180" show-overflow-tooltip>
+          <template slot-scope="scope">
+            {{ formatChemicalDetailSpec(scope.row) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="packUom" label="包装单位" width="90" align="center" />
+        <el-table-column prop="packCount" label="包装数" width="90" align="right" />
+        <el-table-column prop="stdQtyPerPack" label="每包标准量" width="120" align="right">
+          <template slot-scope="scope">
+            <span>{{ scope.row.stdQtyPerPack == null ? '-' : Number(scope.row.stdQtyPerPack).toFixed(3) }}</span>
+            <span style="color:#909399; margin-left:4px;">{{ scope.row.stdUom || '-' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="weight" label="重量(kg)" width="100" align="right" />
         <el-table-column prop="location" label="库位" width="100" align="center" />
         <el-table-column prop="supplier" label="供应商" width="150" show-overflow-tooltip />
+        <el-table-column prop="purchaseOrderNo" label="采购单号" width="140" show-overflow-tooltip />
+        <el-table-column prop="arrivalDate" label="到货日期" width="110" />
         <el-table-column prop="inboundDate" label="入库日期" width="110" />
         <el-table-column prop="expiryDate" label="有效期至" width="110">
           <template slot-scope="scope">
@@ -361,6 +382,7 @@ export default {
       detailDialogVisible: false,
       currentChemical: {},
       detailList: [],
+      detailStatusFilter: 'available',
       detailEditDialogVisible: false,
       detailEditMode: 'create',
       stockEditDialogVisible: false,
@@ -400,6 +422,15 @@ export default {
       flowLoading: false,
       flowList: [],
       flowTarget: {}
+    }
+  },
+  computed: {
+    filteredDetailList() {
+      const list = Array.isArray(this.detailList) ? this.detailList : []
+      if (this.detailStatusFilter === 'all') {
+        return list
+      }
+      return list.filter(item => String(item && item.status || '').toLowerCase() === this.detailStatusFilter)
     }
   },
   mounted() {
@@ -665,6 +696,7 @@ export default {
     // 查看明细
     async handleViewDetails(row) {
       this.currentChemical = row
+      this.detailStatusFilter = 'available'
       this.detailDialogVisible = true
 
       await this.loadDetailList()
@@ -908,6 +940,24 @@ export default {
       const mm = String(d.getMinutes()).padStart(2, '0')
       const ss = String(d.getSeconds()).padStart(2, '0')
       return `${y}-${m}-${day} ${hh}:${mm}:${ss}`
+    },
+
+    formatChemicalDetailSpec(row) {
+      if (!row) return '-'
+      const remark = String(row.remark || '')
+      const m = remark.match(/\|spec=([^|]+)\|/)
+      if (m && m[1]) {
+        try {
+          return decodeURIComponent(m[1])
+        } catch (e) {
+          return m[1]
+        }
+      }
+      const qty = row.stdQtyPerPack == null ? null : Number(row.stdQtyPerPack)
+      if (Number.isFinite(qty) && qty > 0) {
+        return `${qty.toFixed(3)}${row.stdUom || ''}/${row.packUom || row.unit || ''}`
+      }
+      return '-'
     },
 
     // 查看即将过期

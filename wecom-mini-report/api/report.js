@@ -64,6 +64,46 @@ function getSlittingSchedulesPage(data) {
   })
 }
 
+function getNextCoatingRollCode(params) {
+  return request({
+    url: '/schedule/manual/report-work/next-coating-roll-code',
+    method: 'GET',
+    data: params
+  })
+}
+
+function updateReportWork(data) {
+  return request({
+    url: '/schedule/manual/report-work/update',
+    method: 'POST',
+    data
+  })
+}
+
+function savePrintRecord(data) {
+  return request({
+    url: '/production/label-print-record/save',
+    method: 'POST',
+    data
+  })
+}
+
+function getTapeSpecs(data) {
+  return request({
+    url: '/api/tape-spec/list',
+    method: 'GET',
+    data
+  })
+}
+
+function suggestTapeSpecs(keyword) {
+  return request({
+    url: '/api/tape-spec/suggest',
+    method: 'GET',
+    data: { keyword, limit: 10 }
+  })
+}
+
 module.exports = {
   reportWork,
   getReportWorkList,
@@ -72,5 +112,10 @@ module.exports = {
   getMaterialIssues,
   getCoatingSchedulesPage,
   getRewindingSchedulesPage,
-  getSlittingSchedulesPage
+  getSlittingSchedulesPage,
+  getNextCoatingRollCode,
+  updateReportWork,
+  savePrintRecord,
+  getTapeSpecs,
+  suggestTapeSpecs
 }

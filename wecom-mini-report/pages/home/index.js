@@ -61,7 +61,9 @@ Page({
     t3PackEfficiency: '0.78',
     t3OuterMm: '',
     t3RollWidthMm: '',
-    t3Result: null
+    t3Result: null,
+
+    showCalcModal: false
   },
 
   onShow() {
@@ -94,6 +96,19 @@ Page({
   goReport() { wx.switchTab({ url: '/pages/report/index' }) },
   goWarehouse() { wx.switchTab({ url: '/pages/warehouse/index' }) },
   goSales() { wx.switchTab({ url: '/pages/sales/index' }) },
+  goDashboard() { wx.navigateTo({ url: '/pages/dashboard/index' }) },
+  goQC() { wx.navigateTo({ url: '/pages/qc/index' }) },
+  goPallet() { wx.navigateTo({ url: '/pages/stocktake/index' }) },
+  goTransfer() { wx.showToast({ title: '班组交接开发中', icon: 'none' }) },
+
+  showCalculators() {
+    this.setData({ showCalcModal: true })
+  },
+
+  hideCalculators() {
+    this.setData({ showCalcModal: false })
+  },
+  goReturn() { wx.navigateTo({ url: '/pages/issue/index' }) },
 
   logout() {
     clearToken()

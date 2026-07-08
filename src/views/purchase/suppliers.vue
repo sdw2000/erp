@@ -56,7 +56,7 @@
           :page-size="pagination.size"
           :total="pagination.total"
           layout="sizes, prev, pager, next, jumper, ->, total"
-          :page-sizes="[10,20,50,100]"
+          :page-sizes="pageSizes"
           @size-change="onSizeChange"
           @current-change="onPageChange"
         />
@@ -143,6 +143,20 @@
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
+                  <el-form-item label="账期" prop="paymentTerms">
+                    <el-select v-model="form.paymentTerms" placeholder="请选择或输入账期" filterable allow-create clearable style="width:100%">
+                      <el-option label="月结30天" value="月结30天" />
+                      <el-option label="月结60天" value="月结60天" />
+                      <el-option label="月结90天" value="月结90天" />
+                      <el-option label="现款现货" value="现款现货" />
+                      <el-option label="货到付款" value="货到付款" />
+                      <el-option label="预付30%" value="预付30%" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="16">
+                <el-col :span="24">
                   <el-form-item label="备注">
                     <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="补充说明" />
                   </el-form-item>
@@ -229,6 +243,7 @@
 
 <script>
 import { listSuppliers, createSupplier, updateSupplier, deleteSupplier, getSupplierDetail, downloadSupplierTemplate, importSuppliers, exportSuppliers } from '@/api/purchaseSupplier'
+import uiConfig from '@/config/ui'
 
 export default {
   name: 'PurchaseSuppliers',
@@ -237,7 +252,8 @@ export default {
       loading: false,
       suppliers: [],
       keyword: '',
-      pagination: { page: 1, size: 10, total: 0 },
+      pagination: { page: 1, size: uiConfig.defaultPageSize, total: 0 },
+      pageSizes: uiConfig.pageSizes,
       dialogVisible: false,
       isEdit: false,
       form: this.emptyForm(),
@@ -317,6 +333,7 @@ export default {
         taxNo: '',
         bankName: '',
         bankAccount: '',
+        paymentTerms: '',
         status: 'active',
         remark: '',
         contacts: [this.emptyContact()]

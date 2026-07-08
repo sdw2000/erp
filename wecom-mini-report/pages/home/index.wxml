@@ -1,17 +1,105 @@
 <view class="container home-bg">
   <view class="hero">
-    <view class="hero-title">胶带工具箱</view>
-    <view class="hero-sub">MES 快捷计算 · 现场即算即用</view>
-    <view class="hero-user" wx:if="{{userName}}">当前用户：{{userName}}</view>
-    <view class="quick-nav">
-      <button class="btn-ghost" bindtap="goReport">生产报工</button>
-      <button class="btn-ghost" bindtap="goWarehouse">仓库</button>
-      <button class="btn-ghost" bindtap="goSales">销售</button>
+    <view class="hero-top">
+      <view class="hero-left">
+        <view class="hero-title">MES 智能终端</view>
+        <view class="hero-sub">数字化工厂实时协同系统</view>
+      </view>
+      <view class="hero-right" bindtap="logout">
+        <view class="hero-user-icon">👤</view>
+        <view class="hero-user-name">{{userName || '未登录'}}</view>
+      </view>
     </view>
-    <button class="btn-danger" bindtap="logout">退出登录</button>
+    
+    <view class="stats-row">
+      <view class="stat-item">
+        <view class="stat-val">5420</view>
+        <view class="stat-label">今日生产(㎡)</view>
+      </view>
+      <view class="stat-item border-l">
+        <view class="stat-val blue-txt">12</view>
+        <view class="stat-label">活跃订单</view>
+      </view>
+      <view class="stat-item border-l">
+        <view class="stat-val">8</view>
+        <view class="stat-label">待质检</view>
+      </view>
+      <view class="stat-item border-l">
+        <view class="stat-val red-txt">2</view>
+        <view class="stat-label">预警项</view>
+      </view>
+    </view>
+
+    <view class="quick-nav">
+      <view class="nav-item" bindtap="goDashboard">
+        <view class="nav-icon">📊</view>
+        <view class="nav-text">看板</view>
+      </view>
+      <view class="nav-item" bindtap="goReport">
+        <view class="nav-icon">⚙️</view>
+        <view class="nav-text">报工</view>
+      </view>
+      <view class="nav-item" bindtap="goWarehouse">
+        <view class="nav-icon">🏬</view>
+        <view class="nav-text">仓库</view>
+      </view>
+      <view class="nav-item" bindtap="goSales">
+        <view class="nav-icon">💰</view>
+        <view class="nav-text">销售</view>
+      </view>
+    </view>
+    <!-- <button class="btn-danger" bindtap="logout">退出登录</button> -->
   </view>
 
-  <view class="card tool-card">
+  <!-- 核心业务入口 -->
+  <view class="section-title">
+    <view class="title-line"></view>
+    <view class="title-text">生产与质量管理</view>
+  </view>
+
+  <view class="op-grid-list">
+    <view class="op-card-item" bindtap="goReport">
+      <view class="op-icon-side blue-grad">📋</view>
+      <view class="op-info-side">
+        <view class="op-name-txt">生产报工</view>
+        <view class="op-desc-txt">工序报工、产量记录</view>
+      </view>
+    </view>
+    
+    <view class="op-card-item" bindtap="goQC">
+      <view class="op-icon-side purple-grad">🛡️</view>
+      <view class="op-info-side">
+        <view class="op-name-txt">质量检验</view>
+        <view class="op-desc-txt">过程巡检、首件确认</view>
+      </view>
+    </view>
+
+    <view class="op-card-item" bindtap="showCalculators">
+      <view class="op-icon-side cyan-grad">🧮</view>
+      <view class="op-info-side">
+        <view class="op-name-txt">MES 小工具</view>
+        <view class="op-desc-txt">规格换算、装箱计算</view>
+      </view>
+    </view>
+
+    <view class="op-card-item" bindtap="goTransfer">
+      <view class="op-icon-side yellow-grad">🤝</view>
+      <view class="op-info-side">
+        <view class="op-name-txt">班组交接</view>
+        <view class="op-desc-txt">接班确认、异常交接</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 工具弹窗 -->
+  <view class="modal-mask" wx:if="{{showCalcModal}}" bindtap="hideCalculators"></view>
+  <view class="modal-content {{showCalcModal ? 'modal-show' : ''}}" wx:if="{{showCalcModal}}">
+    <view class="modal-header">
+      <view class="modal-title">MES 数字化小工具</view>
+      <view class="modal-close" bindtap="hideCalculators">×</view>
+    </view>
+    <scroll-view class="modal-body" scroll-y="true" style="max-height: 80vh;">
+      <view class="card tool-card">
     <view class="tool-head">
       <view class="tool-title">工具1：直径/长度换算</view>
       <view class="tool-tip">均匀卷绕模型</view>
@@ -259,5 +347,11 @@
       <view>按体积估算每箱卷数：{{t3Result.estQtyByVolume}}</view>
       <view>按体积估算每箱重量：{{t3Result.boxWeightByVol}} kg</view>
     </view>
+  </view>
+</scroll-view>
+</view>
+  
+  <view class="footer-logout">
+    <button class="btn-ghost" bindtap="logout">退出并切换账号</button>
   </view>
 </view>

@@ -108,6 +108,62 @@ Page({
     loadingMaster: false
   },
 
+  calculateTotal() {
+    let totalArea = 0
+    let totalAmount = 0
+    const items = this.data.items.map(item => {
+      const thickness = parseFloat(item.thickness) || 0
+      const width = parseFloat(item.width) || 0
+      const length = parseFloat(item.length) || 0
+      const rolls = parseInt(item.rolls) || 0
+      const unitPrice = parseFloat(item.unitPrice) || 0
+      
+      // 计算单行面积
+      let rowArea = 0
+      if (width > 0 && length > 0 && rolls > 0) {
+        rowArea = (width / 1000) * length * rolls
+      }
+      
+      // 计算单行金额
+      let rowAmount = 0
+      if (item.unit === '㎡') {
+        rowAmount = rowArea * unitPrice
+      } else if (item.unit === '卷') {
+        rowAmount = rolls * unitPrice
+      } else if (item.unit === 'm') {
+        rowAmount = length * rolls * unitPrice
+      }
+      
+      totalArea += rowArea
+      totalAmount += rowAmount
+      
+      return {
+        ...item,
+        rowArea: rowArea.toFixed(2),
+        rowAmount: rowAmount.toFixed(2)
+      }
+    })
+    
+    this.setData({
+      items,
+      totalArea: totalArea.toFixed(2),
+      totalAmount: totalAmount.toFixed(2)
+    })
+  },
+
+  onItemFieldInput(e) {
+    const { index, key } = e.currentTarget.dataset
+    const value = e.detail.value
+    const items = this.data.items
+    items[index][key] = value
+    this.setData({ items }, () => {
+      // 只有数值类字段变动才重新计算
+      if (['thickness', 'width', 'length', 'rolls', 'unitPrice'].includes(key)) {
+        this.calculateTotal()
+      }
+    })
+  },
+
   async onShow() {
     const token = getToken()
     if (!token) {

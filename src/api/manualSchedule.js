@@ -23,6 +23,17 @@ export function getPendingOrdersOweArea(params) {
 }
 
 /**
+ * 获取欠料分析统计 (待生产 - 库存)
+ */
+export function getShortageAnalysis(params) {
+  return request({
+    url: '/schedule/manual/shortage-analysis',
+    method: 'get',
+    params
+  })
+}
+
+/**
  * 获取待排程订单列表（不分页）
  */
 export function getPendingOrdersAll(params) {
@@ -204,6 +215,17 @@ export function confirmSchedule(data) {
 export function terminateSchedule(data) {
   return request({
     url: '/schedule/manual/terminate',
+    method: 'post',
+    data
+  })
+}
+
+/**
+ * 恢复已终止的排程
+ */
+export function resumeSchedule(data) {
+  return request({
+    url: '/schedule/manual/resume',
     method: 'post',
     data
   })
@@ -401,6 +423,28 @@ export function urgentLock(data) {
 export function getOrderItemsReadiness(data) {
   return request({
     url: '/api/production/readiness/order-items/batch',
+    method: 'post',
+    data
+  })
+}
+
+/**
+ * 查询标签打印记录
+ */
+export function getLabelPrintRecordPage(params) {
+  return request({
+    url: '/production/label-print-record/page',
+    method: 'get',
+    params
+  })
+}
+
+/**
+ * 保存/更新标签打印记录
+ */
+export function saveLabelPrintRecord(data) {
+  return request({
+    url: '/production/label-print-record/save',
     method: 'post',
     data
   })

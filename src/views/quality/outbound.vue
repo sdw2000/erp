@@ -62,13 +62,16 @@
           </template>
         </el-table-column>
         <el-table-column prop="inspectionTime" label="检验时间" width="170" />
-        <el-table-column label="操作" width="290" fixed="right">
+        <el-table-column label="操作" min-width="420" class-name="operation-col">
           <template slot-scope="{ row }">
-            <el-button type="text" size="small" @click="viewDetail(row)">详情</el-button>
-            <el-button type="text" size="small" @click="openTestSheet(row)">修改</el-button>
-            <el-button type="text" size="small" @click="previewTestReport(row)">预览打印</el-button>
-            <el-button type="text" size="small" @click="printTestReport(row)">打印报告</el-button>
-            <el-button type="text" size="small" style="color: #F56C6C" @click="handleDelete(row)">删除</el-button>
+            <div class="op-btns">
+              <el-button type="text" size="small" @click="viewDetail(row)">详情</el-button>
+              <el-button type="text" size="small" @click="openTestSheet(row)">修改</el-button>
+              <el-button type="text" size="small" @click="previewTestReport(row)">预览打印</el-button>
+              <el-button type="text" size="small" @click="printTestReport(row)">打印报告</el-button>
+              <el-button type="text" size="small" @click="openTemplateFieldDialog(row)">模板字段值</el-button>
+              <el-button type="text" size="small" style="color: #F56C6C" @click="handleDelete(row)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -94,6 +97,7 @@
           <el-descriptions-item label="卷码">{{ detailRecord.rollCode || '-' }}</el-descriptions-item>
           <el-descriptions-item label="料号">{{ getSheetDisplayMaterialCode(detailRecord) }}</el-descriptions-item>
           <el-descriptions-item label="物料名称">{{ getSheetDisplayMaterialName(detailRecord) }}</el-descriptions-item>
+          <el-descriptions-item label="净重">{{ detailRecord.netWeight || (getRowSnapshot(detailRecord).netWeight) || '-' }}</el-descriptions-item>
           <el-descriptions-item label="规格">{{ detailRecord.specification || '-' }}</el-descriptions-item>
           <el-descriptions-item label="检验员">{{ detailRecord.inspectorName || '-' }}</el-descriptions-item>
           <el-descriptions-item label="抽样数">{{ detailRecord.sampleQty || 0 }}</el-descriptions-item>
@@ -156,21 +160,31 @@
           </el-select>
         </el-form-item>
         <el-form-item label="明细料号" prop="materialCode">
-          <el-select
-            v-model="form.materialCode"
-            filterable
-            clearable
-            placeholder="请选择订单明细料号"
-            style="width:100%"
-            @change="onOrderMaterialChange"
-          >
-            <el-option
-              v-for="item in orderMaterialOptions"
-              :key="item.materialCode"
-              :label="`${item.materialCode} - ${item.materialName || '-'}`"
-              :value="item.materialCode"
-            />
-          </el-select>
+          <div style="display:flex; gap:8px;">
+            <el-select
+              v-model="form.materialCode"
+              filterable
+              clearable
+              placeholder="请选择订单明细料号"
+              style="flex:1"
+              @change="onOrderMaterialChange"
+            >
+              <el-option
+                v-for="item in orderMaterialOptions"
+                :key="item.materialCode"
+                :label="`${item.materialCode} - ${item.materialName || '-'}`"
+                :value="item.materialCode"
+              />
+            </el-select>
+            <el-button 
+              type="primary" 
+              plain 
+              size="mini" 
+              icon="el-icon-setting" 
+              :disabled="!form.materialCode" 
+              @click="openQcItemManager"
+            >指标管理</el-button>
+          </div>
         </el-form-item>
         <el-form-item label="规格/数量" prop="selectedOrderItemId">
           <el-select
@@ -239,7 +253,17 @@
           <el-input v-model="qcRuleText" type="textarea" :rows="3" readonly placeholder="选择料号后自动加载QC规则" />
         </el-form-item>
         <el-form-item label="检测明细表">
-          <div class="muted-tip">测试项目来源：料号表（胶带特性参数）</div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="muted-tip">测试项目来源：料号表（胶带特性参数）</div>
+            <div style="margin-bottom: 4px;">
+              <span style="font-size: 12px; color: #606266; margin-right: 8px;">采样点数:</span>
+              <el-radio-group v-model="samplingColumnSize" size="mini" @change="onSamplingColumnSizeChange">
+                <el-radio-button :label="3">3</el-radio-button>
+                <el-radio-button :label="5">5</el-radio-button>
+                <el-radio-button :label="10">10</el-radio-button>
+              </el-radio-group>
+            </div>
+          </div>
           <div style="width: 100%;">
             <div v-if="measuredRows.length === 0" class="empty-qc-table">
               请先选择料号，系统会自动生成检测表格模板
@@ -257,11 +281,11 @@
                   <div class="qc-rule-text">{{ buildRuleText(row) }}</div>
                 </template>
               </el-table-column>
-              <el-table-column label="检测值1~5" width="320">
+              <el-table-column :label="`检测值1~${samplingColumnSize}`" :width="samplingColumnSize > 5 ? 500 : 320">
                 <template slot-scope="{ row }">
                   <div class="qc-actual-inputs">
                     <el-input
-                      v-for="idx in 5"
+                      v-for="idx in samplingColumnSize"
                       :key="`${row.key}-${idx}`"
                       v-model="row.actualValues[idx - 1]"
                       size="mini"
@@ -292,12 +316,21 @@
         <el-form-item label="不合格数" prop="failQty">
           <el-input-number v-model="form.failQty" :min="0" />
         </el-form-item>
+        <el-form-item label="净重(kg)">
+          <el-input v-model="form.netWeight" placeholder="请输入净重" />
+        </el-form-item>
         <el-form-item label="结果" prop="overallResult">
-          <el-select v-model="form.overallResult" placeholder="请选择">
-            <el-option label="合格" value="pass" />
-            <el-option label="不合格" value="fail" />
-            <el-option label="待判定" value="pending" />
-          </el-select>
+          <div style="display: flex; align-items: center;">
+            <el-select v-model="form.overallResult" placeholder="请选择" :disabled="!isManualMode" style="width: 140px;">
+              <el-option label="合格" value="pass" />
+              <el-option label="不合格" value="fail" />
+              <el-option label="待判定" value="pending" />
+            </el-select>
+            <el-checkbox v-model="isManualMode" style="margin-left: 15px;">手动修正/特采放行</el-checkbox>
+          </div>
+        </el-form-item>
+        <el-form-item v-if="isManualMode" label="修正原因" prop="dispositionRemark" :rules="[{ required: true, message: '手动修改结果必须填写特采/修正原因', trigger: 'blur' }]">
+          <el-input v-model="form.dispositionRemark" type="textarea" placeholder="请输入特采放行或结果修正的具体原因（必填）" />
         </el-form-item>
         <el-form-item label="缺陷类型">
           <el-select v-model="form.defectType" placeholder="可选" filterable clearable>
@@ -377,6 +410,39 @@
         <el-button type="primary" :loading="sheetSaving" @click="saveCurrentSheet">保存修改</el-button>
         <el-button icon="el-icon-view" @click="previewCurrentSheet">预览打印</el-button>
         <el-button type="primary" icon="el-icon-printer" @click="printCurrentSheet">打印报告</el-button>
+        <el-button type="success" plain icon="el-icon-document-copy" @click="openTemplateFieldDialog(sheetRecord, { rows: sheetRows, summary: sheetSummary })">模板字段值</el-button>
+      </span>
+    </el-dialog>
+
+    <el-dialog title="Excel占位模板字段值" :visible.sync="templateFieldDialogVisible" width="980px">
+      <el-tabs v-model="templateFieldActiveTab">
+        <el-tab-pane label="占位符清单" name="fields">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <el-input v-model="templateFieldKeyword" placeholder="搜索字段名/占位符/值" clearable style="width:340px" />
+            <div>
+              <el-button size="mini" @click="copyTemplateFieldList">复制当前清单</el-button>
+              <el-button size="mini" type="primary" @click="copyTemplateFieldJson">复制JSON</el-button>
+            </div>
+          </div>
+          <el-table :data="filteredTemplateFieldRows" border stripe size="mini" max-height="430">
+            <el-table-column prop="key" label="字段名" min-width="220" />
+            <el-table-column prop="placeholder" label="占位符" min-width="220" />
+            <el-table-column label="实际值" min-width="360">
+              <template slot-scope="{ row }">
+                <span>{{ row.valueText }}</span>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div style="margin-top:8px;color:#909399;font-size:12px;">
+            已列出：料号、物料名称、批次号、规格、检测条件、检测项目名称、标准值、测试值、测试方法、判定结果等全部可写入模板字段。
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="复制文本" name="raw">
+          <el-input :value="templateFieldRawText" type="textarea" :rows="16" readonly />
+        </el-tab-pane>
+      </el-tabs>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="templateFieldDialogVisible = false">关闭</el-button>
       </span>
     </el-dialog>
 
@@ -402,6 +468,76 @@
       </el-table>
       <span slot="footer" class="dialog-footer">
         <el-button @click="batchHistoryVisible = false">关闭</el-button>
+      </span>
+    </el-dialog>
+
+    <!-- 性能指标管理对话框 -->
+    <el-dialog title="性能指标标准管理" :visible.sync="qcItemManagerVisible" width="800px">
+      <div style="margin-bottom: 12px; display: flex; justify-content: space-between;">
+        <span style="font-weight: bold; color: #409EFF;">料号: {{ form.materialCode }}</span>
+        <div>
+          <el-button type="warning" size="mini" icon="el-icon-refresh" @click="handleSyncFromSpec">从旧规格表同步</el-button>
+          <el-button type="primary" size="mini" icon="el-icon-plus" @click="handleAddQcItem">添加指标</el-button>
+        </div>
+      </div>
+      <el-table :data="qcItems" border size="small">
+        <el-table-column prop="orderNo" label="排序" width="60" align="center" />
+        <el-table-column prop="itemName" label="项目名称" width="120" />
+        <el-table-column prop="itemUnit" label="单位" width="80" align="center" />
+        <el-table-column prop="judgeMode" label="判定模式" width="100" />
+        <el-table-column label="标准范围" min-width="150">
+          <template slot-scope="{ row }">
+            <span v-if="row.judgeMode === 'range'">{{ row.minValue }} ~ {{ row.maxValue }}</span>
+            <span v-else-if="row.judgeMode === 'gte'">≥ {{ row.minValue }}</span>
+            <span v-else-if="row.judgeMode === 'lte'">≤ {{ row.maxValue }}</span>
+            <span v-else>{{ row.stdValue }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" align="center">
+          <template slot-scope="{ row }">
+            <el-button type="text" size="mini" @click="handleEditQcItem(row)">编辑</el-button>
+            <el-button type="text" size="mini" style="color: #F56C6C" @click="handleDeleteQcItem(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <!-- 编辑指标项对话框 -->
+    <el-dialog title="编辑检测指标" :visible.sync="qcItemEditVisible" width="450px" append-to-body>
+      <el-form :model="qcItemForm" label-width="100px" size="small">
+        <el-form-item label="项目名称">
+          <el-input v-model="qcItemForm.itemName" placeholder="如: 剥离力" />
+        </el-form-item>
+        <el-form-item label="单位">
+          <el-input v-model="qcItemForm.itemUnit" placeholder="如: N/25mm" />
+        </el-form-item>
+        <el-form-item label="判定模式">
+          <el-select v-model="qcItemForm.judgeMode" style="width: 100%">
+            <el-option label="范围 (Min~Max)" value="range" />
+            <el-option label="大于等于 (≥Min)" value="gte" />
+            <el-option label="小于等于 (≤Max)" value="lte" />
+            <el-option label="文本/对等 (Value)" value="value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="['range', 'gte'].includes(qcItemForm.judgeMode)" label="最小值">
+          <el-input-number v-model="qcItemForm.minValue" :precision="4" style="width: 100%" />
+        </el-form-item>
+        <el-form-item v-if="['range', 'lte'].includes(qcItemForm.judgeMode)" label="最大值">
+          <el-input-number v-model="qcItemForm.maxValue" :precision="4" style="width: 100%" />
+        </el-form-item>
+        <el-form-item v-if="qcItemForm.judgeMode === 'value'" label="标准文本">
+          <el-input v-model="qcItemForm.stdValue" />
+        </el-form-item>
+        <el-form-item label="排序号">
+          <el-input-number v-model="qcItemForm.orderNo" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="qcItemForm.remark" type="textarea" />
+        </el-form-item>
+      </el-form>
+      <span slot="footer">
+        <el-button size="small" @click="qcItemEditVisible = false">取消</el-button>
+        <el-button type="primary" size="small" @click="handleSaveQcItem">保存</el-button>
       </span>
     </el-dialog>
   </div>
@@ -440,6 +576,20 @@ export default {
       createVisible: false,
       testSheetVisible: false,
       batchHistoryVisible: false,
+      qcItemManagerVisible: false,
+      qcItems: [],
+      qcItemForm: {
+        id: null,
+        itemName: '',
+        itemUnit: '',
+        judgeMode: 'range',
+        minValue: null,
+        maxValue: null,
+        stdValue: '',
+        orderNo: 0,
+        isRequired: 1
+      },
+      qcItemEditVisible: false,
       sheetRecord: null,
       sheetRuleJson: '',
       sheetSaving: false,
@@ -460,6 +610,8 @@ export default {
       batchHistoryRows: [],
       widthTarget: null,
       widthTolerance: 0.5,
+      isManualMode: false,
+      autoJudgeResult: '',
       form: {
         sourceOrderNo: '',
         batchNo: '',
@@ -471,7 +623,10 @@ export default {
         sampleQty: 0,
         passQty: 0,
         failQty: 0,
+        netWeight: '',
         overallResult: 'pending',
+        disposition: '',
+        dispositionRemark: '',
         inspectorName: '',
         defectType: '',
         remark: ''
@@ -489,9 +644,15 @@ export default {
       },
       printLogoUrl: '/logo/finechem-logo.png',
       reportTemplateRuleCache: {},
+      samplingColumnSize: 5,
+      templateFieldDialogVisible: false,
+      templateFieldActiveTab: 'fields',
+      templateFieldKeyword: '',
+      templateFieldRows: [],
+      templateFieldRawText: '',
       excelTemplateUrlMap: {
         OUTBOUND_DEFAULT: '/downloads/normal_1.xlsx',
-        OUTBOUND_RP01: '/downloads/quality-report-template-rp01.full.xlsx'
+        OUTBOUND_RP01: '/downloads/normal_1.xlsx' // RP01 暂时共用 normal_1.xlsx，防止文件缺失导致导出失败
       },
       defectTypes: [],
       rules: {
@@ -508,6 +669,18 @@ export default {
     this.loadDefectTypes()
     this.loadRawMaterials()
     this.fetchCompanyInfo()
+  },
+  computed: {
+    filteredTemplateFieldRows() {
+      const kw = String(this.templateFieldKeyword || '').trim().toLowerCase()
+      if (!kw) return this.templateFieldRows
+      return (this.templateFieldRows || []).filter(item => {
+        const key = String(item.key || '').toLowerCase()
+        const ph = String(item.placeholder || '').toLowerCase()
+        const val = String(item.valueText || '').toLowerCase()
+        return key.includes(kw) || ph.includes(kw) || val.includes(kw)
+      })
+    }
   },
   methods: {
     async fetchCompanyInfo() {
@@ -754,6 +927,23 @@ export default {
 
       return Object.keys(ruleObj).length ? JSON.stringify(ruleObj) : ''
     },
+    convertQcItemsToPerformanceParams(items) {
+      if (!Array.isArray(items) || items.length === 0) return ''
+      const ruleObj = {}
+      items.forEach(item => {
+        const key = `qc_${item.id || item.itemName}`
+        ruleObj[key] = {
+          label: item.itemName,
+          unit: item.itemUnit || '',
+          judgeMode: item.judgeMode || 'range',
+          min: item.minValue !== null ? String(item.minValue) : '',
+          max: item.maxValue !== null ? String(item.maxValue) : '',
+          standardValue: item.stdValue || '',
+          remark: item.remark || ''
+        }
+      })
+      return JSON.stringify(ruleObj)
+    },
     async ensureRuleMaterialLoaded(code) {
       const hit = this.resolveRuleMaterialByCode(code)
       if (hit && hit.performanceParams) return hit
@@ -764,7 +954,22 @@ export default {
           const res = await getSpecByMaterialCode(c)
           if (!(res && (res.code === 200 || res.code === 20000))) continue
           const item = res.data || {}
-          const performanceParams = this.buildRuleJsonFromSpec(item)
+          
+          // 优先从新系统获取精细化检测标准
+          let performanceParams = ''
+          try {
+            const qcItemsRes = await request.get('/api/quality/tape-qc-item/by-material', { params: { materialCode: c }})
+            if (qcItemsRes && (qcItemsRes.code === 200 || qcItemsRes.code === 20000) && qcItemsRes.data && qcItemsRes.data.length > 0) {
+              performanceParams = this.convertQcItemsToPerformanceParams(qcItemsRes.data)
+            }
+          } catch (e) {
+            console.warn('获取新版检测标准失败，将回退到旧版:', e)
+          }
+
+          // 如果新系统没配置，回退到旧系统字段
+          if (!performanceParams) {
+            performanceParams = this.buildRuleJsonFromSpec(item)
+          }
 
           const materialCode = String(item.materialCode || c || '').trim()
           if (!materialCode) continue
@@ -783,6 +988,7 @@ export default {
           }
           return normalized
         } catch (e) {
+          // ignore error and continue to next candidate
         }
       }
       return null
@@ -1013,9 +1219,10 @@ export default {
     },
     setMeasuredRowsByPayload(payload) {
       const source = payload && typeof payload === 'object' ? payload : {}
+      const size = this.samplingColumnSize || 5
       this.measuredRows = (this.measuredRows || []).map(row => {
-        const arr = Array.isArray(source[row.key]) ? source[row.key].slice(0, 5) : []
-        while (arr.length < 5) arr.push('')
+        const arr = Array.isArray(source[row.key]) ? source[row.key].slice(0, size) : []
+        while (arr.length < size) arr.push('')
         return {
           ...row,
           actualValues: arr
@@ -1038,8 +1245,104 @@ export default {
       if (candidate && typeof candidate === 'object') return candidate
       return {}
     },
+    async openQcItemManager() {
+      if (!this.form.materialCode) return
+      this.qcItemManagerVisible = true
+      this.loadQcItems()
+    },
+    async loadQcItems() {
+      try {
+        const res = await request.get('/api/quality/tape-qc-item/by-material', { params: { materialCode: this.form.materialCode } })
+        if (res && (res.code === 200 || res.code === 20000)) {
+          this.qcItems = res.data || []
+        }
+      } catch (e) {
+        this.$message.error('加载指标失败')
+      }
+    },
+    handleAddQcItem() {
+      this.qcItemForm = {
+        id: null,
+        itemName: '',
+        itemUnit: '',
+        judgeMode: 'range',
+        minValue: null,
+        maxValue: null,
+        stdValue: '',
+        orderNo: this.qcItems.length + 1,
+        isRequired: 1
+      }
+      this.qcItemEditVisible = true
+    },
+    handleEditQcItem(row) {
+      this.qcItemForm = { ...row }
+      this.qcItemEditVisible = true
+    },
+    async handleSaveQcItem() {
+      if (!this.qcItemForm.itemName) {
+        this.$message.warning('请输入项目名称')
+        return
+      }
+      try {
+        const payload = { ...this.qcItemForm, materialCode: this.form.materialCode }
+        const res = await request.post('/api/quality/tape-qc-item/save', payload)
+        if (res && (res.code === 200 || res.code === 20000)) {
+          this.$message.success('保存指标成功')
+          this.qcItemEditVisible = false
+          this.loadQcItems()
+          // 重新加载规则
+          await this.ensureRuleMaterialLoaded(this.form.materialCode)
+          this.syncQcRuleByMaterialCode()
+        }
+      } catch (e) {
+        this.$message.error('保存指标失败')
+      }
+    },
+    async handleDeleteQcItem(row) {
+      try {
+        await this.$confirm(`确定删除指标“${row.itemName}”吗？`, '警告', { type: 'warning' })
+        const res = await request.delete(`/api/quality/tape-qc-item/${row.id}`)
+        if (res && (res.code === 200 || res.code === 20000)) {
+          this.$message.success('删除成功')
+          this.loadQcItems()
+          await this.ensureRuleMaterialLoaded(this.form.materialCode)
+          this.syncQcRuleByMaterialCode()
+        }
+      } catch (e) {
+        // 取消
+      }
+    },
+    async handleSyncFromSpec() {
+      try {
+        await this.$confirm('从规格表同步将覆盖当前料号的所有指标，确定继续吗？', '确认同步', { type: 'info' })
+        const res = await request.post('/api/quality/tape-qc-item/sync-from-spec', null, { params: { materialCode: this.form.materialCode } })
+        if (res && (res.code === 200 || res.code === 20000)) {
+          this.$message.success('同步成功')
+          this.loadQcItems()
+          await this.ensureRuleMaterialLoaded(this.form.materialCode)
+          this.syncQcRuleByMaterialCode()
+        }
+      } catch (e) {
+        // 取消
+      }
+    },
     async applyHistoryToCurrent(row) {
       if (!row) return
+      
+      // 逻辑改进：增加不合格记录提醒
+      const result = String(row.overallResult || '').toLowerCase()
+      if (result === 'fail' || result === '不合格') {
+        try {
+          await this.$confirm('该历史记录判定结果为“不合格”，确定要回填这些数据吗？', '严正提示', {
+            confirmButtonText: '确定回填',
+            cancelButtonText: '取消',
+            type: 'error'
+          })
+        } catch (e) {
+          return
+        }
+      }
+
       const materialCode = String(row.materialCode || '').trim()
       if (!materialCode) {
         this.$message.warning('历史记录缺少料号，无法回填')
@@ -1064,6 +1367,13 @@ export default {
       this.form.materialCode = materialCode
       this.form.materialName = row.materialName || this.form.materialName
       this.form.materialSpec = row.specification || row.materialSpec || this.form.materialSpec
+      
+      // 逻辑改进：恢复历史记录中的采样点数
+      const snapshot = this.parseJsonSafe(row && row.processSnapshot)
+      if (snapshot && snapshot.samplingColumnSize) {
+        this.samplingColumnSize = snapshot.samplingColumnSize
+      }
+      
       await this.handleMaterialCodeChange()
 
       const measuredPayload = this.parseMeasuredPayloadFromRecord(row)
@@ -1120,13 +1430,20 @@ export default {
         return
       }
       const summary = evaluateQcRules(material.performanceParams, measured)
-      this.form.overallResult = summary.overallResult
+      this.autoJudgeResult = summary.overallResult
+      if (!this.isManualMode) {
+        this.form.overallResult = summary.overallResult
+        this.form.disposition = ''
+        this.form.dispositionRemark = ''
+      }
       this.applyJudgeResultToRows(summary.results)
       this.fillSamplingStatsByMeasuredRows()
       if (summary.overallResult === 'fail') {
-        this.form.defectType = summary.results.filter(item => item.status === 'fail').map(item => item.key).join(',') || 'QC判定不合格'
+        if (!this.form.defectType) {
+          this.form.defectType = summary.results.filter(item => item.status === 'fail').map(item => item.key).join(',') || 'QC判定不合格'
+        }
       } else if (summary.overallResult === 'pass') {
-        this.form.defectType = ''
+        if (!this.isManualMode) this.form.defectType = ''
       }
       this.$message.success(`自动判定完成：${this.resultText(summary.overallResult)}（合格${summary.passCount} / 不合格${summary.failCount} / 待判定${summary.pendingCount}）`)
     },
@@ -1205,11 +1522,11 @@ export default {
         if (max !== null && actual > max) return 'fail'
         return 'pass'
       }
-      if (mode === 'min') {
+      if (mode === 'min' || mode === 'gte') {
         if (min === null) return 'pending'
         return actual >= min ? 'pass' : 'fail'
       }
-      if (mode === 'max') {
+      if (mode === 'max' || mode === 'lte') {
         if (max === null) return 'pending'
         return actual <= max ? 'pass' : 'fail'
       }
@@ -1219,34 +1536,59 @@ export default {
       }
       return 'pending'
     },
+    onSamplingColumnSizeChange(val) {
+      if (this.measuredRows && this.measuredRows.length > 0) {
+        this.measuredRows.forEach(row => {
+          if (!Array.isArray(row.actualValues)) {
+            row.actualValues = []
+          }
+          while (row.actualValues.length < val) {
+            row.actualValues.push('')
+          }
+        })
+      }
+      this.syncMeasuredParamsFromRows()
+    },
     fillSamplingStatsByMeasuredRows() {
       const rows = this.measuredRows || []
       if (rows.length === 0) {
         return
       }
+      const size = this.samplingColumnSize || 5
       const sampleStatuses = []
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < size; i++) {
         let hasPending = false
         let hasFail = false
+        let hasValue = false
         for (const row of rows) {
           const values = Array.isArray(row.actualValues) ? row.actualValues : []
-          const status = this.judgeSingleValueByRow(row, values[i])
+          const val = values[i]
+          if (val !== undefined && val !== null && val !== '') {
+            hasValue = true
+          }
+          const status = this.judgeSingleValueByRow(row, val)
           if (status === 'pending') {
             hasPending = true
-            break
           }
           if (status === 'fail') {
             hasFail = true
           }
         }
-        if (hasPending) {
+
+        if (!hasValue) {
+          continue
+        }
+
+        if (hasFail) {
+          sampleStatuses.push('fail')
+        } else if (hasPending) {
           sampleStatuses.push('pending')
         } else {
-          sampleStatuses.push(hasFail ? 'fail' : 'pass')
+          sampleStatuses.push('pass')
         }
       }
 
-      const sampleQty = sampleStatuses.filter(s => s !== 'pending').length
+      const sampleQty = sampleStatuses.length
       const passQty = sampleStatuses.filter(s => s === 'pass').length
       const failQty = sampleStatuses.filter(s => s === 'fail').length
 
@@ -1254,14 +1596,23 @@ export default {
       this.form.passQty = passQty
       this.form.failQty = failQty
 
+      let finalResult = 'pending'
       if (sampleQty === 0) {
-        this.form.overallResult = 'pending'
+        finalResult = 'pending'
       } else if (failQty > 0) {
-        this.form.overallResult = 'fail'
+        finalResult = 'fail'
       } else if (passQty === sampleQty) {
-        this.form.overallResult = 'pass'
+        finalResult = 'pass'
       } else {
-        this.form.overallResult = 'pending'
+        finalResult = 'pending'
+      }
+
+      this.autoJudgeResult = finalResult
+      if (!this.isManualMode) {
+        this.form.overallResult = finalResult
+        // 自动重置特采原因
+        this.form.disposition = ''
+        this.form.dispositionRemark = ''
       }
     },
     sizeChange(size) {
@@ -1467,6 +1818,8 @@ export default {
       this.sheetRows = data.rows
       this.sheetSummary = data.summary
       this.testSheetVisible = true
+      // 如果 form 中没有数值，尝试从 record 或 snapshot 中同步一些关键业务字段到编辑状态
+      this.form.netWeight = normalized.netWeight || (normalized.processSnapshot && normalized.processSnapshot.netWeight) || ''
     },
     async saveCurrentSheet() {
       if (!this.sheetRecord || !this.sheetRecord.id) {
@@ -1581,6 +1934,16 @@ export default {
       if (!v) return 'OUTBOUND_DEFAULT'
       return v
     },
+    deriveDateFromBatch(batchNo) {
+      if (!batchNo) return ''
+      const m = batchNo.match(/(\d{6,8})/)
+      if (m) {
+        const s = m[1]
+        if (s.length === 8) return `${s.substring(0, 4)}-${s.substring(4, 6)}-${s.substring(6, 8)}`
+        if (s.length === 6) return `20${s.substring(0, 2)}-${s.substring(2, 4)}-${s.substring(4, 6)}`
+      }
+      return ''
+    },
     getRecordCustomerInfo(record) {
       const snapshot = this.parseJsonSafe(record && record.processSnapshot) || {}
       const customerCode = this.normalizeCustomerCode(
@@ -1668,7 +2031,15 @@ export default {
       })
     },
     buildExcelValueMap(record, data, templateCode) {
-      const snapshot = record.processSnapshot ? JSON.parse(record.processSnapshot) : {}
+      if (!record) return {}
+      let snapshot = {}
+      try {
+        snapshot = record.processSnapshot ? JSON.parse(record.processSnapshot) : {}
+      } catch (e) {
+        console.warn('Failed to parse processSnapshot', e)
+      }
+      if (!snapshot) snapshot = {}
+
       const rows = Array.isArray(data && data.rows) ? data.rows : []
       const summary = (data && data.summary) || {}
       const customer = this.getRecordCustomerInfo(record)
@@ -1693,10 +2064,10 @@ export default {
         materialName: mapped.materialName || '-',
         specification: record.specification || '-',
         inspectionEnvironment: '23±5℃、50±5%',
-        netWeight: record.netWeight || '-',
+        netWeight: record.netWeight || snapshot.netWeight || '-',
         sampleQty: record.sampleQty || '-',
         inspectorName: record.inspectorName || '-',
-        reviewerName: record.reviewerName || '',
+        reviewerName: record.reviewerName || snapshot.reviewerName || '',
         signDate: nowText,
         inspectionTime: record.inspectionTime || '-',
         overallResult: this.resultText(record.overallResult || 'pending'),
@@ -1704,10 +2075,13 @@ export default {
         failCount: summary.failCount || 0,
         pendingCount: summary.pendingCount || 0,
         totalCount: summary.totalCount || 0,
-        printDate: nowText
+        printDate: nowText,
+        productDate: snapshot.productDate || (record && record.batchNo ? this.deriveDateFromBatch(record.batchNo) : nowText)
       }
 
       // 常用语义别名（便于模板按业务字段命名占位符）
+      values.inspectionDate = (record.inspectionTime || nowText).split(' ')[0]
+      values.inspectionCondition = values.inspectionEnvironment
       values.productName = values.materialName
       values.productCode = values.materialCode
       values.orderNo = values.sourceOrderNo
@@ -1772,6 +2146,7 @@ export default {
       }
 
       rows.forEach((item, index) => {
+        if (!item) return
         const i = index + 1
         const actualValues = [item.actual1, item.actual2, item.actual3, item.actual4, item.actual5].map(v => {
           if (v === undefined || v === null || v === '' || v === '-') return ''
@@ -1788,6 +2163,7 @@ export default {
         values[`item${i}_status`] = this.resultText(item.status || 'pending')
         values[`item${i}_message`] = item.message || ''
         values[`item${i}_remark`] = item.remark || ''
+        values[`item${i}_method`] = item.remark || ''
 
         // 行级语义别名
         values[`item${i}_name`] = values[`item${i}_label`]
@@ -1808,6 +2184,7 @@ export default {
         values[`${itemNamedKey}_actual6`] = values[`item${i}_actual6`]
         values[`${itemNamedKey}_result`] = values[`item${i}_result`]
         values[`${itemNamedKey}_status`] = values[`item${i}_status`]
+        values[`${itemNamedKey}_method`] = values[`item${i}_method`]
         values[`${itemNamedKey}_remark`] = values[`item${i}_remark`]
         values[`${itemNamedKey}_message`] = values[`item${i}_message`]
         values[`${itemNamedKey}_actual_all`] = values[`item${i}_actual_all`]
@@ -1824,13 +2201,110 @@ export default {
         values[`${labelAliasKey}_actual5`] = values[`item${i}_actual5`]
         values[`${labelAliasKey}_actual6`] = values[`item${i}_actual6`]
         values[`${labelAliasKey}_status`] = values[`item${i}_status`]
+        values[`${labelAliasKey}_method`] = values[`item${i}_method`]
         values[`${labelAliasKey}_result`] = values[`item${i}_result`]
         values[`${labelAliasKey}_message`] = values[`item${i}_message`]
         values[`${labelAliasKey}_remark`] = values[`item${i}_remark`]
         values[`${labelAliasKey}_actual_all`] = values[`item${i}_actual_all`]
       })
 
+      const labels = rows.map(r => r && r.label).filter(Boolean)
+      const standards = rows.map(r => r && r.ruleText).filter(Boolean)
+      const actuals = rows.map(r => {
+        if (!r) return ''
+        return [r.actual1, r.actual2, r.actual3, r.actual4, r.actual5]
+          .filter(v => v !== undefined && v !== null && v !== '' && v !== '-')
+          .join('/')
+      }).filter(Boolean)
+      const methods = rows.map(r => r && r.remark).filter(Boolean)
+      const results = rows.map(r => this.resultText(r && r.status)).filter(Boolean)
+      values.qcItemNames = labels.join('\n')
+      values.qcStandards = standards.join('\n')
+      values.qcActualValues = actuals.join('\n')
+      values.qcMethods = methods.join('\n')
+      values.qcResults = results.join('\n')
+
       return values
+    },
+    formatTemplateFieldValue(value) {
+      if (value === null || value === undefined) return ''
+      if (typeof value === 'object') {
+        try {
+          return JSON.stringify(value)
+        } catch (e) {
+          return String(value)
+        }
+      }
+      return String(value)
+    },
+    buildTemplateFieldRows(valueMap) {
+      return Object.keys(valueMap || {})
+        .sort((a, b) => a.localeCompare(b))
+        .map(key => {
+          const valueText = this.formatTemplateFieldValue(valueMap[key])
+          return {
+            key,
+            placeholder: `\${${key}}`,
+            valueText
+          }
+        })
+    },
+    async openTemplateFieldDialog(record, preparedData) {
+      if (!record) {
+        this.$message.warning('缺少检测记录，无法生成模板字段值')
+        return
+      }
+      const data = preparedData || this.composeSheetData(record)
+      if (!data) {
+        this.$message.warning('该记录暂无检测明细，无法生成模板字段值')
+        return
+      }
+      const templateCode = await this.resolveReportTemplateCode(record)
+      const valueMap = this.buildExcelValueMap(record, data, templateCode)
+      this.templateFieldRows = this.buildTemplateFieldRows(valueMap)
+      this.templateFieldRawText = this.templateFieldRows
+        .map(item => `${item.placeholder} = ${item.valueText}`)
+        .join('\n')
+      this.templateFieldKeyword = ''
+      this.templateFieldActiveTab = 'fields'
+      this.templateFieldDialogVisible = true
+    },
+    copyTextToClipboard(text, successMsg) {
+      const content = String(text || '')
+      if (!content) {
+        this.$message.warning('没有可复制内容')
+        return
+      }
+      const done = () => this.$message.success(successMsg || '复制成功')
+      if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(content).then(done).catch(() => {
+          const ta = document.createElement('textarea')
+          ta.value = content
+          document.body.appendChild(ta)
+          ta.select()
+          document.execCommand('copy')
+          document.body.removeChild(ta)
+          done()
+        })
+      } else {
+        const ta = document.createElement('textarea')
+        ta.value = content
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+        done()
+      }
+    },
+    copyTemplateFieldList() {
+      this.copyTextToClipboard(this.templateFieldRawText, '模板字段清单已复制')
+    },
+    copyTemplateFieldJson() {
+      const json = {}
+      ;(this.templateFieldRows || []).forEach(item => {
+        json[item.key] = item.valueText
+      })
+      this.copyTextToClipboard(JSON.stringify(json, null, 2), '模板字段JSON已复制')
     },
     async tryPrintByExcelTemplate(record, data, templateCode) {
       const normalizedCode = this.normalizeTemplateCode(templateCode)
@@ -1838,29 +2312,54 @@ export default {
       if (!url) return false
 
       try {
+        console.log('Fetching template from:', url)
         const response = await fetch(url, { cache: 'no-store' })
         if (!response.ok) {
           this.$message.error(`未找到Excel报告模板：${normalizedCode}（${url}）`)
           return 'hard-fail'
         }
+        
+        // 检查文件类型，防止误下载 HTML 报错页面
+        const contentType = response.headers.get('content-type') || ''
+        console.log('Template content-type:', contentType)
+        
         const buffer = await response.arrayBuffer()
+        console.log('Template buffer loaded, size:', buffer.byteLength)
+
+        // 校验 ZIP 文件头 (50 4B 03 04)
+        const header = new Uint8Array(buffer.slice(0, 4))
+        const isZip = header[0] === 0x50 && header[1] === 0x4b && header[2] === 0x03 && header[3] === 0x04
+        if (!isZip) {
+          console.error('Downloaded file is not a valid ZIP/Excel file. Header:', header)
+          const text = new TextDecoder().decode(buffer.slice(0, 200))
+          console.error('File start snippet:', text)
+          this.$message.error('Excel模板结构异常：下载的文件不是有效的Excel包（可能是HTML页面或已损坏）')
+          return 'hard-fail'
+        }
+
         const valueMap = this.buildExcelValueMap(record, data, templateCode)
+        console.log('Value map built, keys count:', Object.keys(valueMap).length)
         const zip = await JSZip.loadAsync(buffer)
+        console.log('JSZip loaded buffer successfully')
         const xmlFileNames = Object.keys(zip.files).filter(name => /^xl\/(sharedStrings\.xml|worksheets\/sheet\d+\.xml)$/i.test(name))
+        console.log('Files to process:', xmlFileNames)
         for (const fileName of xmlFileNames) {
           const file = zip.file(fileName)
           if (!file) continue
           const xml = await file.async('string')
           const replaced = this.replaceXmlPlaceholders(xml, valueMap)
           if (replaced !== xml) {
+            console.log('Updated XML for:', fileName)
             zip.file(fileName, replaced)
           }
         }
 
+        console.log('Generating final blob...')
         const blob = await zip.generateAsync({
           type: 'blob',
           mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         })
+        console.log('Blob generated, size:', blob.size)
         const link = document.createElement('a')
         const inspectionNo = String(record.inspectionNo || '').trim() || 'report'
         const customerCode = this.getRecordCustomerInfo(record).customerCode || 'customer'
@@ -1873,7 +2372,8 @@ export default {
         this.$message.success('已按Excel模板生成报告文件')
         return true
       } catch (e) {
-        this.$message.error('Excel模板生成失败，请检查模板结构或占位符设置')
+        console.error('Excel export failed:', e)
+        this.$message.error('Excel模板生成失败，请检查模板结构或占位符设置（' + (e.message || '未知错误') + '）')
         return 'hard-fail'
       }
     },
@@ -1944,7 +2444,7 @@ export default {
                 <div class="company">
                   <div class="company-name">${this.escapeHtml(this.companyInfo.companyName || '')}</div>
                   <div>地址：${this.escapeHtml(this.companyInfo.address || '')}</div>
-                  <div>电话：${this.escapeHtml(this.companyInfo.phone || '')}　传真：${this.escapeHtml(this.companyInfo.fax || '')}</div>
+                  <div>电话：${this.escapeHtml(this.companyInfo.phone || '')} &nbsp; 传真：${this.escapeHtml(this.companyInfo.fax || '')}</div>
                   <div>网址：${this.escapeHtml(this.companyInfo.website || '')}</div>
                 </div>
               </div>
@@ -2072,14 +2572,18 @@ export default {
         materialName: this.form.materialName || '',
         customerMaterialCode: this.customerMaterialMapping ? (this.customerMaterialMapping.customerMaterialCode || '') : '',
         customerMaterialName: this.customerMaterialMapping ? (this.customerMaterialMapping.customerMaterialName || '') : '',
+        customerPartNo: this.customerMaterialMapping ? (this.customerMaterialMapping.customerMaterialCode || '') : '',
+        coatingBatchNo: this.form.batchNo || '', // 默认使用批次号作为涂布批号占位
+        netWeight: this.form.netWeight || '',
+        specification: this.form.materialSpec || '',
         widthTarget: this.widthTarget,
         widthTolerance: this.widthTolerance,
-        specification: this.form.materialSpec || '',
         qcRuleText: this.qcRuleText || '',
         ruleJson: material && material.performanceParams ? material.performanceParams : '',
         measuredParams: this.form.measuredParams || '{}',
         measuredRows: this.measuredRows || [],
         summary: summary || null,
+        samplingColumnSize: this.samplingColumnSize || 5,
         generatedAt: new Date().toISOString()
       })
     },
@@ -2106,15 +2610,35 @@ export default {
         let summary = null
         if (material && material.performanceParams) {
           summary = evaluateQcRules(material.performanceParams, this.form.measuredParams)
-          this.form.overallResult = summary.overallResult
+          
+          if (!this.isManualMode) {
+            this.form.overallResult = summary.overallResult
+            this.form.disposition = ''
+            this.form.dispositionRemark = ''
+          } else {
+            // 手动模式下，如果结果不一致，标记为特采/手动修正
+            if (this.form.overallResult !== summary.overallResult) {
+              this.form.disposition = (summary.overallResult === 'fail' && this.form.overallResult === 'pass') ? 'special_pass' : 'manual_correction'
+            }
+          }
+
           this.applyJudgeResultToRows(summary.results)
-          if (summary.pendingCount > 0) {
-            this.$message.error('每个检测项目必须录入5个有效实测值')
+          
+          if (summary.pendingCount > 0 && !this.isManualMode) {
+            this.$message.error(`检测项未填满，当前采样点数要求：${this.samplingColumnSize || 5}个`)
             return
           }
-          if (summary.failCount > 0) {
-            this.$message.error('存在超限检测值，不能保存')
-            return
+          
+          if (this.form.overallResult === 'fail' && !this.isManualMode) {
+            try {
+              await this.$confirm(`存在${summary.failCount}项检测不合格，判定结果为“不合格”。系统将同步更新库存状态。确定保存吗？`, '不合格警告', {
+                confirmButtonText: '强制保存',
+                cancelButtonText: '返回修改',
+                type: 'error'
+              })
+            } catch (e) {
+              return
+            }
           }
         }
         const payload = {
@@ -2146,11 +2670,16 @@ export default {
         sampleQty: 0,
         passQty: 0,
         failQty: 0,
+        netWeight: '',
         overallResult: 'pending',
+        disposition: '',
+        dispositionRemark: '',
         inspectorName: '',
         defectType: '',
         remark: ''
       }
+      this.isManualMode = false
+      this.autoJudgeResult = ''
       this.widthTarget = null
       this.widthTolerance = 0.5
       this.form.measuredParams = '{}'
@@ -2246,5 +2775,11 @@ export default {
   margin-top: 10px;
   font-size: 13px;
   color: #303133;
+}
+
+.op-btns {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
 }
 </style>

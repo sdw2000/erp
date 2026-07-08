@@ -48,6 +48,21 @@
   margin-top: 12rpx;
 }
 
+.mt16 {
+  margin-top: 16rpx;
+}
+
+.highlight {
+  border-color: #2563eb !important;
+  background-color: #f0f7ff !important;
+  font-weight: bold;
+}
+
+.disabled {
+  background-color: #f7fafc;
+  color: #718096;
+}
+
 .btn-danger {
   margin-top: 12rpx;
   background: #ef4444 !important;

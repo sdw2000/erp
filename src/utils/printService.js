@@ -334,48 +334,87 @@ export function clearPendingPrintBatch(batchId = '') {
 
 async function reportPrintRecord({ payload = {}, trace = {}, result = null, error = null } = {}) {
   try {
+    // 修正：支持保存批量标签记录的所有项，而不仅仅是第一项
     const isBatchPayload = Array.isArray(payload)
-    const firstPayload = isBatchPayload ? (payload[0] || {}) : (payload || {})
-    const data = (firstPayload && firstPayload.data) || {}
-    const body = {
-      sceneName: firstNotBlank(trace.sceneName),
-      bizType: firstNotBlank(trace.bizType),
-      templateKey: firstNotBlank(firstPayload.template),
-      jobName: firstNotBlank(firstPayload.jobName),
-      copies: Number(firstPayload.copies || 1),
-      customerCode: firstNotBlank(trace.customerCode, data.customerCode),
-      customerOrderNo: firstNotBlank(trace.customerOrderNo, data.customerOrderNo),
-      orderNo: firstNotBlank(trace.orderNo, data.orderNo),
-      materialCode: firstNotBlank(trace.materialCode, data.materialCode, data.internalMaterialCode),
-      materialName: firstNotBlank(trace.materialName, data.materialName, data.internalMaterialName),
-      batchNo: firstNotBlank(trace.batchNo, data.batchNo, data.issueBatchNo, data.slittingBatchNo),
-      printerName: firstNotBlank(trace.printerName, payload.printer),
-      printStatus: error ? 'FAIL' : 'SUCCESS',
-      resultMessage: error ? String((error && error.message) || error || '').trim() : firstNotBlank(result && (result.message || result.msg)),
-      printData: data,
-      printPayload: payload,
-      printResult: result || null,
-      batchId: firstNotBlank(trace.batchId),
-      batchCount: Number(trace.batchCount || (isBatchPayload ? payload.length : 1) || 1)
-    }
-
     const headers = { 'Content-Type': 'application/json; charset=utf-8' }
     const token = getToken()
     if (token) headers['X-Token'] = token
 
-    // 修正：使用相对路径通过 webpack proxy 转发，解决客户端访问 localhost:8090 连接被拒绝的问题
-    // 开发模式下必须添加 /api-proxy 前缀，以便 vue.config.js 中的代理能正确识别并转发到后端
     const apiBase = process.env.NODE_ENV === 'development'
       ? '/api-proxy'
       : String(process.env.VUE_APP_BASE_API || '').replace(/\/$/, '')
 
-    await fetch(`${apiBase}/production/label-print-record/save`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body)
-    })
+    if (isBatchPayload) {
+      // 批量记录处理
+      const payloads = payload.map((item, idx) => {
+        const data = item.data || {}
+        return {
+          sceneName: firstNotBlank(trace.sceneName),
+          bizType: firstNotBlank(trace.bizType),
+          templateKey: firstNotBlank(item.template),
+          jobName: firstNotBlank(item.jobName),
+          copies: Number(item.copies || 1),
+          customerCode: firstNotBlank(trace.customerCode, data.customerCode),
+          customerOrderNo: firstNotBlank(trace.customerOrderNo, data.customerOrderNo),
+          orderNo: firstNotBlank(trace.orderNo, data.orderNo),
+          materialCode: firstNotBlank(trace.materialCode, data.materialCode, data.internalMaterialCode),
+          materialName: firstNotBlank(trace.materialName, data.materialName, data.internalMaterialName),
+          batchNo: firstNotBlank(trace.batchNo, data.batchNo, data.issueBatchNo, data.slittingBatchNo),
+          printerName: firstNotBlank(trace.printerName, item.printer), // 批量模式下每个可能不同
+          printStatus: error ? 'FAIL' : 'SUCCESS',
+          resultMessage: error ? String((error && error.message) || error || '').trim() : firstNotBlank(result && (result.message || result.msg)),
+          printData: data,
+          printPayload: item,
+          printResult: result || null
+        }
+      })
+
+      await fetch(`${apiBase}/production/label-print-record/save-batch`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          payloads,
+          trace: {
+            batchId: trace.batchId,
+            batchCount: payload.length
+          }
+        })
+      })
+    } else {
+      // 单条记录处理
+      const firstPayload = payload || {}
+      const data = (firstPayload && firstPayload.data) || {}
+      const body = {
+        sceneName: firstNotBlank(trace.sceneName),
+        bizType: firstNotBlank(trace.bizType),
+        templateKey: firstNotBlank(firstPayload.template),
+        jobName: firstNotBlank(firstPayload.jobName),
+        copies: Number(firstPayload.copies || 1),
+        customerCode: firstNotBlank(trace.customerCode, data.customerCode),
+        customerOrderNo: firstNotBlank(trace.customerOrderNo, data.customerOrderNo),
+        orderNo: firstNotBlank(trace.orderNo, data.orderNo),
+        materialCode: firstNotBlank(trace.materialCode, data.materialCode, data.internalMaterialCode),
+        materialName: firstNotBlank(trace.materialName, data.materialName, data.internalMaterialName),
+        batchNo: firstNotBlank(trace.batchNo, data.batchNo, data.issueBatchNo, data.slittingBatchNo),
+        printerName: firstNotBlank(trace.printerName, payload.printer),
+        printStatus: error ? 'FAIL' : 'SUCCESS',
+        resultMessage: error ? String((error && error.message) || error || '').trim() : firstNotBlank(result && (result.message || result.msg)),
+        printData: data,
+        printPayload: payload,
+        printResult: result || null,
+        batchId: firstNotBlank(trace.batchId),
+        batchCount: Number(trace.batchCount || 1)
+      }
+
+      await fetch(`${apiBase}/production/label-print-record/save`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body)
+      })
+    }
   } catch (e) {
     // 忽略日志上报异常，避免影响主打印流程
+    console.error('Report print record failed:', e)
   }
 }
 

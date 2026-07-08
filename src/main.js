@@ -152,3 +152,141 @@ new Vue({
   store,
   render: h => h(App)
 })
+
+// ===== 横向滚动检测：当页面上任意 el-table 出现横向滚动时，给 body 添加 class
+// 目的是当表格有横向滚动时，上移 sticky 分页以避免遮挡。
+;(function(){
+  if (typeof window === 'undefined') return
+
+  let rafId = null
+  function checkTablesForHScroll() {
+    if (rafId) cancelAnimationFrame(rafId)
+    rafId = requestAnimationFrame(() => {
+      rafId = null
+      try {
+        const wrappers = Array.from(document.querySelectorAll('.el-table__body-wrapper'))
+        let anyH = false
+        const SPACER_CLASS = 'h-scroll-spacer'
+        wrappers.forEach(w => {
+          if (!w) return
+          // 计算更稳健的宽度：优先使用 scrollWidth/clientWidth，其次退回到 getBoundingClientRect
+          let scrollW = 0
+          try { scrollW = w.scrollWidth || 0 } catch (e) { scrollW = 0 }
+          let clientW = 0
+          try { clientW = w.clientWidth || 0 } catch (e) { clientW = 0 }
+          if (!clientW && w.getBoundingClientRect) {
+            const r = w.getBoundingClientRect()
+            clientW = Math.round(r.width || r.right - r.left || 0)
+          }
+          const table = w.closest && w.closest('.el-table')
+          if ((!scrollW || !clientW) && table) {
+            try {
+              const innerTable = table.querySelector('table')
+              if (innerTable) {
+                scrollW = scrollW || innerTable.scrollWidth || 0
+                clientW = clientW || (innerTable.getBoundingClientRect && Math.round(innerTable.getBoundingClientRect().width)) || clientW
+              }
+            } catch (e) {}
+          }
+
+          const isH = scrollW > (clientW || 0)
+          if (isH) {
+            anyH = true
+            w.classList.add('h-scroll')
+            if (table) table.classList.add('h-scroll')
+            // 确保在表格后插入一个占位 spacer，避免 sticky 分页或下方元素遮挡横向滚动条
+            try {
+              if (table && table.parentNode) {
+                const next = table.nextElementSibling
+                if (!(next && next.classList && next.classList.contains(SPACER_CLASS))) {
+                  const spacer = document.createElement('div')
+                  spacer.className = SPACER_CLASS
+                  spacer.style.height = '24px'
+                  spacer.style.width = '100%'
+                  spacer.style.pointerEvents = 'none'
+                  table.parentNode.insertBefore(spacer, table.nextSibling)
+                }
+              }
+            } catch (e) {}
+          } else {
+            w.classList.remove('h-scroll')
+            if (table) table.classList.remove('h-scroll')
+            try {
+              if (table && table.parentNode) {
+                const next = table.nextElementSibling
+                if (next && next.classList && next.classList.contains(SPACER_CLASS)) {
+                  next.parentNode.removeChild(next)
+                }
+              }
+            } catch (e) {}
+          }
+        })
+        // 异步渲染场景下，稍后再跑一次检测以捕获后续变化
+        try {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              const laterWrappers = Array.from(document.querySelectorAll('.el-table__body-wrapper'))
+              laterWrappers.forEach(lw => {
+                if (!lw) return
+                const lt = lw.closest && lw.closest('.el-table')
+                let lscroll = 0
+                try { lscroll = lw.scrollWidth || 0 } catch (e) { lscroll = 0 }
+                let lclient = 0
+                try { lclient = lw.clientWidth || 0 } catch (e) { lclient = 0 }
+                if (!lclient && lw.getBoundingClientRect) lclient = Math.round(lw.getBoundingClientRect().width || 0)
+                if ((!lscroll || !lclient) && lt) {
+                  try {
+                    const innerTable = lt.querySelector('table')
+                    if (innerTable) {
+                      lscroll = lscroll || innerTable.scrollWidth || 0
+                      lclient = lclient || (innerTable.getBoundingClientRect && Math.round(innerTable.getBoundingClientRect().width)) || lclient
+                    }
+                  } catch (e) {}
+                }
+                if (lscroll > (lclient || 0)) {
+                  lw.classList.add('h-scroll')
+                  if (lt) lt.classList.add('h-scroll')
+                  try {
+                    if (lt && lt.parentNode) {
+                      const next = lt.nextElementSibling
+                      if (!(next && next.classList && next.classList.contains(SPACER_CLASS))) {
+                        const spacer = document.createElement('div')
+                        spacer.className = SPACER_CLASS
+                        spacer.style.height = '24px'
+                        spacer.style.width = '100%'
+                        spacer.style.pointerEvents = 'none'
+                        lt.parentNode.insertBefore(spacer, lt.nextSibling)
+                      }
+                    }
+                  } catch (e) {}
+                }
+              })
+            })
+          })
+        } catch (e) {}
+        if (anyH) document.body.classList.add('has-h-scroll')
+        else document.body.classList.remove('has-h-scroll')
+      } catch (e) {
+        // ignore
+      }
+    })
+  }
+
+  // 对外暴露检测函数，供其他 mixin/组件在表格布局完成后主动触发
+  try {
+    if (typeof window !== 'undefined') window.__checkHScrollTables = checkTablesForHScroll
+  } catch (e) {
+    // ignore
+  }
+
+  // 初次检测与窗口尺寸变化
+  window.addEventListener('resize', checkTablesForHScroll, { passive: true })
+  window.addEventListener('load', () => setTimeout(checkTablesForHScroll, 50))
+
+  // 在每次路由切换后检测（延迟以等待 DOM 渲染完成）
+  if (router && typeof router.afterEach === 'function') {
+    router.afterEach(() => {
+      setTimeout(checkTablesForHScroll, 80)
+    })
+  }
+})()

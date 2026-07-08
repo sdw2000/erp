@@ -75,7 +75,11 @@
         </el-table-column>
         <el-table-column prop="beforeSpec" label="变动前规格" width="140" />
         <el-table-column prop="afterSpec" label="变动后规格" width="140" />
-        <el-table-column prop="operator" label="操作人" width="100" />
+        <el-table-column prop="operator" label="操作人" width="100">
+          <template slot-scope="scope">
+            {{ getOperatorText(scope.row) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="remark" label="详情说明" min-width="200" show-overflow-tooltip />
       </el-table>
     </el-card>
@@ -133,12 +137,22 @@ export default {
     getTypeText(type) {
       const map = {
         'IN': '退料/入库',
-        'OUT': '消耗/出库',
+        'OUT': '领料出库',
         'ADJUST': '规格修正',
         'TRANSFER': '班组交接',
         'MOVE': '领料入场'
       }
       return map[type] || type
+    },
+    getOperatorText(row) {
+      if (row.realName) return row.realName
+      const operator = row.operator
+      if (!operator) return '-'
+      const map = {
+        'admin': '管理员',
+        'yinhuanzhong': '尹焕中'
+      }
+      return map[operator] || operator
     },
     getSummary(param) {
       const { columns, data } = param

@@ -46,7 +46,7 @@
         <el-table-column prop="materialCode" label="料号" width="180" sortable="custom" />
         <el-table-column prop="productName" label="产品名称" width="160" show-overflow-tooltip sortable="custom" />
         <el-table-column prop="batchNo" label="生产批次号" width="130" sortable="custom" />
-        <el-table-column prop="sequenceNo" label="数字号" width="100" align="center" sortable="custom">
+        <el-table-column v-if="showListSequenceColumn" prop="sequenceNo" label="数字号" width="100" align="center" sortable="custom">
           <template slot-scope="scope">
             {{ getSequenceNoText(scope.row) }}
           </template>
@@ -71,12 +71,12 @@
           </template>
         </el-table-column>
         <el-table-column prop="applyTime" label="申请时间" width="160" sortable="custom" />
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="220" align="center">
           <template slot-scope="scope">
-            <template v-if="isPendingTapeRow(scope.row)">
+            <template v-if="scope.row.status == 0">
               <el-button type="text" size="small" icon="el-icon-check" @click="handleApprove(scope.row, true)">通过</el-button>
               <el-button type="text" size="small" icon="el-icon-refresh-left" @click="handleApprove(scope.row, false)">退回</el-button>
-              <el-button type="text" size="small" icon="el-icon-edit" @click="handleEdit(scope.row)">修改</el-button>
+              <el-button v-if="isPendingTapeRow(scope.row)" type="text" size="small" icon="el-icon-edit" @click="handleEdit(scope.row)">修改</el-button>
               <el-button type="text" size="small" icon="el-icon-view" @click="handleViewStatus(scope.row)">查看状态</el-button>
             </template>
             <el-button v-else type="text" size="small" icon="el-icon-view" @click="handleViewStatus(scope.row)">查看状态</el-button>
@@ -130,7 +130,7 @@
         <el-table-column type="index" width="50" />
         <el-table-column prop="qrCode" label="二维码" width="130" sortable="custom" />
         <el-table-column prop="batchNo" label="批次号" width="120" sortable="custom" />
-        <el-table-column prop="sequenceNo" label="数字号" width="80" align="center" sortable="custom">
+        <el-table-column v-if="showStockSequenceColumn" prop="sequenceNo" label="数字号" width="80" align="center" sortable="custom">
           <template slot-scope="scope">
             {{ getSequenceNoText(scope.row) }}
           </template>
@@ -231,7 +231,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="订单明细ID">
-              <el-input-number v-model="form.orderItemId" :min="1" :step="1" style="width: 100%" />
+              <el-input-number v-model="form.orderItemId" :min="0" :step="1" style="width: 100%" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -273,7 +273,7 @@
           <el-input v-model="fifoForm.orderNo" placeholder="可选：关联订单号" clearable />
         </el-form-item>
         <el-form-item label="订单明细ID">
-          <el-input-number v-model="fifoForm.orderItemId" :min="1" :step="1" style="width: 100%" />
+          <el-input-number v-model="fifoForm.orderItemId" :min="0" :step="1" style="width: 100%" />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="fifoForm.remark" type="textarea" :rows="2" placeholder="用途/去向等" />
@@ -318,6 +318,12 @@
             <el-option label="包装部" value="包装部" />
             <el-option label="涂布车间" value="涂布车间" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="订单号">
+          <el-input v-model="editForm.orderNo" placeholder="可选：关联订单号" clearable />
+        </el-form-item>
+        <el-form-item label="订单明细ID">
+          <el-input-number v-model="editForm.orderItemId" :min="0" :step="1" style="width: 100%" />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="editForm.remark" type="textarea" :rows="2" placeholder="用途/去向等" />
@@ -475,6 +481,12 @@ export default {
     },
     selectedTotalAreaText() {
       return (Math.round(this.selectedTotalArea * 100) / 100).toFixed(2)
+    },
+    showListSequenceColumn() {
+      return (this.list || []).some(row => this.hasSequenceNo(row))
+    },
+    showStockSequenceColumn() {
+      return (this.stockList || []).some(row => this.hasSequenceNo(row))
     }
   },
   created() {
@@ -870,16 +882,6 @@ export default {
       }
       return 0
     },
-    getSequenceNoText(row) {
-      if (!row) return '-'
-      const direct = row.digitalNo || row.numberNo || row.printNumber || row.printNo
-      if (direct !== null && direct !== undefined && String(direct).trim() !== '') {
-        return String(direct).trim()
-      }
-      const text = String((row && row.remark) || '')
-      const m = text.match(/数字号\s*[:：=]\s*([^；;,\s|]+)/)
-      return m && m[1] ? String(m[1]).trim() : '-'
-    },
     getSortValue(row, prop) {
       if (!row) return ''
       if (prop === '__qty') return this.getOutboundQtyNumber(row)
@@ -1222,6 +1224,9 @@ export default {
     },
     mapChemicalDetailRow(detail) {
       const weight = Number(detail && detail.weight)
+      const customerBatchNo = this.extractOutboundTokenFromRemark(detail && detail.remark, 'customerBatchNo')
+      const incomingBatchNo = this.extractOutboundTokenFromRemark(detail && detail.remark, 'incomingBatchNo')
+      const displayBatchNo = customerBatchNo || incomingBatchNo || (detail && detail.batchNo)
       return {
         id: `chemical-${detail.id}`,
         sourceStockType: 'chemical',
@@ -1234,8 +1239,8 @@ export default {
         stdQtyPerPack: Number(detail && detail.stdQtyPerPack),
         stdUom: detail && detail.stdUom,
         packUom: detail && detail.packUom,
-        qrCode: detail.containerNo || detail.batchNo || '-',
-        batchNo: detail.batchNo,
+        qrCode: detail.containerNo || displayBatchNo || '-',
+        batchNo: displayBatchNo,
         sequenceNo: null,
         rollType: '原料',
         thickness: '-',
@@ -1474,6 +1479,12 @@ export default {
       }
       return ''
     },
+    normalizeOptionalPositiveInt(value) {
+      const n = Number(value)
+      if (!Number.isFinite(n)) return undefined
+      const i = Math.floor(n)
+      return i > 0 ? i : undefined
+    },
     isLikelySpecText(text) {
       const t = String(text || '').trim()
       if (!t) return false
@@ -1528,7 +1539,7 @@ export default {
         remark: this.form.remark,
         applicant: this.name,
         orderNo: this.form.orderNo ? String(this.form.orderNo).trim() : undefined,
-        orderItemId: this.form.orderItemId || undefined,
+        orderItemId: this.normalizeOptionalPositiveInt(this.form.orderItemId),
         bizType: 'MANUAL'
       }
       return createOutboundRequest(payload)
@@ -1563,7 +1574,8 @@ export default {
               failures.push(`${row.batchNo || row.id}: ${res.msg || '提交失败'}`)
             }
           } catch (e) {
-            failures.push(`${row.batchNo || row.id}: 提交失败`)
+            const msg = (e && e.response && e.response.data && (e.response.data.msg || e.response.data.message)) || e.message || '提交失败'
+            failures.push(`${row.batchNo || row.id}: ${msg}`)
           }
         }
 
@@ -1599,7 +1611,7 @@ export default {
             applyDept: this.fifoForm.applyDept,
             remark: this.fifoForm.remark,
             orderNo: this.fifoForm.orderNo ? String(this.fifoForm.orderNo).trim() : undefined,
-            orderItemId: this.fifoForm.orderItemId || undefined,
+            orderItemId: this.normalizeOptionalPositiveInt(this.fifoForm.orderItemId),
             bizType: 'MANUAL'
           }
           const res = await createOutboundRequestFIFO(params)
@@ -1636,6 +1648,8 @@ export default {
         materialCode: row.materialCode || '',
         rolls: Number(row.rolls || 1),
         applyDept: row.applyDept || '',
+        orderNo: row.orderNo || '',
+        orderItemId: this.normalizeOptionalPositiveInt(row.orderItemId) || 0,
         remark: row.remark || ''
       }
       this.editVisible = true
@@ -1651,6 +1665,8 @@ export default {
         const res = await updateOutboundRequest(this.editForm.id, {
           rolls: Number(this.editForm.rolls),
           applyDept: this.editForm.applyDept,
+          orderNo: this.editForm.orderNo ? String(this.editForm.orderNo).trim() : undefined,
+          orderItemId: this.normalizeOptionalPositiveInt(this.editForm.orderItemId),
           remark: this.editForm.remark
         })
         if (this.isApiSuccess(res)) {
@@ -1784,6 +1800,19 @@ export default {
         '分切卷': 'warning'
       }
       return typeMap[rollType] || 'info'
+    },
+    extractSequenceNo(row) {
+      if (!row) return ''
+      const direct = row.sequenceNo ?? row.sequence_no ?? row.digitalNo ?? row.numberNo ?? row.printNumber ?? row.printNo
+      if (direct === null || direct === undefined) return ''
+      const text = String(direct).trim()
+      return text || ''
+    },
+    hasSequenceNo(row) {
+      return !!this.extractSequenceNo(row)
+    },
+    getSequenceNoText(row) {
+      return this.extractSequenceNo(row)
     },
     getOutboundQtyText(row) {
       if (!row) return '-'

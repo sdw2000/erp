@@ -1,14 +1,70 @@
-<view class="container">
-  <view class="card" wx:if="{{canSales}}">
-    <view class="title">销售工作台</view>
-    <view class="muted">在小程序中快速完成下单、样板单、发货</view>
-    <button class="btn-primary" bindtap="goSalesOrder">销售下单</button>
-    <button class="btn-secondary" bindtap="goSampleOrder">样板单</button>
-    <button class="btn-secondary" bindtap="goDelivery">发货通知</button>
+<view class="container sales-bg">
+  <view class="hero orange-grad">
+    <view class="hero-title">销售管理中心</view>
+    <view class="hero-subtitle">客户 / 订单 / 发货 数字一体化</view>
   </view>
 
-  <view class="card" wx:else>
-    <view class="title">销售工作台</view>
-    <view class="muted">当前账号无销售权限</view>
+  <view class="main-content">
+    <view class="card shadow-sm" wx:if="{{canSales}}">
+      <view class="tool-section">
+        <view class="section-label">销售快捷操作</view>
+        <view class="summary-action-btn orange-border" bindtap="goSalesOrder">
+          <view class="action-icon">📝</view>
+          <view class="action-body">
+            <view class="action-title">快速销售下单</view>
+            <view class="action-desc">支持常规产品、客制化规格下单</view>
+          </view>
+          <view class="action-arrow">➡️</view>
+        </view>
+      </view>
+
+      <view class="tool-grid">
+        <view class="tool-item" bindtap="goSalesOrder">
+          <view class="tool-icon orange shadow-sm">💰</view>
+          <view class="tool-name">销售下单</view>
+        </view>
+        <view class="tool-item" bindtap="goSampleOrder">
+          <view class="tool-icon purple shadow-sm">🧪</view>
+          <view class="tool-name">样板订单</view>
+        </view>
+        <view class="tool-item" bindtap="goDelivery">
+          <view class="tool-icon red shadow-sm">🚚</view>
+          <view class="tool-name">发货通知</view>
+        </view>
+        
+        <view class="tool-item" bindtap="goCustomers">
+          <view class="tool-icon green shadow-sm">👥</view>
+          <view class="tool-name">客户管理</view>
+        </view>
+        <view class="tool-item" bindtap="goQuotation">
+          <view class="tool-icon teal shadow-sm">📑</view>
+          <view class="tool-name">报价管理</view>
+        </view>
+        <view class="tool-item" bindtap="goPriceInquiry">
+          <view class="tool-icon indigo shadow-sm">🔍</view>
+          <view class="tool-name">价格查询</view>
+        </view>
+
+        <view class="tool-item" bindtap="goSalesStats">
+          <view class="tool-icon gold shadow-sm">📈</view>
+          <view class="tool-name">销售统计</view>
+        </view>
+        <view class="tool-item" bindtap="goReturnOrder">
+          <view class="tool-icon gray shadow-sm">🔄</view>
+          <view class="tool-name">退换货</view>
+        </view>
+        <view class="tool-item" bindtap="goWorkLog">
+          <view class="tool-icon cyan shadow-sm">📓</view>
+          <view class="tool-name">销售日志</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card" wx:else>
+      <view class="sales-header">
+        <view class="sales-title">销售工作台</view>
+      </view>
+      <view class="muted" style="text-align:center; padding: 40rpx 0;">当前账号无销售权限，请联系管理员开通</view>
+    </view>
   </view>
 </view>

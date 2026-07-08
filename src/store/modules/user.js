@@ -46,11 +46,25 @@ const actions = {
   login({ commit }, userInfo) {
     const { username, password } = userInfo
     return new Promise((resolve, reject) => {
-      login({ username: username.trim(), password: password }).then(response => {
-        const { data } = response
-        commit('SET_TOKEN', data.token)
-        setToken(data.token)
-        resolve()
+      login({ username: username.trim(), password: password }).then(async response => {
+        try {
+          const { data } = response
+          commit('SET_TOKEN', data.token)
+          setToken(data.token)
+
+          // Immediately fetch user info and generate routes to ensure roles are available
+          // (helps environments like web-view that may not trigger a separate getInfo call)
+          const info = await this.dispatch('user/getInfo')
+          // generate accessible routes map based on roles
+          const accessRoutes = await this.dispatch('permission/generateRoutes', info.roles, { root: true })
+          // dynamically add accessible routes
+          router.addRoutes(accessRoutes)
+
+          resolve()
+        } catch (err) {
+          // even if getInfo/generateRoutes fails, resolve login so caller can handle fallback
+          resolve()
+        }
       }).catch(error => {
         reject(error)
       })

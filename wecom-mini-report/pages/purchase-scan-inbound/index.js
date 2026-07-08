@@ -13,7 +13,12 @@ Page({
   data: {
     keyword: '',
     documentList: [],
+    emptyHintText: '暂无可扫描单据',
     listLoading: false,
+    page: 1,
+    pageSize: 10,
+    totalRecords: 0,
+    totalPages: 0,
 
     selectedReceiptId: null,
     selectedReceiptNo: '',
@@ -32,7 +37,31 @@ Page({
 
     submitting: false,
     submitSummary: null,
-    operator: ''
+    operator: '',
+    progressPercent: 0,
+    lastScannedItem: null
+  },
+
+  updateProgress() {
+    const doc = this.data.document;
+    if (!doc) return;
+    
+    const summary = this.data.focusedSummary || doc.summary || { planQty: 0, scannedQty: 0 };
+    const plan = Number(summary.planQty) || 0;
+    if (plan <= 0) {
+      this.setData({ progressPercent: 0 });
+      return;
+    }
+
+    // 进度 = (系统已入库 + 本次扫码未提交) / 计划数
+    const systemScanned = Number(summary.scannedQty) || 0;
+    const currentSession = (this.data.scanCodes || []).length;
+    const total = systemScanned + currentSession;
+    
+    let percent = Math.floor((total / plan) * 100);
+    if (percent > 100) percent = 100;
+    
+    this.setData({ progressPercent: percent });
   },
 
   beginNativeScanSession() {
@@ -55,9 +84,9 @@ Page({
     }
     const userInfo = getUserInfo() || {}
     const roles = Array.isArray(userInfo.roles) ? userInfo.roles : []
-    const canWarehouse = roles.includes('warehouse') || roles.includes('admin')
+    const canWarehouse = roles.includes('warehouse') || roles.includes('admin') || roles.includes('packing') || roles.includes('packaging')
     if (!canWarehouse) {
-      wx.showToast({ title: '仅仓库/管理员可扫码入库', icon: 'none' })
+      wx.showToast({ title: '仅仓库/包装/管理员可访问', icon: 'none' })
       return
     }
     const name = userInfo.name || userInfo.username || ''
@@ -83,21 +112,27 @@ Page({
   },
 
   onKeywordInput(e) {
-    this.setData({ keyword: (e.detail && e.detail.value) || '' })
+    this.setData({ 
+      keyword: (e.detail && e.detail.value) || '',
+      page: 1 
+    })
   },
 
   async queryDocuments() {
-    this.setData({ listLoading: true })
+    this.setData({ listLoading: true, emptyHintText: '正在查询待入库单据...' })
     try {
       const keyword = (this.data.keyword || '').trim() || undefined
+      const { page, pageSize } = this.data
       let loadedByKeyword = false
       const res = await getInboundScanDocuments({
-        page: 1,
-        size: 30,
+        page,
+        size: pageSize,
         keyword
       })
       const data = (res && res.data) || {}
       let records = Array.isArray(data.records) ? data.records : []
+      let totalCount = data.total || records.length
+      let totalPages = data.pages || Math.ceil(totalCount / pageSize)
 
       // 兜底：当关键字是标签码/批次码时，列表接口可能查不到，直接走扫码详情接口反查单据。
       if (keyword) {
@@ -109,6 +144,8 @@ Page({
           const doc = (detailRes && detailRes.data) || null
           if (doc && (doc.receiptId || doc.receiptNo || (Array.isArray(doc.items) && doc.items.length > 0))) {
             records = [this.toDocumentListRow(doc, keyword)]
+            totalCount = 1
+            totalPages = 1
             loadedByKeyword = await this.loadDocument({
               receiptId: doc.receiptId || undefined,
               receiptNo: doc.receiptNo || undefined,
@@ -117,10 +154,29 @@ Page({
               preserveOnSameDoc: true
             })
           }
-        } catch (e1) {}
+        } catch (e1) { console.error('反查单据失败', e1) }
       }
 
-      this.setData({ documentList: records })
+      if (data.records && data.records.length === 1) {
+        const only = data.records[0]
+        wx.vibrateShort()
+        this.loadDocument({
+          receiptId: only.id,
+          receiptNo: only.receiptNo
+        })
+      }
+
+      this.setData({ 
+        documentList: records,
+        totalRecords: totalCount,
+        totalPages: totalPages,
+        emptyHintText: records.length > 0
+          ? ''
+          : (keyword
+            ? '未匹配到待入库单据，请确认收货单号/标签码'
+            : '暂无待入库单据（仅显示未入库申请）')
+      })
+      
       if (!loadedByKeyword && keyword && records.length === 1) {
         const only = records[0] || {}
         await this.loadDocument({
@@ -138,9 +194,30 @@ Page({
         return
       }
       wx.showToast({ title: (e && (e.msg || e.message)) || '查询失败', icon: 'none' })
-      this.setData({ documentList: [] })
+      const rawMsg = String((e && (e.msg || e.message)) || '').toLowerCase()
+      const noPerm = e && (e.code === 401 || e.code === 403 || rawMsg.includes('403') || rawMsg.includes('forbidden') || rawMsg.includes('权限'))
+      this.setData({
+        documentList: [],
+        emptyHintText: noPerm ? '当前账号无仓库/包装权限，请联系管理员开通' : '查询失败，请稍后重试'
+      })
     } finally {
       this.setData({ listLoading: false })
+    }
+  },
+
+  onPrevPage() {
+    if (this.data.page > 1) {
+      this.setData({ page: this.data.page - 1 }, () => {
+        this.queryDocuments()
+      })
+    }
+  },
+
+  onNextPage() {
+    if (this.data.page < this.data.totalPages) {
+      this.setData({ page: this.data.page + 1 }, () => {
+        this.queryDocuments()
+      })
     }
   },
 
@@ -152,7 +229,7 @@ Page({
         this.endNativeScanSession()
         const code = String((res && (res.result || res.rawData)) || '').trim()
         if (!code) return
-        this.setData({ keyword: code })
+        this.setData({ keyword: code, page: 1 })
         await this.queryDocuments()
       },
       fail: () => {
@@ -211,6 +288,7 @@ Page({
         scanning: false,
         scanCodeInput: ''
       })
+      this.updateProgress()
       if (!silent) wx.showToast({ title: '单据已载入', icon: 'success' })
       return true
     } catch (e) {
@@ -367,10 +445,15 @@ Page({
     }
 
     const next = [...(this.data.scanCodes || []), code]
+    const lastItem = this.findDocItemByCode(code)
+    
     this.setData({
       scanCodes: next,
-      scanGroupedItems: this.buildScanGroupedItems(next)
+      scanGroupedItems: this.buildScanGroupedItems(next),
+      lastScannedItem: lastItem
     })
+    this.updateProgress()
+    wx.vibrateShort({ type: 'medium' })
     // 自动滚动到底部（如果有上百条，方便用户确认）
     wx.showToast({ title: `已录入(${next.length})`, icon: 'success', duration: 800 })
   },
@@ -414,6 +497,7 @@ Page({
           itemId: row.itemId || null,
           materialCode: row.materialCode || '-',
           materialName: row.materialName || '-',
+          supplierCode: row.supplierCode || row.supplier || ((this.data.document || {}).supplierCode) || '-',
           incomingBatchNo: row.incomingBatchNo || '-',
           scannedThisRound: 0
         }
@@ -446,12 +530,8 @@ Page({
   },
 
   extractBatchCode(code) {
-    let text = toUpperSafe(code)
-    // 支持 | 分隔符提取批次
-    if (text.includes('|')) {
-      const parts = text.split('|')
-      if (parts.length >= 2) text = parts[1].trim()
-    }
+    const text = toUpperSafe(code)
+    // 只剥离末尾流水号后缀（如 -001、-002），不再截断 | 分隔符
     const idx = text.lastIndexOf('-')
     if (idx > 0 && idx < text.length - 1) {
       const suffix = text.substring(idx + 1)
@@ -529,6 +609,18 @@ Page({
         failedCodeMap,
         scanning: false
       })
+
+      // 立即更新本地已入库批次缓存，防止竞态重复扫码
+      if (isAllSuccess) {
+        const newAlready = [...(doc.alreadyInBatchNos || [])]
+        ;(submittedCodes || []).forEach(c => {
+          const batch = this.extractBatchCode(c)
+          if (batch && !newAlready.includes(batch.toUpperCase())) {
+            newAlready.push(batch.toUpperCase())
+          }
+        })
+        this.setData({ 'document.alreadyInBatchNos': newAlready })
+      }
 
       wx.showToast({ title: isAllSuccess ? '提交完成' : (failures.length > 0 ? '部分提交失败' : '提交完成'), icon: isAllSuccess ? 'success' : 'none' })
       

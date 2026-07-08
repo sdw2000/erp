@@ -75,7 +75,9 @@
         </el-table-column>
         <el-table-column prop="materialCode" label="料号" width="170" sortable="custom" />
         <el-table-column prop="productName" label="产品名称" min-width="150" show-overflow-tooltip sortable="custom" />
-        <el-table-column prop="specDesc" label="规格" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="specDesc" label="规格" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="location" label="库位" width="110" show-overflow-tooltip sortable="custom" />
+        <el-table-column prop="team" label="班组" width="90" align="center" sortable="custom" />
         <el-table-column prop="batchNo" label="批次号" width="140" sortable="custom" />
         <el-table-column prop="changeQuantity" label="变动量" width="170" align="right" sortable="custom">
           <template slot-scope="scope">
@@ -91,6 +93,14 @@
         </el-table-column>
         <el-table-column prop="beforeQuantity" label="变动前" width="110" align="right" sortable="custom" />
         <el-table-column prop="afterQuantity" label="变动后" width="110" align="right" sortable="custom" />
+        <el-table-column prop="lossQuantity" label="损耗" width="100" align="right" sortable="custom">
+          <template slot-scope="scope">
+            <span v-if="scope.row.lossQuantity && scope.row.lossQuantity > 0" style="color: #F56C6C">
+              {{ formatQty(scope.row.lossQuantity) }}
+            </span>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="refNo" label="关联单号" width="180" show-overflow-tooltip sortable="custom" />
         <el-table-column prop="operator" label="操作人" width="110" align="center" sortable="custom" />
         <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
@@ -101,7 +111,7 @@
         layout="total, sizes, prev, pager, next, jumper"
         :current-page="pager.current"
         :page-size="pager.size"
-        :page-sizes="[20, 50, 100, 200]"
+        :page-sizes="pageSizes"
         :total="pager.total"
         @current-change="handlePageChange"
         @size-change="handleSizeChange"
@@ -113,6 +123,7 @@
 <script>
 import { getUnifiedStockFlowPage } from '@/api/stockFlow'
 import elTableAutoLayout from '@/mixins/elTableAutoLayout'
+import uiConfig from '@/config/ui'
 
 export default {
   name: 'UnifiedStockFlow',
@@ -135,9 +146,10 @@ export default {
       },
       pager: {
         current: 1,
-        size: 20,
+        size: uiConfig.defaultPageSize,
         total: 0
-      }
+      },
+      pageSizes: uiConfig.pageSizes
     }
   },
   created() {
@@ -294,8 +306,8 @@ export default {
         }
 
         const headers = [
-          '时间', '库存类型', '操作类型', '料号', '产品名称', '规格', '批次号',
-          '变动数量', '单位', '标准变动数量', '标准单位', '变动前', '变动后',
+          '时间', '库存类型', '操作类型', '料号', '产品名称', '规格', '库位', '班组', '批次号',
+          '变动数量', '单位', '标准变动数量', '标准单位', '变动前', '变动后', '损耗',
           '关联单号', '操作人', '备注'
         ]
 
@@ -306,6 +318,8 @@ export default {
           r.materialCode || '',
           r.productName || '',
           r.specDesc || '',
+          r.location || '',
+          r.team || '',
           r.batchNo || '',
           r.changeQuantity == null ? '' : r.changeQuantity,
           r.unit || '',
@@ -313,6 +327,7 @@ export default {
           r.stdUnit || '',
           r.beforeQuantity == null ? '' : r.beforeQuantity,
           r.afterQuantity == null ? '' : r.afterQuantity,
+          r.lossQuantity == null ? '' : r.lossQuantity,
           r.refNo || '',
           r.operator || '',
           (r.remark || '').replace(/\r?\n/g, ' ')

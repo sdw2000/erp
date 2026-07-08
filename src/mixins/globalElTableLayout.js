@@ -43,6 +43,14 @@ function scheduleLayout(instance, delay = 40) {
             }
             ensureHeaderBodyScrollSync(tableVm)
           })
+          // 在完成表格布局同步后，触发横向滚动检测（若主脚本暴露了检测函数）
+          try {
+            if (typeof window !== 'undefined' && typeof window.__checkHScrollTables === 'function') {
+              window.__checkHScrollTables()
+            }
+          } catch (e) {
+            // noop
+          }
         })
       })
     })

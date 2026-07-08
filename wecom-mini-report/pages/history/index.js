@@ -10,10 +10,7 @@ Page({
     processTypeIndex: 0,
     scheduleId: '',
     loading: false,
-    list: [],
-    pageNum: 1,
-    pageSize: 10,
-    hasMore: true
+    list: []
   },
 
   onScheduleIdInput(e) {
@@ -21,47 +18,28 @@ Page({
   },
 
   onProcessTypeChange(e) {
-    this.setData({ 
-      processTypeIndex: Number(e.detail.value) || 0,
-      pageNum: 1,
-      list: [],
-      hasMore: true
-    }, () => {
-      this.onQuery()
-    })
+    this.setData({ processTypeIndex: Number(e.detail.value) || 0 })
   },
 
-  async onQuery(isLoadMore = false) {
-    if (this.data.loading) return
-    if (isLoadMore && !this.data.hasMore) return
+  async onQuery() {
+    const { scheduleId, processTypeOptions, processTypeIndex } = this.data
+    if (!scheduleId) {
+      wx.showToast({ title: '请填写 scheduleId', icon: 'none' })
+      return
+    }
 
-    const { scheduleId, processTypeOptions, processTypeIndex, pageNum, pageSize } = this.data
-    
     this.setData({ loading: true })
     try {
       const res = await getReportWorkList({
-        scheduleId: scheduleId ? Number(scheduleId) : undefined,
-        processType: processTypeOptions[processTypeIndex].value,
-        pageNum: isLoadMore ? pageNum + 1 : 1,
-        pageSize
+        scheduleId: Number(scheduleId),
+        processType: processTypeOptions[processTypeIndex].value
       })
-      
-      const newData = res.data.records || []
-      const hasMore = newData.length === pageSize
-      
-      this.setData({ 
-        list: isLoadMore ? this.data.list.concat(newData) : newData,
-        pageNum: isLoadMore ? pageNum + 1 : 1,
-        hasMore
-      })
+      this.setData({ list: Array.isArray(res.data) ? res.data : [] })
     } catch (e) {
       wx.showToast({ title: (e && (e.msg || e.message)) || '查询失败', icon: 'none' })
+      this.setData({ list: [] })
     } finally {
       this.setData({ loading: false })
     }
-  },
-
-  onReachBottom() {
-    this.onQuery(true)
   }
 })

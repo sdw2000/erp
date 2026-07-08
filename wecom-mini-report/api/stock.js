@@ -15,6 +15,13 @@ function getTapeStockList(data) {
   })
 }
 
+function getStockByQrCode(qrCode) {
+  return request({
+    url: `/api/tape-stock/scan/${encodeURIComponent(qrCode)}`,
+    method: 'GET'
+  })
+}
+
 function getOutboundList(data) {
   return request({
     url: '/api/tape-stock/outbound/list',
@@ -74,7 +81,8 @@ function getInboundScanDocuments(data) {
   return request({
     url: '/api/tape-stock/inbound/scan/documents',
     method: 'GET',
-    data
+    data,
+    timeout: 12000
   })
 }
 
@@ -82,7 +90,8 @@ function getInboundScanDocument(data) {
   return request({
     url: '/api/tape-stock/inbound/scan/document',
     method: 'GET',
-    data
+    data,
+    timeout: 12000
   })
 }
 
@@ -90,12 +99,38 @@ function submitInboundScan(data) {
   return request({
     url: '/api/tape-stock/inbound/scan/submit',
     method: 'POST',
+    data,
+    timeout: 15000
+  })
+}
+
+function getWorkshopStock(data) {
+  return request({
+    url: '/api/workshop/stock',
+    method: 'GET',
+    data
+  })
+}
+
+function simpleIssueMaterial(data) {
+  return request({
+    url: '/api/workshop/simple-issue',
+    method: 'POST',
+    data
+  })
+}
+
+function printByGateway(data) {
+  return request({
+    url: '/api/print-gateway/print',
+    method: 'POST',
     data
   })
 }
 
 module.exports = {
   getTapeStockList,
+  getStockByQrCode,
   getOutboundList,
   createOutboundRequest,
   getInboundList,
@@ -105,5 +140,8 @@ module.exports = {
   stocktakeById,
   getInboundScanDocuments,
   getInboundScanDocument,
-  submitInboundScan
+  submitInboundScan,
+  getWorkshopStock,
+  simpleIssueMaterial,
+  printByGateway
 }

@@ -5,6 +5,7 @@ App({
     userInfo: null
   },
   onLaunch() {
+    console.log('App Launching...');
     const fixedBaseUrl = 'https://api.maxtritape.com'
     const token = wx.getStorageSync('mes_token') || ''
     const userInfo = wx.getStorageSync('mes_user_info') || null

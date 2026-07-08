@@ -102,12 +102,14 @@
         :data="priorityList"
         border
         stripe
-        style="margin-top: 15px"
+        style="margin-top: 15px; width: 100%"
+        height="calc(100vh - 280px)"
+        @sort-change="handleSortChange"
       >
         <el-table-column type="index" label="排名" width="60" align="center" />
-        <el-table-column prop="customerCode" label="客户代码" width="140" />
+        <el-table-column prop="customerCode" label="客户代码" width="140" sortable="custom" />
         <el-table-column prop="customerName" label="客户名称" width="150" show-overflow-tooltip />
-        <el-table-column prop="totalScore" label="总分" width="80" align="center" sortable>
+        <el-table-column prop="totalScore" label="总分" width="80" align="center" sortable="custom">
           <template slot-scope="{ row }">
             <el-tag :type="getPriorityType(row.totalScore)" size="small">
               {{ row.totalScore ? row.totalScore.toFixed(2) : '0.00' }}
@@ -115,23 +117,23 @@
           </template>
         </el-table-column>
         <el-table-column label="得分明细" align="center">
-          <el-table-column prop="paymentTermScore" label="账期得分" width="100" align="center">
+          <el-table-column prop="paymentTermScore" label="账期得分" width="100" align="center" sortable="custom">
             <template slot-scope="{ row }">
               <span style="color: #409eff">{{ row.paymentTermScore || 0 }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="avgAmountScore" label="月均金额得分" width="130" align="center">
+          <el-table-column prop="avgAmountScore" label="月均金额得分" width="130" align="center" sortable="custom">
             <template slot-scope="{ row }">
               <span style="color: #67c23a">{{ row.avgAmountScore ? row.avgAmountScore.toFixed(2) : '0.00' }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="priceScore" label="单价得分" width="100" align="center">
+          <el-table-column prop="priceScore" label="单价得分" width="100" align="center" sortable="custom">
             <template slot-scope="{ row }">
               <span style="color: #e6a23c">{{ row.priceScore || 0 }}</span>
             </template>
           </el-table-column>
         </el-table-column>
-        <el-table-column prop="statsDate" label="统计时间" width="160" />
+        <el-table-column prop="statsDate" label="统计时间" width="160" sortable="custom" />
         <el-table-column label="操作" width="180" align="center" fixed="right">
           <template slot-scope="{ row }">
             <el-button type="text" size="small" @click="handleViewDetail(row)">
@@ -232,7 +234,9 @@ export default {
         pageSize: 20,
         customerCode: '',
         customerName: '',
-        priorityRange: ''
+        priorityRange: '',
+        sortField: 'totalScore',
+        sortOrder: 'descending'
       },
       stats: {
         high: 0,
@@ -307,9 +311,16 @@ export default {
         pageSize: 20,
         customerCode: '',
         customerName: '',
-        priorityRange: ''
+        priorityRange: '',
+        sortField: 'totalScore',
+        sortOrder: 'descending'
       }
       this.loadData(true)
+    },
+    handleSortChange({ prop, order }) {
+      this.queryParams.sortField = prop
+      this.queryParams.sortOrder = order
+      this.loadData(false)
     },
     handleSizeChange(val) {
       this.queryParams.pageSize = val

@@ -687,22 +687,16 @@ export default {
       this.statement = Object.assign({}, this.statement, data)
       this.statement.rpNaturalMonthLocked = !!data.rpNaturalMonthLocked
       const allDetailRows = (data.detailRows || []).map(row => {
-        const targetMonth = this.statement.rpNaturalMonthLocked
-          ? this.queryForm.month
-          : (row.reconcileTargetMonth || this.queryForm.month)
+        const targetMonth = row.reconcileTargetMonth || this.queryForm.month
         return {
           ...row,
           reconcileTargetMonth: targetMonth,
-          includeInCurrentStatement: this.statement.rpNaturalMonthLocked
-            ? true
-            : (row.includeInCurrentStatement !== false)
+          includeInCurrentStatement: row.includeInCurrentStatement !== false
         }
       })
       // 仅展示当前对账月应纳入的明细；已调到下月或删除（顺延下月）的数据不再显示在当前月页面
       this.statement.allDetailRows = allDetailRows
-      this.statement.detailRows = this.statement.rpNaturalMonthLocked
-        ? allDetailRows
-        : allDetailRows.filter(row => row.includeInCurrentStatement !== false)
+      this.statement.detailRows = allDetailRows.filter(row => row.includeInCurrentStatement !== false)
       this.statement.historyRows = (data.historyRows || []).map(item => ({ ...item, _editing: false }))
       this.statement.printHistoryRows = data.printHistoryRows || []
       this.statement.summary = data.summary || this.statement.summary
@@ -1147,9 +1141,7 @@ export default {
       ;(this.statement.allDetailRows || [])
         .filter(row => row.bizType === 'delivery' && row.noticeItemId)
         .forEach(row => {
-          const targetMonth = this.statement.rpNaturalMonthLocked
-            ? this.queryForm.month
-            : (row.reconcileTargetMonth || this.queryForm.month)
+          const targetMonth = row.reconcileTargetMonth || this.queryForm.month
           const dedupKey = `${row.noticeItemId}_${targetMonth}`
           if (!detailsMap.has(dedupKey)) {
             detailsMap.set(dedupKey, {
@@ -1170,6 +1162,7 @@ export default {
       return {
         customerCode: this.queryForm.customerCode,
         month: this.queryForm.month,
+        overrideSalesDetails: true,
         details
       }
     },
@@ -1333,7 +1326,7 @@ export default {
 </script>
 
 <style scoped>
-.sales-reconciliation { padding: 20px; }
+.sales-reconciliation { padding: 20px 20px 40px; }
 .page-header { display:flex; justify-content:space-between; align-items:center; }
 .card-title { font-size:16px; font-weight:600; }
 .search-area { margin-bottom: 16px; padding: 14px 16px; background:#f8fafc; border:1px solid #ebeef5; border-radius:10px; }
@@ -1351,7 +1344,7 @@ export default {
 .section-head { display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; }
 .section-head-actions { display:flex; align-items:center; gap:8px; }
 .section-title { font-size:14px; font-weight:600; color:#303133; margin-bottom:10px; }
-.reconciliation-table { border:1px solid #ebeef5; border-radius:8px; overflow:hidden; }
+.reconciliation-table { border:1px solid #ebeef5; border-radius:8px; }
 .reconciliation-table /deep/ th.el-table__cell { background:#f5f7fa; color:#606266; font-weight:600; }
 .reconciliation-table /deep/ .el-table__row td.el-table__cell { padding-top:10px; padding-bottom:10px; }
 .history-summary { margin-top: 10px; display:flex; justify-content:flex-end; gap:24px; color:#606266; font-size:13px; }

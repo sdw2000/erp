@@ -1,6 +1,100 @@
 <view class="container">
-  <view class="card">
-    <view class="title">{{pageTitle}}</view>
+  
+  <!-- 简化模式 UI (包装领料专场) -->
+  <view wx:if="{{isSimplifiedMode}}">
+    <view class="card" style="border-top: 4px solid #1890ff;">
+        <view class="title" style="color: #1890ff; font-weight: bold;">包装领料 - 极简录入 v1.2</view>
+        <view class="muted">【新功能】扫码 -> 填入领料量 -> 提交保存</view>
+
+        <view class="row">
+          <view>
+            <view class="label">目标工段/车间</view>
+            <picker mode="selector" range="{{targetSectionOptions}}" value="{{targetSectionIndex}}" bindchange="onTargetSectionChange">
+                <view class="input">{{targetSectionOptions[targetSectionIndex]}}</view>
+            </picker>
+          </view>
+          <view>
+            <view class="label">领料人/接收人</view>
+            <picker mode="selector" range="{{staffOptions}}" value="{{targetPersonIndex}}" bindchange="onTargetPersonChange">
+                <view class="input" style="color: #1890ff; font-weight: bold;">{{staffOptions[targetPersonIndex] || '请选择'}}</view>
+            </picker>
+          </view>
+        </view>
+
+        <view class="row">
+          <view>
+            <view class="label">操作人</view>
+            <picker mode="selector" range="{{staffOptions}}" value="{{staffIndex}}" bindchange="onOperatorChange">
+                <view class="input" style="color: #1890ff;">{{operator || '请选择操作人'}}</view>
+            </picker>
+          </view>
+          <view>
+            <view class="label">批量备注</view>
+            <input class="input" value="{{remark}}" placeholder="可选" bindinput="onRemarkInput" />
+          </view>
+        </view>
+
+        <view class="row mt16">
+          <button class="btn-primary" style="width: 100%;" bindtap="onScanSimple">点击扫码加料</button>
+        </view>
+    </view>
+
+    <view class="card">
+        <view class="row row-middle">
+            <view class="title">待领料列表 ({{simpleScannedList.length}})</view>
+            <button class="btn-primary" loading="{{submitting}}" bindtap="submitSimpleIssue">提交登记</button>
+        </view>
+
+        <view wx:if="{{simpleScannedList.length === 0}}" class="muted" style="text-align: center; padding: 20px;">
+            请点击下方或上方按钮开始扫码
+        </view>
+
+        <block wx:for="{{simpleScannedList}}" wx:key="index">
+            <view class="issue-card">
+                <view class="row row-middle">
+                    <view class="tag">{{item.materialCode}}</view>
+                    <view class="muted" style="margin-left: 10px; font-weight: bold;">{{item.productName}}</view>
+                </view>
+
+                <view class="row mt4" style="font-size: 12px; color: #999;">
+                    <view>条码: {{item.qrCode}}</view>
+                </view>
+
+                <view class="row mt4" style="font-size: 13px; color: #666;">
+                    <view>规格: <text style="color: #333; font-weight: bold;">{{item.spec}}</text></view>
+                    <view style="margin-left: 20px;">当前库存: <text style="color: #333; font-weight: bold;">{{item.totalRolls}} 卷</text></view>
+                </view>
+
+                <view class="row mt8">
+                    <view>
+                        <view class="label">系统剩余 ({{item.unit}})</view>
+                        <view class="input disabled">{{item.systemArea}}</view>
+                    </view>
+                    <view>
+                        <view class="label">本次领料 ({{item.unit}})</view>
+                        <input class="input highlight" value="{{item.issueArea}}" type="digit" data-index="{{index}}" data-key="issueArea" bindinput="onSimpleIssueInput" />
+                    </view>
+                </view>
+
+                <view class="row">
+                    <view style="width: 100%;">
+                        <view class="label">备注</view>
+                        <input class="input" value="{{item.remark}}" data-index="{{index}}" data-key="remark" bindinput="onSimpleIssueInput" placeholder="行备注" />
+                    </view>
+                </view>
+
+                <button class="btn-danger small" data-index="{{index}}" bindtap="removeSimpleRow">移除此项</button>
+            </view>
+        </block>
+        
+        <button class="btn-secondary mt16" bindtap="onScanSimple">+ 继续扫码</button>
+    </view>
+  </view>
+
+  <!-- 标准模式 UI -->
+  <view wx:if="{{!isSimplifiedMode}}">
+    <view class="card">
+        <view class="title">{{pageTitle}}</view>
     <view class="muted">{{pageDesc}}</view>
 
     <view wx:if="{{isCoatingScene}}">
@@ -113,6 +207,15 @@
     </view>
     <block wx:for="{{materialIssues}}" wx:key="index">
       <view class="issue-card">
+        <view class="row row-middle">
+          <view class="tag">{{item.materialCode}}</view>
+          <view class="muted" style="margin-left: 10px; font-weight: bold;">{{item.materialName || '-'}}</view>
+        </view>
+        
+        <view class="row mt4" style="font-size: 13px; color: #666;" wx:if="{{item.spec}}">
+          <view>规格: <text style="color: #333; font-weight: bold;">{{item.spec}}</text></view>
+        </view>
+
         <view class="row">
           <view>
             <view class="label">物料类型</view>
@@ -199,4 +302,5 @@
       </view>
     </block>
   </view>
-</view>
+ </view> <!-- Close standard mode !isSimplifiedMode -->
+</view> <!-- Close container -->

@@ -4,7 +4,8 @@ const {
   getMaterialIssues,
   getCoatingSchedulesPage
 } = require('../../api/report')
-const { getTapeStockList } = require('../../api/stock')
+const { getStaffList } = require('../../api/user')
+const { getTapeStockList, getStockByQrCode, simpleIssueMaterial } = require('../../api/stock')
 const { getToken, getUserInfo, clearToken } = require('../../utils/auth')
 
 function emptyIssue() {
@@ -31,6 +32,7 @@ Page({
   data: {
     scene: 'default',
     isCoatingScene: false,
+    isSimplifiedMode: false, // 简化模式，用于包装领料
     pageTitle: '领料登记',
     pageDesc: '优先填写 scheduleId；可先带出BOM模板再提交',
     processTypeOptions: [
@@ -59,14 +61,23 @@ Page({
     lineOptions: ['全部线别'],
     lineOptionValues: [''],
     selectedLineIndex: 0,
-    selectedScheduleId: ''
+    selectedScheduleId: '',
+
+    // 简化模式专有
+    targetSectionOptions: ['包装','分切','复卷','涂布','成品仓'],
+    targetSectionIndex: 0,
+    targetPerson: '',
+    targetPersonIndex: 0,
+    staffOptions: ['加载人员中...'],
+    staffList: [],
+    simpleScannedList: [] // 简化模式扫码列表
   },
 
   onLoad(options = {}) {
     const scene = (options.scene || '').trim()
-    if (!scene) {
-      return
-    }
+    console.log('Issue onLoad scene:', scene)
+    
+    // 如果没有指定场景，通过工序索引尝试识别 (如果是从通用入口进入)
     if (scene === 'coatingIssue') {
       this.setData({
         scene,
@@ -82,12 +93,73 @@ Page({
     if (scene === 'packagingIssue') {
       this.setData({
         scene,
+        isSimplifiedMode: true,
         pageTitle: '包装领料登记',
-        pageDesc: '包装领料按现有接口映射到分切 SLITTING 工序',
+        pageDesc: '极简模式：扫码 -> 填入领料量 -> 提交至线边仓',
         processTypeIndex: 2,
-        remark: 'SCENE=PACKAGING_ISSUE'
+        remark: 'SCENE=PACKAGING_ISSUE',
+        targetSectionIndex: 0 
       })
       wx.setNavigationBarTitle({ title: '包装领料' })
+      this.loadPackagingStaff()
+      return
+    }
+
+    // 默认情况
+    this.setData({ scene: 'default' })
+  },
+
+  async loadPackagingStaff() {
+    try {
+      // 同时加载：包装A组(5)、包装B组(4)、以及部门为“包装”的人员
+      const [resA, resB, resDept] = await Promise.all([
+        getStaffList({ page: 1, size: 50, teamId: 5, status: 'active' }),
+        getStaffList({ page: 1, size: 50, teamId: 4, status: 'active' }),
+        getStaffList({ page: 1, size: 50, department: '包装', status: 'active' })
+      ])
+      
+      let list = []
+      if (resA.data && resA.data.list) list = list.concat(resA.data.list)
+      if (resB.data && resB.data.list) list = list.concat(resB.data.list)
+      if (resDept.data && resDept.data.list) list = list.concat(resDept.data.list)
+      
+      // 按照 ID 去重
+      const uniqueMap = {}
+      list.forEach(s => { if (s && s.id) uniqueMap[s.id] = s })
+      let finalStaffs = Object.values(uniqueMap)
+
+      // 如果还是没人（或者人太少），加载全部在职人员
+      if (finalStaffs.length < 5) {
+        const resAll = await getStaffList({ page: 1, size: 200, status: 'active' })
+        if (resAll.data && resAll.data.list) {
+          finalStaffs = resAll.data.list
+        }
+      }
+
+      // 排序
+      finalStaffs.sort((a, b) => a.staffName.localeCompare(b.staffName, 'zh-Hans-CN'))
+
+      const options = finalStaffs.map(s => `${s.staffName} (${s.staffCode})`)
+      if (options.length === 0) options.push('未找到人员')
+
+      // 尝试匹配当前登录人
+      const userInfo = getUserInfo() || {}
+      const loginName = userInfo.name || userInfo.username || ''
+      let matchIndex = 0
+      if (loginName) {
+        const idx = finalStaffs.findIndex(s => s.staffName === loginName)
+        if (idx !== -1) matchIndex = idx
+      }
+
+      this.setData({
+        staffList: finalStaffs,
+        staffOptions: options,
+        targetPersonIndex: matchIndex,
+        targetPerson: finalStaffs[matchIndex] ? finalStaffs[matchIndex].staffName : ''
+      })
+    } catch (e) {
+      console.error('Load staff failed', e)
+      this.setData({ staffOptions: ['加载失败，请重试'] })
     }
   },
 
@@ -102,15 +174,148 @@ Page({
     if (name && !this.data.operator) {
       this.setData({ operator: name })
     }
+    // 确保人员列表已加载
+    if (!this.data.staffList || this.data.staffList.length <= 1) {
+      this.loadPackagingStaff()
+    }
     if (this.data.isCoatingScene) {
       this.loadCoatingSchedules()
+    }
+  },
+
+  onTargetSectionChange(e) { this.setData({ targetSectionIndex: Number(e.detail.value) || 0 }) },
+  onTargetPersonChange(e) {
+    const index = Number(e.detail.value) || 0
+    const staff = this.data.staffList[index]
+    this.setData({
+      targetPersonIndex: index,
+      targetPerson: staff ? staff.staffName : ''
+    })
+  },
+  onTargetPersonInput(e) { this.setData({ targetPerson: e.detail.value }) },
+
+  // 极简扫码领料：连续扫码
+  onScanSimple() {
+    wx.scanCode({
+      success: async (res) => {
+        const qrCode = res.result
+        if (!qrCode) return
+        
+        // 查找是否已在清单中
+        const isDuplicate = this.data.simpleScannedList.some(i => i.qrCode === qrCode)
+        if (isDuplicate) {
+          wx.showToast({ title: '重复扫码，已忽略', icon: 'none' })
+          return
+        }
+
+        wx.showLoading({ title: '识别中...' })
+        try {
+          const resStock = await getTapeStockList({ page: 1, size: 1, qrCode })
+          const records = resStock.data.records
+          if (records && records.length > 0) {
+            const stock = records[0]
+            const realLen = stock.currentLength || stock.length || '-'
+            const thickness = stock.thickness || stock.thicknessUm || '-'
+            const width = stock.width || stock.widthMm || '-'
+            const newItem = {
+              qrCode: stock.qrCode,
+              materialCode: stock.materialCode,
+              productName: stock.productName,
+              width: stock.width,
+              thickness: stock.thickness,
+              spec: `${thickness}μm * ${width}mm * ${realLen}m`,
+              totalRolls: stock.totalRolls || 0,
+              systemArea: stock.totalSqm || 0,
+              issueArea: stock.totalSqm || 0, // 默认领全额
+              unit: stock.unit || '㎡',
+              batchNo: stock.batchNo,
+              remark: ''
+            }
+            this.setData({
+              simpleScannedList: [newItem, ...this.data.simpleScannedList]
+            })
+            wx.vibrateShort()
+          } else {
+            wx.showToast({ title: '未找到库存', icon: 'none' })
+          }
+        } catch (e) {
+          wx.showToast({ title: '查询失败', icon: 'none' })
+        } finally {
+          wx.hideLoading()
+        }
+      }
+    })
+  },
+
+  onSimpleIssueInput(e) {
+    const { index, key } = e.currentTarget.dataset
+    const list = this.data.simpleScannedList.slice()
+    list[index][key] = e.detail.value
+    this.setData({ simpleScannedList: list })
+  },
+
+  removeSimpleRow(e) {
+    const index = Number(e.currentTarget.dataset.index)
+    const list = this.data.simpleScannedList.slice()
+    list.splice(index, 1)
+    this.setData({ simpleScannedList: list })
+  },
+
+  async submitSimpleIssue() {
+    const { simpleScannedList, targetSectionOptions, targetSectionIndex, targetPerson, operator } = this.data
+    if (!simpleScannedList.length) {
+      wx.showToast({ title: '请先扫码', icon: 'none' })
+      return
+    }
+
+    const targetSection = targetSectionOptions[targetSectionIndex]
+    this.setData({ submitting: true })
+    
+    let successCount = 0
+    let failCount = 0
+
+    for (const item of simpleScannedList) {
+      try {
+        await simpleIssueMaterial({
+          qrCode: item.qrCode,
+          issueArea: item.issueArea,
+          targetSection,
+          targetPerson,
+          operator,
+          remark: item.remark
+        })
+        successCount++
+      } catch (e) {
+        failCount++
+      }
+    }
+
+    this.setData({ submitting: false })
+    if (failCount === 0) {
+      wx.showModal({
+        title: '提交成功',
+        content: `成功记录 ${successCount} 项，请通知现场人员确认。`,
+        showCancel: false,
+        success: () => {
+          this.setData({ simpleScannedList: [] })
+        }
+      })
+    } else {
+      wx.showToast({ title: `成功:${successCount}, 失败:${failCount}`, icon: 'none' })
     }
   },
 
   onProcessTypeChange(e) { this.setData({ processTypeIndex: Number(e.detail.value) || 0 }) },
   onScheduleIdInput(e) { this.setData({ scheduleId: e.detail.value }) },
   onOrderDetailIdInput(e) { this.setData({ orderDetailId: e.detail.value }) },
-  onOperatorInput(e) { this.setData({ operator: e.detail.value }) },
+  onOperatorChange(e) {
+    const idx = e.detail.value
+    const name = this.data.staffOptions[idx]
+    this.setData({
+      staffIndex: idx,
+      operator: name
+    })
+  },
   onRemarkInput(e) { this.setData({ remark: e.detail.value }) },
   onQrCodeInput(e) { this.setData({ qrCode: e.detail.value }) },
   onScheduleKeywordInput(e) {
@@ -298,26 +503,74 @@ Page({
     }
     this.setData({ qrLoading: true })
     try {
-      const res = await getTapeStockList({ page: 1, size: 1, qrCode })
-      const records = (res && res.data && res.data.records) || []
-      if (!records.length) {
-        wx.showToast({ title: '未找到对应库存', icon: 'none' })
+      const res = await getStockByQrCode(qrCode)
+      const stock = res && res.data
+      if (!stock) {
+        wx.showToast({ title: '未找到对应库存或任务', icon: 'none' })
         return
       }
-      const stock = records[0]
+
       const list = this.data.materialIssues.slice()
+      const scannedCode = (stock.materialCode || '').trim().toUpperCase()
+
+      // 新增：料号不一致时弹出警告框
+      if (list.length > 0) {
+        const requiredCodes = list.map(item => (item.materialCode || '').trim().toUpperCase()).filter(c => c)
+        // 如果模板里有要求的料号，且扫入的料号不在需求范围内
+        if (requiredCodes.length > 0 && !requiredCodes.includes(scannedCode)) {
+          const confirm = await new Promise(resolve => {
+            wx.showModal({
+              title: '领料错误',
+              content: `扫入料号(${scannedCode})不在订单需求范围内！\n要求：${requiredCodes.join(' / ')}。\n是否强制录入？`,
+              confirmText: '强制录入',
+              cancelText: '取消',
+              success: (mRes) => resolve(mRes.confirm)
+            })
+          })
+          if (!confirm) return // 用户选择取消，停止后续逻辑
+        }
+      }
+
       if (!list.length) {
         list.push(emptyIssue())
       }
-      list[0] = {
-        ...list[0],
-        materialCode: stock.materialCode || list[0].materialCode,
-        stockId: stock.id || list[0].stockId,
-        rollCode: stock.batchNo || list[0].rollCode,
-        actualArea: list[0].actualArea || stock.totalArea || ''
+      
+      // 智能匹配目标行：优先寻找料号一致且未填写卷号的行
+      let targetIdx = list.findIndex(item => (item.materialCode || '').trim().toUpperCase() === scannedCode && !item.rollCode)
+      if (targetIdx < 0) {
+        // 找不到空的匹配行，找任意料号一致的行
+        targetIdx = list.findIndex(item => (item.materialCode || '').trim().toUpperCase() === scannedCode)
+      }
+      if (targetIdx < 0) {
+        // 找不到料号一致的，找第一个完全空白的行
+        targetIdx = list.findIndex(item => !item.materialCode && !item.rollCode)
+      }
+      if (targetIdx < 0) {
+        // 还没找到，默认更新第一行（或者可选 push 新行，这里保持更新首行以保持预览感）
+        targetIdx = 0
+      }
+
+      const bizType = stock.bizType
+      const isTask = bizType === 'PRODUCTION_TASK'
+      
+      const t = stock.thickness || stock.thicknessUm || '-'
+      const w = stock.width || stock.widthMm || '-'
+      const l = stock.currentLength || stock.length || '-'
+      const spec = `${t}μm * ${w}mm * ${l}m`
+
+      list[targetIdx] = {
+        ...list[targetIdx],
+        materialType: stock.rollType || stock.materialType || list[targetIdx].materialType,
+        materialCode: stock.materialCode || list[targetIdx].materialCode,
+        materialName: stock.productName || list[targetIdx].materialName,
+        spec: spec || list[targetIdx].spec || '',
+        stockId: stock.id || '',
+        rollCode: stock.batchNo || stock.taskNo || list[targetIdx].rollCode,
+        actualArea: stock.totalArea || stock.plannedArea || stock.targetArea || list[targetIdx].actualArea || '',
+        remark: isTask ? `生产任务:${stock.taskNo}` : list[targetIdx].remark
       }
       this.setData({ materialIssues: this.decorateIssueListLabels(list) })
-      wx.showToast({ title: '已带出库存信息', icon: 'success' })
+      wx.showToast({ title: isTask ? '已带出生产任务信息' : '已带出库存信息', icon: 'success' })
     } catch (e) {
       wx.showToast({ title: (e && (e.msg || e.message)) || '二维码查询失败', icon: 'none' })
     } finally {
@@ -643,20 +896,28 @@ Page({
         wx.showToast({ title: '未查询到BOM模板', icon: 'none' })
         return
       }
-      const mapped = rows.map(row => ({
-        materialType: row.materialType || row.material_type || '',
-        materialCode: row.materialCode || row.material_code || '',
-        materialName: row.materialName || row.material_name || '',
-        unit: row.unit || '',
-        stockId: row.stockId || row.stock_id || '',
-        rollCode: row.rollCode || row.roll_code || '',
-        planArea: row.planArea || row.plan_area || '',
-        actualArea: row.actualArea || row.actual_area || row.planArea || row.plan_area || '',
-        lossArea: row.lossArea || row.loss_area || '',
-        remark: row.remark || '',
-        packCount: '',
-        batchOptions: Array.isArray(row.batchOptions) ? row.batchOptions : []
-      }))
+      const mapped = rows.map(row => {
+        const t = row.thickness || row.thicknessUm || '-'
+        const w = row.width || row.widthMm || '-'
+        const l = row.length || row.lengthM || '-'
+        const spec = (t !== '-' || w !== '-' || l !== '-') ? `${t}μm * ${w}mm * ${l}m` : (row.spec || row.specification || '')
+
+        return {
+          materialType: row.materialType || row.material_type || '',
+          materialCode: row.materialCode || row.material_code || '',
+          materialName: row.materialName || row.material_name || '',
+          spec: spec,
+          unit: row.unit || '',
+          stockId: row.stockId || row.stock_id || '',
+          rollCode: row.rollCode || row.roll_code || '',
+          planArea: row.planArea || row.plan_area || '',
+          actualArea: row.actualArea || row.actual_area || row.planArea || row.plan_area || '',
+          lossArea: row.lossArea || row.loss_area || '',
+          remark: row.remark || '',
+          packCount: '',
+          batchOptions: Array.isArray(row.batchOptions) ? row.batchOptions : []
+        }
+      })
       this.setData({ materialIssues: this.decorateIssueListLabels(mapped.length ? mapped : [emptyIssue()]) })
       wx.showToast({ title: '已带出模板', icon: 'success' })
     } catch (e) {

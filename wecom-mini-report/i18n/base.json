@@ -1,11 +1,11 @@
 {
-	"ios": {
-		"name": "胶带通"
-	},
-	"android": {
-		"name": "胶带通"
-	},
-	"common": {
-		"name": "胶带通"
-	}
+    "common":  {
+                   "name":  "胶带通"
+               },
+    "ios":  {
+                "name":  "胶带通"
+            },
+    "android":  {
+                    "name":  "胶带通"
+                }
 }

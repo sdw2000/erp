@@ -65,6 +65,13 @@
             <el-tag size="small">{{ formatType(scope.row.materialType) }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="targetWarehouse" label="目标仓库" width="100" align="center">
+          <template slot-scope="scope">
+            <el-tag :type="getWarehouseTagType(scope.row.targetWarehouse)" size="small">
+              {{ scope.row.targetWarehouse || '未定义' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="unit" label="单位" width="80" align="center" />
         <el-table-column prop="spec" label="规格说明" min-width="180" show-overflow-tooltip />
         <el-table-column label="厚度" min-width="110" show-overflow-tooltip>
@@ -107,7 +114,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column v-if="$canEdit()" label="操作" width="150" fixed="right" align="center">
+        <el-table-column v-if="$canEdit()" label="操作" width="150" align="center">
           <template slot-scope="scope">
             <el-button type="text" size="small" icon="el-icon-edit" @click="handleEdit(scope.row)">编辑</el-button>
             <el-button type="text" size="small" icon="el-icon-delete" style="color:#f56c6c" @click="handleDelete(scope.row)">删除</el-button>
@@ -137,6 +144,25 @@
           <el-col :span="12">
             <el-form-item label="物料名称" prop="materialName">
               <el-input v-model="form.materialName" placeholder="请输入物料名称" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="目标仓库" prop="targetWarehouse">
+              <el-select v-model="form.targetWarehouse" style="width:100%" placeholder="请选择目标仓库">
+                <el-option label="胶带成品仓 (TAPE)" value="TAPE" />
+                <el-option label="薄膜仓 (FILM)" value="FILM" />
+                <el-option label="化工仓 (CHEMICAL)" value="CHEMICAL" />
+                <el-option label="包材辅料仓 (PACKAGE)" value="PACKAGE" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="单位" prop="unit">
+              <el-select v-model="form.unit" placeholder="请选择单位" style="width:100%">
+                <el-option v-for="item in unitOptionsForCategory()" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
             </el-form-item>
           </el-col>
         </el-row>
@@ -262,6 +288,7 @@ export default {
         materialName: [{ required: true, message: '请输入物料名称', trigger: 'blur' }],
         materialCategory: [{ required: true, message: '请选择物料类别', trigger: 'change' }],
         materialType: [{ required: true, message: '请选择物料类型', trigger: 'change' }],
+        targetWarehouse: [{ required: true, message: '请选择目标仓库', trigger: 'change' }],
         unit: [{ required: true, message: '请输入单位', trigger: 'blur' }]
       },
       importResultVisible: false,
@@ -287,6 +314,7 @@ export default {
         materialCategory: defaultCategory,
         materialCategoryRaw: defaultCategory,
         materialType: this.defaultMaterialTypeByCategory(defaultCategory),
+        targetWarehouse: 'CHEMICAL',
         unit: 'kg',
         spec: '',
         performanceParams: '',
@@ -417,10 +445,18 @@ export default {
       if (typeof value !== 'object') {
         return String(value)
       }
-      const standardValue = value.standardValue !== undefined ? String(value.standardValue).trim() : ''
-      const min = value.min !== undefined ? String(value.min).trim() : ''
-      const max = value.max !== undefined ? String(value.max).trim() : ''
       const unit = value.unit !== undefined ? String(value.unit).trim() : ''
+      // 去除数值中已含的单位后缀，防止重复拼接（如 "2000μm" + "μm" = "2000μmμm"）
+      const stripUnit = (val) => {
+        let s = String(val || '').trim()
+        if (unit && s.toLowerCase().endsWith(unit.toLowerCase())) {
+          s = s.slice(0, -unit.length)
+        }
+        return s
+      }
+      const standardValue = stripUnit(value.standardValue)
+      const min = stripUnit(value.min)
+      const max = stripUnit(value.max)
       const judgeMode = value.judgeMode || ''
       if (judgeMode === 'value' || (standardValue && !min && !max)) return `${standardValue}${unit}`
       if (judgeMode === 'min' || (min && !max)) return `≥${min}${unit}`
@@ -745,6 +781,16 @@ export default {
         this.fetchData()
       } else {
         this.$message.error(res.message || '导入失败')
+      }
+    },
+    getWarehouseTagType(warehouse) {
+      if (!warehouse) return 'danger'
+      switch (warehouse) {
+        case 'TAPE': return 'primary'
+        case 'FILM': return 'success'
+        case 'CHEMICAL': return 'warning'
+        case 'PACKAGE': return 'info'
+        default: return 'info'
       }
     }
   }

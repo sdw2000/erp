@@ -3,7 +3,10 @@ import { normalizeRoles } from '@/utils/role'
 
 function isCoatingRestrictedUser(roles) {
   const normalizedRoles = normalizeRoles(roles)
-  return normalizedRoles.includes('coating') && !normalizedRoles.includes('admin')
+  // Only treat user as "coating-restricted" when their sole role is `coating` (non-admin).
+  // This avoids incorrectly restricting users who have multiple roles (e.g. both `coating` and `packing`).
+  if (normalizedRoles.includes('admin')) return false
+  return normalizedRoles.length === 1 && normalizedRoles[0] === 'coating'
 }
 
 /**
@@ -58,8 +61,9 @@ const mutations = {
     state.addRoutes = routes
 
     if (coatingRestricted) {
-      const minimalConstantRoutes = (constantRoutes || []).filter(route => route.hidden)
-      state.routes = minimalConstantRoutes.concat(routes)
+      // 保留 hidden 路由（login/404/401）和首页 Dashboard
+      const coatingConstantRoutes = (constantRoutes || []).filter(route => route.hidden || route.path === '/')
+      state.routes = coatingConstantRoutes.concat(routes)
       return
     }
 

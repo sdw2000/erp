@@ -51,6 +51,7 @@
             <el-option label="已回款" value="PAID" />
             <el-option label="关闭" value="CLOSED" />
             <el-option label="取消" value="CANCELLED" />
+            <el-option label="已对账" value="已对账" />
           </el-select>
         </el-col>
         <el-col :span="4">
@@ -60,12 +61,6 @@
           <el-date-picker v-model="searchForm.orderDateEnd" type="date" placeholder="订单日期止" value-format="yyyy-MM-dd" size="small" style="width:100%" @change="handleSearch" />
         </el-col>
         <el-col :span="6">
-          <el-switch
-            v-model="searchForm.showCompleted"
-            active-text="显示已收货"
-            style="margin-right: 8px;"
-            @change="handleShowCompletedChange"
-          />
           <el-button type="primary" icon="el-icon-search" size="small" @click="handleSearch">搜索</el-button>
           <el-button icon="el-icon-refresh" size="small" @click="handleReset">重置</el-button>
         </el-col>
@@ -117,11 +112,11 @@
       </el-table>
     </div>
 
-    <div class="orders-pagination-wrapper">
+    <div class="pagination-container">
       <el-pagination
         :current-page.sync="currentPage"
         :page-size="pageSize"
-        :page-sizes="[5,10,20,50]"
+          :page-sizes="pageSizes"
         layout="sizes, prev, pager, next, jumper, ->, total"
         :total="Number(total)"
         @size-change="handleSizeChange"
@@ -683,6 +678,7 @@ import { getAllEnabledSpecs } from '@/api/tapeSpec'
 import { getSalesContractTemplates, getSalesContractCustomerDefaultTemplate, saveSalesContractCustomerDefaultTemplate } from '@/api/labelPrintConfig'
 import request from '@/utils/request'
 import elTableAutoLayout from '@/mixins/elTableAutoLayout'
+import uiConfig from '@/config/ui'
 
 // 仅运行期内存草稿（刷新页面后清空）
 let inMemoryOrderDraft = null
@@ -706,7 +702,8 @@ export default {
       quotationListLoaded: false,
       quotationListLoading: false,
       currentPage: 1,
-      pageSize: 10,
+      pageSize: uiConfig.defaultPageSize,
+      pageSizes: uiConfig.pageSizes,
       total: 0,
       detailVisible: false,
       currentOrder: null,
@@ -948,6 +945,15 @@ export default {
         canceled: '取消',
         closed: '关闭'
       }
+      // 中文状态直接映射（如已对账、待发货等）
+      const chineseMap = {
+        '已对账': '已对账',
+        '对账完成': '对账完成',
+        '已结清': '已结清',
+        '待发货': '待发货',
+        '已发货': '已发货'
+      }
+      if (chineseMap[raw]) return chineseMap[raw]
       return map[upper] || map[lower] || raw
     },
     getLifecycleStatusType(status) {
@@ -957,6 +963,10 @@ export default {
       if (upper === 'PAID' || upper === 'SHIPPED_FULL' || upper === 'PRODUCED' || upper === 'COMPLETED' || upper === 'RECEIVED') return 'success'
       if (upper === 'CANCELLED' || upper === 'CANCELED' || upper === 'CANCELLED' || upper === 'CLOSED') return 'danger'
       if (upper === 'SHIPPED_PARTIAL' || upper === 'IN_PRODUCTION' || upper === 'PROCESSING' || upper === 'PAYMENT_PARTIAL' || upper === 'PARTIAL_RECEIVED') return 'warning'
+      // 中文状态映射
+      if (raw === '已对账') return 'warning'
+      if (raw === '对账完成' || raw === '已结清') return 'success'
+      if (raw === '待发货') return 'info'
       return 'info'
     },
     formatItemCompletedRolls(item) {
@@ -1599,6 +1609,7 @@ export default {
       if (rawUnit === '米' || rawUnit === 'M' || rawUnit === 'm') return 'm'
       if (rawUnit === '平方米' || rawUnit === 'm²' || rawUnit === 'm2' || rawUnit === 'M²' || rawUnit === 'M2' || rawUnit === '㎡') return '㎡'
       if (rawUnit === '卷') return '卷'
+      if (rawUnit === 'roll' || rawUnit === 'ROLL' || rawUnit === 'Roll' || rawUnit === 'rolls' || rawUnit === 'ROLLS' || rawUnit === 'Rolls') return '卷'
       return '㎡'
     },
     getPricingUnit(row) {
@@ -1780,26 +1791,28 @@ export default {
       // m 计价：按宽度匹配
       // 卷 计价：按宽度+长度匹配
       // ㎡ 计价：不按规格卡控（客户+料号即可）
-      const matchedCandidates = allCandidates.filter(c => {
-        if (!c) return false
-        if (c.unit === 'm') {
-          const ok = this.numberEquals(c.width, rowWidth)
-          if (ok) specMatchedCount += 1
-          return ok
-        }
-        if (c.unit === '卷') {
-          const ok = this.numberEquals(c.width, rowWidth) && this.numberEquals(c.length, rowLength)
-          if (ok) specMatchedCount += 1
-          return ok
-        }
-        if (c.unit === '㎡') {
-          specMatchedCount += 1
-          return true
-        }
-        return false
+      // 取价优先级：卷 > m > ㎡（避免按卷报价被按㎡报价覆盖）
+      const rollCandidates = allCandidates.filter(c => {
+        if (!c || c.unit !== '卷') return false
+        const ok = this.numberEquals(c.width, rowWidth) && this.numberEquals(c.length, rowLength)
+        if (ok) specMatchedCount += 1
+        return ok
       })
 
-      const picked = pickLatestCandidate(matchedCandidates)
+      const meterCandidates = allCandidates.filter(c => {
+        if (!c || c.unit !== 'm') return false
+        const ok = this.numberEquals(c.width, rowWidth)
+        if (ok) specMatchedCount += 1
+        return ok
+      })
+
+      const sqmCandidates = allCandidates.filter(c => {
+        if (!c || c.unit !== '㎡') return false
+        specMatchedCount += 1
+        return true
+      })
+
+      const picked = pickLatestCandidate(rollCandidates) || pickLatestCandidate(meterCandidates) || pickLatestCandidate(sqmCandidates)
 
       if (picked) {
         this.$set(row, 'unitPrice', this.formatUnitPrice(picked.unitPrice))
@@ -2920,7 +2933,7 @@ export default {
 
 <style scoped>
 .sales-orders {
-  padding: 20px;
+  padding: 20px 20px 40px;
 }
 .orders-card-header {
   display: flex;
@@ -3036,7 +3049,6 @@ export default {
 }
 .sales-orders .orders-table {
   border-radius: 8px;
-  overflow: hidden;
 }
 .sales-orders .orders-table-wrapper {
   overflow-x: auto;
@@ -3150,12 +3162,11 @@ export default {
   appearance: textfield;
 }
 
-/* pagination fixed to bottom */
+/* pagination: let global pagination-container control alignment */
 .orders-pagination-wrapper {
   margin-top: 16px;
-  display: flex;
-  justify-content: flex-end;
   padding: 0;
+  width: 100%;
 }
 
 /* 打印样式 */

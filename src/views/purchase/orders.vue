@@ -90,7 +90,7 @@
         <el-pagination
           :current-page.sync="pagination.pageNum"
           :page-size="pagination.pageSize"
-          :page-sizes="[5,10,20,50]"
+          :page-sizes="pageSizes"
           layout="sizes, prev, pager, next, jumper, ->, total"
           :total="Number(pagination.total)"
           @size-change="handleSizeChange"
@@ -231,8 +231,8 @@
         <div v-if="currentOrder">
           <p><strong>供应商：</strong>{{ getOrderSupplierFullName(currentOrder) }} &nbsp;&nbsp; <strong>采购单号：</strong>{{ currentOrder.orderNo }}</p>
           <p><strong>供应商单号：</strong>{{ currentOrder.supplierOrderNo || '-' }} &nbsp;&nbsp; <strong>状态：</strong><PurchaseStatusTag kind="purchase" :status="currentOrder.status" /></p>
-          <p><strong>对账状态：</strong><PurchaseStatusTag kind="reconciliation" :status="currentOrder.reconciliationStatus" /></p>
-          <p><strong>总金额：</strong>{{ formatNumber(totalAmount(currentOrder)) }} &nbsp;&nbsp; <strong>总数量：</strong>{{ formatNumber(totalQuantity(currentOrder)) }}</p>
+          <p><strong>结算方式：</strong>{{ currentOrder.paymentTerms ||  '月结' }} &nbsp;&nbsp; <strong>对账状态：</strong><PurchaseStatusTag kind="reconciliation" :status="currentOrder.reconciliationStatus" /></p>
+          <p><strong>总金额：</strong>{{ currentOrder.calculatedTotalAmount || '0.00' }} &nbsp;&nbsp; <strong>总数量：</strong>{{ currentOrder.calculatedTotalQuantity || '0.00' }}</p>
           <el-table :data="currentOrder.items" stripe style="width:100%; margin-top:10px;">
             <el-table-column type="index" label="序号" width="60" align="center" />
             <el-table-column label="物料编码" width="160">
@@ -245,13 +245,13 @@
               <template slot-scope="scope">{{ formatSpec(scope.row) }}</template>
             </el-table-column>
             <el-table-column :label="getDetailQtyHeaderLabel()" width="80">
-              <template slot-scope="scope">{{ getDetailQtyValue(scope.row) }}</template>
+              <template slot-scope="scope">{{ scope.row.detailQtyValue }}</template>
             </el-table-column>
             <el-table-column :label="getDetailTotalHeaderLabel()" width="100">
-              <template slot-scope="scope">{{ getDetailTotalValue(scope.row) }}</template>
+              <template slot-scope="scope">{{ scope.row.detailTotalValue }}</template>
             </el-table-column>
             <el-table-column label="金额" width="120">
-              <template slot-scope="scope">{{ scope.row.amount || calcAmount(scope.row) }}</template>
+              <template slot-scope="scope">{{ scope.row.calculatedAmount || scope.row.amount || '0.00' }}</template>
             </el-table-column>
             <el-table-column prop="unitPrice" label="单价" width="100" />
             <el-table-column prop="remark" label="备注" />
@@ -361,9 +361,21 @@
           </el-row>
 
           <el-row :gutter="12">
-            <el-col :span="24">
+            <el-col :span="12">
               <el-form-item label="公司地址">
                 <el-input v-model="editForm.deliveryAddress" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="结算方式">
+                <el-select v-model="editForm.paymentTerms" placeholder="请选择或输入结算方式" filterable allow-create clearable style="width:100%">
+                  <el-option label="月结30天" value="月结30天" />
+                  <el-option label="月结60天" value="月结60天" />
+                  <el-option label="月结90天" value="月结90天" />
+                  <el-option label="现款现货" value="现款现货" />
+                  <el-option label="货到付款" value="货到付款" />
+                  <el-option label="预付30%" value="预付30%" />
+                </el-select>
               </el-form-item>
             </el-col>
           </el-row>
@@ -598,7 +610,7 @@
                       :value="opt"
                     />
                   </el-select>
-                  <span v-else>{{ scope.row.rawSpec || '-' }}</span>
+                  <span v-else>{{ formatSpec(scope.row) || '-' }}</span>
                 </template>
               </el-table-column>
               <el-table-column :label="getRawQtyHeaderLabelForEdit()" width="90">
@@ -664,6 +676,7 @@ import { getRawMaterialList } from '@/api/tapeRawMaterial'
 import { getPurchaseReconciliationMeta, getPurchaseReconciliationOptions } from '@/constants/purchaseReconciliation'
 import { getPurchaseStatusMeta } from '@/constants/purchaseStatus'
 import PurchaseStatusTag from '@/components/PurchaseStatusTag'
+import uiConfig from '@/config/ui'
 
 export default {
   name: 'PurchaseOrders',
@@ -674,9 +687,10 @@ export default {
       orders: [],
       pagination: {
         pageNum: 1,
-        pageSize: 10,
+        pageSize: uiConfig.defaultPageSize,
         total: 0
       },
+      pageSizes: uiConfig.pageSizes,
       searchForm: {
         supplier: '',
         orderNo: '',
@@ -757,6 +771,7 @@ export default {
         orderDate: this.getDateOffset(0),
         deliveryDate: this.getDateOffset(1),
         deliveryAddress: '',
+        paymentTerms: '',
         status: 'pending',
         remark: '',
         materialMode: '',
@@ -778,13 +793,39 @@ export default {
         })
         if (res && (res.code === 200 || res.code === 20000)) {
           const pageData = res.data
+          let records = []
           if (pageData && pageData.records) {
-            this.orders = pageData.records.map(o => ({ ...o, receiptProgress: undefined }))
+            records = pageData.records
             this.pagination.total = Number(pageData.total || 0)
           } else if (Array.isArray(pageData)) {
-            this.orders = pageData.map(o => ({ ...o, receiptProgress: undefined }))
+            records = pageData
             this.pagination.total = pageData.length
           }
+
+          // 预处理数据：预先计算好总金额和总数量，避免在模板渲染 cycle 中由于频繁 re-render 导致递归执行复杂的计算方法
+          this.orders = records.map(o => {
+            const items = o.items || []
+            // 计算前端汇总值作为兜底
+            const calcAmt = items.reduce((sum, it) => sum + Number(this.calcAmount(it)), 0).toFixed(2)
+            const calcQty = items.reduce((sum, it) => {
+              const q = this.isPurchaseFilmItem(it)
+                ? Number(this.calcSqm(it))
+                : Number(it.sqm !== undefined && it.sqm !== null ? it.sqm : this.calcRawTotalWeight(it))
+              return sum + (Number.isFinite(q) ? q : 0)
+            }, 0).toFixed(2)
+
+            return {
+              ...o,
+              receiptProgress: undefined,
+              // 优先保留后端返回的汇总值（如果不为0），否则使用前端汇总值
+              calculatedTotalAmount: (o.totalAmount && Number(o.totalAmount) !== 0) ? Number(o.totalAmount).toFixed(2) : calcAmt,
+              calculatedTotalQuantity: (o.totalArea && Number(o.totalArea) !== 0) ? Number(o.totalArea).toFixed(2) : calcQty,
+              // 同时更新原始字段，以防其他地方用到
+              totalAmount: (o.totalAmount && Number(o.totalAmount) !== 0) ? o.totalAmount : calcAmt,
+              totalArea: (o.totalArea && Number(o.totalArea) !== 0) ? o.totalArea : calcQty
+            }
+          })
+
           // 异步加载收货进度，不阻塞主列表展示 (改进点6)
           this.loadReceiptProgress(this.orders)
         }
@@ -824,10 +865,10 @@ export default {
     },
     async loadReceiptProgress(orders) {
       if (!orders || !orders.length) return
-      // 限制并发数量，避免后端压力过大
+      // 限制并发数量
       const limit = 3
       const list = [...orders]
-      const results = []
+      const progressMap = {} // 收集结果
 
       const fetchNext = async() => {
         if (!list.length) return
@@ -835,7 +876,7 @@ export default {
         try {
           // 如果已经是对账完成状态，直接设为 100%
           if (row.reconciliationStatus === 'RECONCILED' || row.reconciliationStatus === 'MATCHED') {
-            this.$set(row, 'receiptProgress', 100)
+            progressMap[row.orderNo] = 100
             return fetchNext()
           }
 
@@ -845,26 +886,31 @@ export default {
             const orderQty = Number(data.orderQty || 0)
             const receiptQty = Number(data.receiptQty || 0)
             if (orderQty > 0) {
-              const progress = (receiptQty / orderQty) * 100
-              this.$set(row, 'receiptProgress', Math.min(100, progress))
+              progressMap[row.orderNo] = Math.min(100, (receiptQty / orderQty) * 100)
             } else {
-              this.$set(row, 'receiptProgress', 0)
+              progressMap[row.orderNo] = 0
             }
-          } else {
-            this.$set(row, 'receiptProgress', 0)
           }
         } catch (e) {
           console.error(`加载订单 ${row.orderNo} 进度失败`, e)
-          this.$set(row, 'receiptProgress', 0)
         }
         return fetchNext()
       }
 
       const workers = []
-      for (let i = 0; i < Math.min(limit, list.length); i++) {
+      for (let i = 0; i < Math.min(limit, orders.length); i++) {
         workers.push(fetchNext())
       }
       await Promise.all(workers)
+
+      // 最后统一更新一次数据，减少渲染负担
+      this.orders.forEach(row => {
+        if (progressMap[row.orderNo] !== undefined) {
+          this.$set(row, 'receiptProgress', progressMap[row.orderNo])
+        } else if (row.receiptProgress === undefined) {
+          this.$set(row, 'receiptProgress', 0)
+        }
+      })
     },
     async fetchRawMaterials() {
       try {
@@ -954,8 +1000,25 @@ export default {
     },
     async loadOrderDetail(orderNo) {
       const res = await getPurchaseOrderDetail(orderNo)
-      if (res && (res.code === 200 || res.code === 20000)) {
-        return res.data || null
+      if (res && (res.code === 200 || res.code === 20000) && res.data) {
+        const order = res.data
+        const items = (order.items || []).map(it => this.normalizePurchaseDetailItem(it))
+        order.items = items
+        
+        // 给明细行增加预计算金额和数量，彻底杜绝弹窗内的计算死循环
+        items.forEach(it => {
+          it.calculatedAmount = this.calcAmount(it)
+          it.calculatedSqm = this.isPurchaseFilmItem(it)
+            ? Number(this.calcSqm(it))
+            : Number(it.sqm !== undefined && it.sqm !== null ? it.sqm : this.calcRawTotalWeight(it))
+          it.detailQtyValue = it.rolls !== undefined && it.rolls !== null ? it.rolls : (it.quantity || '-')
+          it.detailTotalValue = Number.isFinite(it.calculatedSqm) ? it.calculatedSqm.toFixed(2) : '-'
+        })
+
+        // 详情加载时也预处理计算值，保证详情弹窗展示稳定
+        order.calculatedTotalAmount = items.reduce((sum, item) => sum + Number(item.calculatedAmount || 0), 0).toFixed(2)
+        order.calculatedTotalQuantity = items.reduce((sum, item) => sum + (Number.isFinite(item.calculatedSqm) ? item.calculatedSqm : 0), 0).toFixed(2)
+        return order
       }
       return null
     },
@@ -970,6 +1033,7 @@ export default {
         orderDate: this.normalizeDateOnly(order.orderDate),
         deliveryDate: this.normalizeDateOnly(order.deliveryDate),
         deliveryAddress: order.deliveryAddress,
+        paymentTerms: order.paymentTerms,
         status: order.status || 'pending',
         remark: order.remark,
         materialMode: '',
@@ -979,7 +1043,8 @@ export default {
       if (order.items && order.items.length) {
         const filmItems = []
         const rawItems = []
-        order.items.forEach(item => {
+        order.items.forEach(rawItem => {
+          const item = this.normalizePurchaseDetailItem(rawItem)
           const rawMat = this.getRawMaterialByCode(item.materialCode)
           const filmSpecText = item.filmSpecRaw || item.rawSpec || item.specifications || (rawMat && rawMat.spec) || ''
           const rowForDetect = {
@@ -997,8 +1062,10 @@ export default {
           }
           const byMetaFilm = this.isFilmByMeta(this.getRawMaterialMetaByRow(rowForDetect))
           const countPriced = this.isCountPricedRow(rowForDetect)
-          const hasFilmDimension = item.width !== null && item.width !== undefined && item.length !== null && item.length !== undefined
-          const isFilm = !countPriced && (byMetaFilm || hasFilmDimension || this.isLikelyFilmRow(rowForDetect))
+          const widthNum = this.toDecimalNumber(item.width)
+          const lengthNum = this.toDecimalNumber(item.length)
+          const hasFilmDimension = widthNum !== null && lengthNum !== null && widthNum > 0 && lengthNum > 0
+          const isFilm = hasFilmDimension || (!countPriced && (byMetaFilm || this.isLikelyFilmRow(rowForDetect)))
           if (isFilm) {
             const specParts = this.splitFilmSpecToParts(filmSpecText)
             const thicknessFromText = this.inferFilmThicknessFromText({
@@ -1031,7 +1098,7 @@ export default {
               ...item,
               quantity: item.rolls || item.quantity,
               totalWeight: item.sqm,
-              rawSpec: item.rawSpec || (rawMat && rawMat.spec) || '',
+              rawSpec: item.rawSpec || item.filmSpecRaw || [item.thickness, item.width, item.length].filter(v => v !== null && v !== undefined && String(v).trim() !== '').join('*') || (rawMat && rawMat.spec) || '',
               tubeThickness: tubeParts.thickness,
               tubeInnerDiameter: tubeParts.innerDiameter,
               tubeLength: tubeParts.length,
@@ -1071,6 +1138,9 @@ export default {
         }
         if (supplier.contactAddress) {
           this.editForm.deliveryAddress = supplier.contactAddress
+        }
+        if (supplier.paymentTerms) {
+          this.editForm.paymentTerms = supplier.paymentTerms
         }
         this.materialSearchKeyword = ''
         this.rawSpecHistoryCache = {}
@@ -1145,12 +1215,13 @@ export default {
           this.supplierRemarkOptions = []
           return
         }
-        const pageSize = 200
+        const pageSize = 100
         let pageNum = 1
         let total = 0
         let loaded = 0
         const set = new Set()
-        while (pageNum <= 5) {
+        // 性能优化：限制历史备注搜索范围为最近 300 条订单
+        while (pageNum <= 3) {
           const res = await getPurchaseOrders({ pageNum, pageSize, supplier: keyword })
           if (!(res && (res.code === 200 || res.code === 20000) && res.data)) break
           const pageData = res.data
@@ -2056,7 +2127,8 @@ export default {
 
         const fetchBySupplierKeyword = async(keyword, status) => {
           if (!keyword) return []
-          const res = await listPurchaseQuotations({ page: 1, size: 500, supplier: keyword, status })
+          // 性能优化：每类关键词仅获取前 100 条报价记录
+          const res = await listPurchaseQuotations({ page: 1, size: 100, supplier: keyword, status })
           return normalizeRecords(res)
         }
 
@@ -2103,7 +2175,8 @@ export default {
           return tb - ta
         })
 
-        const detailTargets = sorted
+        // 性能优化：限制详情获取数量，仅获取最近 30 份报价单
+        const detailTargets = sorted.slice(0, 30)
         const detailList = []
 
         const chunkSize = 5
@@ -2521,7 +2594,9 @@ export default {
     totalQuantity(order) {
       if (!order || !order.items) return 0
       return order.items.reduce((sum, item) => {
-        const qty = Number(item.sqm !== undefined && item.sqm !== null ? item.sqm : this.calcSqm(item))
+        const qty = this.isPurchaseFilmItem(item)
+          ? Number(this.calcSqm(item))
+          : Number(item.sqm !== undefined && item.sqm !== null ? item.sqm : this.calcRawTotalWeight(item))
         return sum + (Number.isFinite(qty) ? qty : 0)
       }, 0).toFixed(2)
     },
@@ -2550,9 +2625,10 @@ export default {
     },
     getDetailTotalValue(row) {
       if (!row) return ''
-      return row.sqm !== undefined && row.sqm !== null && row.sqm !== ''
-        ? row.sqm
-        : this.calcSqm(row)
+      if (this.isPurchaseFilmItem(row)) {
+        return this.calcSqm(row)
+      }
+      return row.sqm || row.area || row.squareMeter || this.calcRawTotalWeight(row)
     },
     getEditActiveItems() {
       const mode = this.editForm.materialMode || (this.editForm.rawItems.length ? 'raw' : 'film')
@@ -2580,13 +2656,39 @@ export default {
     },
     formatSpec(item) {
       if (!item) return ''
-      if (item.filmSpecRaw) return item.filmSpecRaw
-      const t = item.thicknessDisplay || item.thickness || ''
-      const w = item.width || ''
-      const l = item.lengthDisplay || item.length || ''
+      const row = this.normalizePurchaseDetailItem(item)
+      if (row.filmSpecRaw) return row.filmSpecRaw
+      const t = row.thicknessDisplay || row.thickness || ''
+      const w = row.width || ''
+      const l = row.lengthDisplay || row.length || ''
       const filmSpec = [t, w, l].filter(Boolean).join('*')
       if (filmSpec) return filmSpec
-      return item.rawSpec || item.specifications || ''
+      return row.rawSpec || row.specifications || ''
+    },
+    normalizePurchaseDetailItem(item) {
+      if (!item) return item
+      const normalized = {
+        ...item,
+        filmSpecRaw: item.filmSpecRaw || item.film_spec_raw || '',
+        rawSpec: item.rawSpec || item.raw_spec || '',
+        specifications: item.specifications || item.specification || item.spec || '',
+        thicknessDisplay: item.thicknessDisplay || item.thickness_display || item.thickness || '',
+        width: item.width !== undefined ? item.width : (item.baseWidth !== undefined ? item.baseWidth : item.base_width),
+        lengthDisplay: item.lengthDisplay || item.length_display || item.length || '',
+        length: item.length !== undefined ? item.length : item.length_display,
+        rolls: item.rolls !== undefined && item.rolls !== null ? item.rolls : (item.purchaseQty !== undefined ? item.purchaseQty : item.purchase_qty),
+        sqm: item.sqm !== undefined && item.sqm !== null ? item.sqm : (item.squareMeter !== undefined ? item.squareMeter : item.square_meter),
+        unitPrice: item.unitPrice !== undefined ? item.unitPrice : item.unit_price,
+        amount: item.amount !== undefined ? item.amount : item.total_amount
+      }
+      if (!normalized.filmSpecRaw) {
+        const t = String(normalized.thicknessDisplay || normalized.thickness || '').trim()
+        const w = String(normalized.width || '').trim()
+        const l = String(normalized.lengthDisplay || normalized.length || '').trim()
+        const spec = [t, w, l].filter(v => v).join('*')
+        if (spec) normalized.filmSpecRaw = spec
+      }
+      return normalized
     },
     formatNumber(val) {
       return val === undefined || val === null ? '-' : Number(val).toFixed(2)
@@ -2670,21 +2772,48 @@ export default {
         remark: item.remark
       }))
 
-      const rawItems = this.editForm.rawItems.map(item => ({
-        id: item.id,
-        materialCode: item.materialCode,
-        materialName: item.materialName,
-        rawSpec: this.normalizeRawSpecValue(this.isTubeRow(item) ? this.buildTubeSpecValue(item) : item.rawSpec, item),
-        colorCode: null,
-        thickness: null,
-        width: null,
-        length: null,
-        rolls: item.quantity ? Number(item.quantity) : null,
-        sqm: Number(this.calcRawTotalWeight(item)),
-        unitPrice: item.unitPrice ? Number(item.unitPrice) : null,
-        amount: Number(this.calcRawAmount(item)),
-        remark: item.remark
-      }))
+      const rawItems = this.editForm.rawItems.map(item => {
+        // 从原材料表读取单位，不再依赖后端硬编码默认值
+        const rawMat = (this.rawMaterials || []).find(r => this.normalizeMaterialCode(r.materialCode) === this.normalizeMaterialCode(item.materialCode))
+        const dbUnit = (rawMat && rawMat.unit) ? String(rawMat.unit).trim() : ''
+
+        // 单位映射：支/pcs/个 → PCS；Kg → KG；桶 → DRUM
+        let purchaseUom = 'DRUM'
+        let stockUom = 'KG'
+        const lowerUnit = dbUnit.toLowerCase()
+        if (lowerUnit === 'pcs' || lowerUnit === '支' || lowerUnit === '个' || lowerUnit === 'pc') {
+          purchaseUom = 'PCS'
+          stockUom = 'PCS'
+        } else if (lowerUnit === 'kg' || lowerUnit === '公斤') {
+          purchaseUom = 'KG'
+          stockUom = 'KG'
+        }
+
+        const qty = item.quantity ? Number(item.quantity) : null
+        const totalWeight = Number(this.calcRawTotalWeight(item))
+
+        return {
+          id: item.id,
+          materialCode: item.materialCode,
+          materialName: item.materialName,
+          rawSpec: this.normalizeRawSpecValue(this.isTubeRow(item) ? this.buildTubeSpecValue(item) : item.rawSpec, item),
+          colorCode: null,
+          thickness: null,
+          width: null,
+          length: null,
+          rolls: qty,
+          sqm: totalWeight,
+          purchaseQty: qty,
+          purchaseUomCode: purchaseUom,
+          stockQty: totalWeight,
+          stockUomCode: stockUom,
+          priceQty: totalWeight,
+          priceUomCode: stockUom,
+          unitPrice: item.unitPrice ? Number(item.unitPrice) : null,
+          amount: Number(this.calcRawAmount(item)),
+          remark: item.remark
+        }
+      })
 
       const payload = {
         ...this.editForm,
@@ -2768,12 +2897,23 @@ export default {
           ...order,
           supplierCode: (supplierHit && supplierHit.supplierCode) || '',
           supplierFullName: fullSupplierName,
-          items: (order.items || []).map(item => ({
-            ...item,
-            thicknessDisplay: item.thicknessDisplay || item.thickness,
-            lengthDisplay: item.lengthDisplay || item.length
-          }))
+          items: (order.items || []).map(rawItem => {
+            const item = this.normalizePurchaseDetailItem(rawItem)
+            const calculatedAmount = this.calcAmount(item)
+            const calculatedSqm = this.isPurchaseFilmItem(item)
+              ? Number(this.calcSqm(item))
+              : Number(item.sqm !== undefined && item.sqm !== null ? item.sqm : this.calcRawTotalWeight(item))
+            return {
+              ...item,
+              calculatedAmount,
+              calculatedSqm,
+              thicknessDisplay: item.thicknessDisplay || item.thickness,
+              lengthDisplay: item.lengthDisplay || item.length
+            }
+          })
         }
+        this.currentPrint.calculatedTotalAmount = this.currentPrint.items.reduce((sum, item) => sum + Number(item.calculatedAmount || 0), 0)
+        this.currentPrint.calculatedTotalQuantity = this.currentPrint.items.reduce((sum, item) => sum + (Number.isFinite(item.calculatedSqm) ? item.calculatedSqm : 0), 0)
         this.printVisible = true
       } catch (e) {
         console.error('打印失败', e)
@@ -2882,7 +3022,7 @@ export default {
       if (this.isChemicalPrintTemplate()) {
         const raw = this.rawMaterials.find(r => r.materialCode === item.materialCode)
         const kgPerBucket = this.parseSpecKg(item.rawSpec || (raw && raw.spec))
-        const totalQty = Number(item.sqm !== undefined && item.sqm !== null ? item.sqm : this.calcRawTotalWeight(item))
+        const totalQty = item.calculatedSqm || 0
         const bucketQty = (kgPerBucket > 0 && totalQty > 0) ? (totalQty / kgPerBucket) : NaN
         return Number.isFinite(bucketQty) ? this.formatPurchaseMoney(bucketQty) : ''
       }
@@ -2981,7 +3121,7 @@ export default {
       const code = String(item.materialCode || '').trim()
       const name = String(item.materialName || '').trim()
       const qty = Number(this.isPurchaseFilmItem(item)
-        ? (item.sqm !== undefined && item.sqm !== null ? item.sqm : this.calcSqm(item))
+        ? this.calcSqm(item)
         : (item.sqm !== undefined && item.sqm !== null ? item.sqm : this.calcRawTotalWeight(item)))
       return !code && !name && (!Number.isFinite(qty) || qty <= 0)
     },
@@ -3093,18 +3233,7 @@ export default {
     getPurchasePrintQuantity(item) {
       if (!item) return ''
       if (this.isCountPrintTemplate()) return ''
-      if (this.isPurchaseFilmItem(item)) {
-        if (this.isPurchaseFilmWeightPriced(item)) {
-          const qty = item.priceQty !== undefined && item.priceQty !== null && item.priceQty !== ''
-            ? item.priceQty
-            : (item.purchaseQty !== undefined && item.purchaseQty !== null && item.purchaseQty !== ''
-              ? item.purchaseQty
-              : item.sqm)
-          return this.formatPurchaseMoney(qty)
-        }
-        return this.formatPurchaseMoney(item.sqm !== undefined && item.sqm !== null ? item.sqm : this.calcSqm(item))
-      }
-      return this.formatPurchaseMoney(item.sqm !== undefined && item.sqm !== null ? item.sqm : this.calcRawTotalWeight(item))
+      return this.formatPurchaseMoney(item.calculatedSqm || 0)
     },
     getPurchasePrintTotalQtyLabel() {
       if (this.isFilmWeightPrintTemplate()) return '下单重量(Kg)：'
@@ -3113,36 +3242,14 @@ export default {
     },
     getPurchasePrintAmount(item) {
       if (!item) return 0
-      return item.amount !== undefined && item.amount !== null && item.amount !== ''
-        ? Number(item.amount)
-        : Number(this.calcAmount(item))
+      // 优先使用预计算的 calculatedAmount 或 后端返回的 amount，绝不触发重新计算
+      return item.calculatedAmount || item.amount || 0
     },
     getPurchasePrintTotalQty() {
-      if (this.isCountPrintTemplate()) {
-        return this.getPurchasePrintRows().reduce((sum, item) => {
-          const qty = Number(item.rolls !== undefined && item.rolls !== null && item.rolls !== '' ? item.rolls : item.quantity)
-          return sum + (Number.isFinite(qty) ? qty : 0)
-        }, 0)
-      }
-      if (this.isFilmWeightPrintTemplate()) {
-        return this.getPurchasePrintRows().reduce((sum, item) => {
-          const qty = Number(item.priceQty !== undefined && item.priceQty !== null && item.priceQty !== ''
-            ? item.priceQty
-            : (item.purchaseQty !== undefined && item.purchaseQty !== null && item.purchaseQty !== ''
-              ? item.purchaseQty
-              : item.sqm))
-          return sum + (Number.isFinite(qty) ? qty : 0)
-        }, 0)
-      }
-      return this.getPurchasePrintRows().reduce((sum, item) => {
-        const qty = Number(this.isPurchaseFilmItem(item)
-          ? (item.sqm !== undefined && item.sqm !== null ? item.sqm : this.calcSqm(item))
-          : (item.sqm !== undefined && item.sqm !== null ? item.sqm : this.calcRawTotalWeight(item)))
-        return sum + (Number.isFinite(qty) ? qty : 0)
-      }, 0)
+      return this.currentPrint ? (this.currentPrint.calculatedTotalQuantity || 0) : 0
     },
     getPurchasePrintTotalAmount() {
-      return this.getPurchasePrintRows().reduce((sum, item) => sum + Number(this.getPurchasePrintAmount(item) || 0), 0)
+      return this.currentPrint ? (this.currentPrint.calculatedTotalAmount || 0) : 0
     },
     formatPurchaseMoney(val) {
       const num = Number(val)

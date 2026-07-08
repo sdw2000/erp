@@ -66,7 +66,7 @@
           :current-page.sync="pagination.page"
           :page-size="pagination.size"
           :total="pagination.total"
-          :page-sizes="[10,20,50]"
+          :page-sizes="pageSizes"
           layout="sizes, prev, pager, next, jumper, ->, total"
           @size-change="onSizeChange"
           @current-change="onPageChange"
@@ -85,12 +85,18 @@
             <el-table-column prop="materialCode" label="物料编码" width="140" />
             <el-table-column prop="materialName" label="物料名称" width="150" />
             <el-table-column prop="specification" label="规格" width="150" />
-            <el-table-column prop="purchaseQty" label="采购数量" width="90" />
-            <el-table-column label="采购单位" width="90">
-              <template slot-scope="scope">{{ normalizeUomLabel(scope.row.purchaseUomCode) || '-' }}</template>
+            <el-table-column label="下单数量" width="110">
+              <template slot-scope="scope">{{ formatQtyWithUnit(scope.row, 'purchaseQty') }}</template>
             </el-table-column>
-            <el-table-column prop="receivedQty" label="应到数量(本次)" width="120" />
-            <el-table-column prop="unit" label="单位" width="80" />
+            <el-table-column label="采购单位" width="90">
+              <template slot-scope="scope">{{ resolveReceiptItemDisplayUnit(scope.row) || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="本次到货数量" width="130">
+              <template slot-scope="scope">{{ formatQtyWithUnit(scope.row, 'receivedQty') }}</template>
+            </el-table-column>
+            <el-table-column label="单位" width="80">
+              <template slot-scope="scope">{{ resolveReceiptItemDisplayUnit(scope.row) || '-' }}</template>
+            </el-table-column>
             <el-table-column prop="remark" label="备注" />
           </el-table>
         </div>
@@ -190,7 +196,10 @@
               <template slot-scope="scope"><el-input v-model.number="scope.row.receivedQty" size="small" type="number" /></template>
             </el-table-column>
             <el-table-column label="单位" width="90">
-              <template slot-scope="scope"><el-input v-model="scope.row.unit" size="small" /></template>
+              <template slot-scope="scope">
+                <span v-if="scope.row.purchaseUomCode">{{ normalizeUomLabel(scope.row.purchaseUomCode) }}</span>
+                <el-input v-else v-model="scope.row.unit" size="small" />
+              </template>
             </el-table-column>
             <el-table-column label="备注" min-width="140">
               <template slot-scope="scope"><el-input v-model="scope.row.remark" size="small" /></template>
@@ -223,6 +232,7 @@ import {
 } from '@/api/purchaseReceipt'
 import { getPurchaseOrders, getPurchaseOrderDetail, getOrdersAvailableForReceipt } from '@/api/purchase'
 import { getRawMaterialList } from '@/api/tapeRawMaterial'
+import uiConfig from '@/config/ui'
 import { getPurchaseReconciliationMeta, getPurchaseReconciliationOptions } from '@/constants/purchaseReconciliation'
 import { getPurchaseStatusMeta, getPurchaseStatusOptions } from '@/constants/purchaseStatus'
 import PurchaseStatusTag from '@/components/PurchaseStatusTag'
@@ -235,7 +245,8 @@ export default {
       loading: false,
       records: [],
       filters: { supplier: '', status: '', reconciliationStatus: '', includeReceived: false },
-      pagination: { page: 1, size: 10, total: 0 },
+      pagination: { page: 1, size: uiConfig.defaultPageSize, total: 0 },
+      pageSizes: uiConfig.pageSizes,
       sortState: { prop: 'createdAt', order: 'descending' },
       purchaseOrderOptions: [],
       rawMaterials: [],
@@ -284,6 +295,34 @@ export default {
         PC: '支'
       }
       return map[code] || uom
+    },
+    formatQtyWithUnit(row, field) {
+      if (!row) return '-'
+      const qtyRaw = row[field]
+      const qtyNum = Number(qtyRaw)
+      const qtyText = Number.isFinite(qtyNum)
+        ? (Number.isInteger(qtyNum) ? String(qtyNum) : String(Number(qtyNum.toFixed(4))))
+        : (qtyRaw === null || qtyRaw === undefined || qtyRaw === '' ? '-' : String(qtyRaw))
+      if (qtyText === '-') return '-'
+      const unit = this.resolveReceiptItemDisplayUnit(row)
+      return unit ? `${qtyText}${unit}` : qtyText
+    },
+    isSpecPerDrum(spec) {
+      const text = String(spec || '').trim().toLowerCase().replace(/\s+/g, '')
+      if (!text) return false
+      return text.includes('/桶') || text.includes('kg/桶') || text.includes('kgs/桶') || text.includes('公斤/桶') || text.includes('千克/桶')
+    },
+    resolveReceiptItemDisplayUnit(row) {
+      if (!row) return ''
+      const specPerDrum = this.isSpecPerDrum(row.specification)
+      const candidates = [row.purchaseUomCode, row.stockUomCode, row.priceUomCode, row.unit]
+      for (const c of candidates) {
+        const normalized = this.normalizeUomLabel(c)
+        if (!normalized) continue
+        if (specPerDrum && String(normalized).toLowerCase() === 'kg') return '桶'
+        return normalized
+      }
+      return specPerDrum ? '桶' : ''
     },
     findRawMaterialByCode(materialCode) {
       const code = String(materialCode || '').trim()

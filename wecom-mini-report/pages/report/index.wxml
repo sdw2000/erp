@@ -1,95 +1,305 @@
-<view class="container">
-  <view class="card" wx:if="{{canReport}}">
-    <view class="title">提交报工</view>
-    <view class="muted">按排程列表选中后报工（支持扫码定位）</view>
+<view class="container report-bg">
+  <view class="hero-mini blue-grad">
+    <view class="hero-title">生产报工</view>
+    <view class="hero-sub">记录生产进度，实时反馈订单达成率</view>
+  </view>
 
-    <view class="label">工序</view>
-    <picker mode="selector" range="{{processTypeOptions}}" range-key="label" value="{{processTypeIndex}}" bindchange="onProcessTypeChange">
-      <view class="input">{{processTypeOptions[processTypeIndex].label}}</view>
-    </picker>
-
-    <view>
-      <view class="row row-middle">
-        <view class="label">排程列表（先选条目）</view>
-        <button class="btn-secondary small" loading="{{scheduleLoading}}" bindtap="loadSchedules">刷新</button>
+  <view class="main-content">
+    <view class="card shadow-sm" wx:if="{{canReport}}">
+      <view class="card-header-modern">
+        <view class="title-main">任务选择</view>
+        <view class="refresh-btn {{scheduleLoading ? 'loading' : ''}}" bindtap="loadSchedules">
+          <text class="refresh-icon">🔄</text>
+        </view>
       </view>
-      <view class="row">
-        <view>
-          <view class="label">线别</view>
+
+      <view class="form-group">
+        <view class="section-label">当前工序</view>
+        <picker mode="selector" range="{{processTypeOptions}}" range-key="label" value="{{processTypeIndex}}" bindchange="onProcessTypeChange">
+          <view class="picker-modern">
+            <view class="picker-val">{{processTypeOptions[processTypeIndex].label}}</view>
+            <view class="arrow-down">▼</view>
+          </view>
+        </picker>
+      </view>
+
+      <view class="filter-row mt30">
+        <view class="filter-item">
+          <view class="section-label">线别</view>
           <picker mode="selector" range="{{lineOptions}}" value="{{selectedLineIndex}}" bindchange="onLineChange">
-            <view class="input">{{lineOptions[selectedLineIndex]}}</view>
+            <view class="picker-modern mini">
+              <view class="picker-val">{{lineOptions[selectedLineIndex]}}</view>
+            </view>
           </picker>
         </view>
-      </view>
-      <view class="row row-middle">
-        <input class="input" value="{{scanCode}}" placeholder="扫码内容/排程ID/明细ID/订单号/料号" bindinput="onScanCodeInput" />
-        <button class="btn-secondary small" bindtap="onScanCodeTap">扫码</button>
-      </view>
-      <button class="btn-secondary small" bindtap="onScanSelectSchedule">按输入内容选中排程</button>
-      <input class="input" value="{{scheduleKeyword}}" placeholder="输入订单号/料号/排程ID筛选" bindinput="onScheduleKeywordInput" />
-      <view wx:if="{{scheduleDisplayList.length === 0}}" class="muted">暂无可报工排程</view>
-      <block wx:for="{{scheduleDisplayList}}" wx:key="index">
-        <view class="schedule-item {{item.scheduleId == selectedScheduleId ? 'schedule-item-active' : ''}}" data-index="{{index}}" bindtap="onSelectSchedule">
-          <view class="tag">排程ID: {{item.scheduleId || '-'}}</view>
-          <view class="muted">线别: {{item.line || '-'}}</view>
-          <view class="muted">订单: {{item.orderNo || '-'}}</view>
-          <view class="muted">料号: {{item.materialCode || '-'}}</view>
-          <view class="muted">计划面积: {{item.plannedArea || '-'}}</view>
+        <view class="filter-item flex2">
+          <view class="section-label">精准定位 (明细号/单号)</view>
+          <view class="search-bar-modern mini">
+            <input class="input-modern" value="{{scanCode}}" placeholder="扫码或输入" bindinput="onScanCodeInput" />
+            <view class="scan-icon-btn" bindtap="onScanCodeTap">🔍</view>
+          </view>
         </view>
-      </block>
+      </view>
+
+      <view class="search-box mt20">
+        <view class="search-bar-modern">
+          <input class="input-modern" value="{{scheduleKeyword}}" placeholder="搜索订单号/料号/订单明细号" bindinput="onScheduleKeywordInput" />
+        </view>
+      </view>
+
+      <view class="schedule-list mt30">
+        <scroll-view scroll-y style="max-height: 480rpx;" bindscrolltolower="onScheduleScrollToLower" lower-threshold="80">
+          <view wx:if="{{scheduleDisplayList.length === 0}}" class="empty-hint">暂无匹配排程</view>
+          <block wx:for="{{scheduleDisplayList}}" wx:key="index">
+            <view class="schedule-card-modern {{item.scheduleId == selectedScheduleId ? 'is-active' : ''}}" data-index="{{index}}" bindtap="onSelectSchedule">
+              <view class="s-card-top">
+                <view class="s-id-tag">明细#{{item.orderDetailId || '-'}}</view>
+                <view class="s-time-tag" wx:if="{{item.timeText}}">{{item.timeText}}</view>
+                <view class="s-line-tag">线别: {{item.line}}</view>
+              </view>
+              <view class="s-order-no">{{item.orderNo}}</view>
+              <view class="s-material">{{item.materialCode}}</view>
+              <view class="s-spec" wx:if="{{item.specText}}">{{item.specText}}</view>
+              <view class="s-stats">
+                <text>计划数量: {{item.plannedQty || 0}} {{currentUnit}}</text>
+                <view class="active-dot" wx:if="{{item.scheduleId == selectedScheduleId}}"></view>
+              </view>
+            </view>
+          </block>
+        </scroll-view>
+      </view>
     </view>
 
-    <view class="row">
-      <view>
-        <view class="label">排程ID scheduleId</view>
-        <input class="input" value="{{scheduleId}}" type="number" placeholder="请从上方列表选择" bindinput="onScheduleIdInput" disabled="{{true}}" />
-      </view>
-      <view>
-        <view class="label">订单明细ID orderDetailId</view>
-        <input class="input" value="{{orderDetailId}}" type="number" placeholder="请从上方列表选择" bindinput="onOrderDetailIdInput" disabled="{{true}}" />
+    <!-- 报工弹窗 -->
+    <view class="modal-root" wx:if="{{showReportModal}}" catchtouchmove="true">
+      <view class="modal-mask" bindtap="closeReportModal"></view>
+      <view class="modal-container {{submitting ? 'is-submitting' : ''}}">
+        <view class="card shadow-sm no-margin">
+          <view class="card-header-modern">
+            <view class="title-main">报工详情</view>
+            <view class="title-sub">订单明细号: {{orderDetailId || '-'}} <text class="ml10" wx:if="{{selectedSchedule.plannedArea}}">| 计划: {{selectedSchedule.plannedArea}} ㎡</text></view>
+            <view class="close-modal-btn" bindtap="closeReportModal">✕</view>
+          </view>
+
+          <!-- 领退料管理 -->
+          <view class="issue-section">
+            <view class="section-title-modern">
+              <view class="title-line"></view>
+              <text>领退料清单</text>
+              <text class="usage-badge" wx:if="{{netMaterialUsage}}">已领净值: {{netMaterialUsage}} ㎡</text>
+            </view>
+            <view class="issue-btn-group">
+              <view class="issue-btn issue" bindtap="onScanIssue">
+                <text>+ 扫码领料</text>
+              </view>
+              <view class="issue-btn return" bindtap="onScanReturn">
+                <text>- 扫码退料</text>
+              </view>
+            </view>
+
+            <!-- 待提交列表 -->
+            <view class="active-issue-list" wx:if="{{activeIssues.length > 0}}">
+              <view class="list-label">待提交队列 ({{activeIssues.length}})</view>
+              <view class="issue-item-card" wx:for="{{activeIssues}}" wx:key="index">
+                <view class="item-main">
+                  <view class="item-code">{{item.rollCode}}</view>
+                  <view class="item-specs">规格: {{item.widthMm || '-'}}mm / {{item.thickness || '-'}}μm</view>
+                </view>
+                <view class="item-side">
+                  <view class="item-area {{item.type === 'ISSUE' ? 'is-issue' : 'is-return'}}">
+                    {{item.type === 'ISSUE' ? '领' : '退'}}: {{item.actualArea}} ㎡
+                  </view>
+                  <view class="item-actions">
+                    <text class="action-link edit" bindtap="onEditIssueSpec" data-index="{{index}}">改规格</text>
+                    <text class="action-link del" bindtap="onRemoveActiveIssue" data-index="{{index}}">移除</text>
+                  </view>
+                </view>
+              </view>
+              <button class="btn-batch-submit" loading="{{issueSubmitting}}" disabled="{{issueSubmitting}}" bindtap="batchSubmitIssues">提交领料/退料数据</button>
+            </view>
+            
+            <view class="history-list" wx:if="{{issueHistory.length > 0}}">
+              <view class="list-label">已提交历史</view>
+              <view class="history-item" wx:for="{{issueHistory}}" wx:key="index">
+                <text class="h-code">{{item.rollCode}}</text>
+                <text class="h-type {{item.actualArea > 0 ? 'is-issue' : 'is-return'}}">{{item.actualArea > 0 ? '领' : '退'}}</text>
+                <text class="h-area">{{item.actualArea > 0 ? '+' : ''}}{{item.actualArea}} ㎡</text>
+              </view>
+            </view>
+          </view>
+
+          <view class="form-grid" wx:if="{{processTypeOptions[processTypeIndex].value !== 'COATING'}}">
+            <view class="form-item">
+              <view class="section-label">报工数量</view>
+              <view class="input-wrapper-modern">
+                <input class="input-modern" value="{{producedQty}}" type="{{processTypeOptions[processTypeIndex].value === 'SLITTING' ? 'number' : 'digit'}}" placeholder="120" bindinput="onProducedQtyInput" />
+                <text class="unit-tag">{{currentUnit}}</text>
+              </view>
+              <!-- 显式参考面积，位置调整到输入框下方 -->
+              <view class="calc-res-box" wx:if="{{currentUnit === '卷'}}">
+                <text class="calc-label">面积:</text>
+                <text class="calc-val">{{referenceArea || '0'}} ㎡</text>
+              </view>
+            </view>
+            <view class="form-item">
+              <view class="section-label">操作人</view>
+              <picker mode="selector" range="{{staffOptions}}" value="{{staffIndex}}" bindchange="onOperatorChange">
+                <view class="picker-modern">
+                  <view class="picker-val">{{operator || '请选择操作人'}}</view>
+                  <view class="arrow-down">▼</view>
+                </view>
+              </picker>
+            </view>
+          </view>
+
+          <!-- 涂布母卷明细 -->
+          <view wx:if="{{processTypeOptions[processTypeIndex].value === 'COATING'}}" class="coating-detail-box">
+             <view class="form-item mb20">
+              <view class="section-label">当前操作人</view>
+              <picker mode="selector" range="{{staffOptions}}" value="{{staffIndex}}" bindchange="onOperatorChange">
+                <view class="picker-modern">
+                  <view class="picker-val">{{operator || '请选择操作人'}}</view>
+                  <view class="arrow-down">▼</view>
+                </view>
+              </picker>
+            </view>
+            
+            <view class="roll-input-card">
+              <view class="next-roll-preview" wx:if="{{nextRollCodePreview}}">
+                待打印编号: <text class="highlight">{{nextRollCodePreview}}</text>
+              </view>
+              <view class="roll-input-row">
+                <view class="input-col">
+                  <view class="tiny-label">宽度(mm)</view>
+                  <input class="input-modern mini" value="{{currentRoll.widthMm}}" type="digit" placeholder="960" bindinput="onWidthInput" />
+                </view>
+                <view class="input-col">
+                  <view class="tiny-label">长度(m)</view>
+                  <input class="input-modern mini" value="{{currentRoll.lengthM}}" type="digit" placeholder="1000" bindinput="onLengthInput" />
+                </view>
+                <view class="input-col">
+                  <view class="tiny-label">面积(㎡)</view>
+                  <view class="input-modern mini disabled">{{currentRoll.area}}</view>
+                </view>
+              </view>
+              <button class="btn-add-roll mt20" bindtap="addRoll">+ 添加母卷</button>
+            </view>
+
+            <view class="roll-list mt20" wx:if="{{producedRolls.length > 0}}">
+              <view class="roll-item" wx:for="{{producedRolls}}" wx:key="index">
+                <view class="roll-info">
+                  <view class="roll-top">
+                    <text class="roll-code">{{item.rollCode || '待生成'}}</text>
+                    <text class="roll-index">#{{index + 1}}</text>
+                  </view>
+                  <view class="roll-bot">
+                    <text class="roll-specs">{{item.widthMm}}mm * {{item.lengthM}}m</text>
+                    <text class="roll-area">{{item.area}} ㎡</text>
+                  </view>
+                </view>
+                <view class="roll-actions">
+                  <view class="btn-remove" data-index="{{index}}" data-id="{{item.rollCode}}" bindtap="removeRoll">删除</view>
+                </view>
+              </view>
+              <view class="roll-summary">
+                合计: <text class="sum-val">{{producedQty}}</text> ㎡
+              </view>
+            </view>
+
+            <view class="advance-options mt20">
+              <view class="option-item">
+                <view class="option-label">远程电脑同步打印</view>
+                <switch color="#2563eb" checked="{{remotePrint}}" bindchange="onRemotePrintChange" />
+              </view>
+              <view class="option-item mt10">
+                <view class="option-label">涂布使用复卷标签(小支模式)</view>
+                <switch color="#2563eb" checked="{{form.coatingUseRewindingLabel}}" bindchange="onCoatingUseRewindingLabelChange" />
+              </view>
+            </view>
+
+            <view class="rewinding-label-box card-inner mt10" wx:if="{{form.coatingUseRewindingLabel}}">
+              <view class="form-row">
+                <view class="input-col flex-3">
+                  <view class="tiny-label">母卷号前缀</view>
+                  <view class="input-with-btn">
+                    <input class="input-modern mini" value="{{form.rewindingMotherRollCode}}" bindinput="onRewindingMotherRollCodeInput" />
+                    <view class="btn-fetch-code" bindtap="fetchNextRewindingMotherRollCode">获取</view>
+                  </view>
+                </view>
+                <view class="input-col flex-1">
+                  <view class="tiny-label">起始序</view>
+                  <input class="input-modern mini" value="{{form.rewindingSerialStart}}" type="number" bindinput="onRewindingSerialStartInput" />
+                </view>
+                <view class="input-col flex-1">
+                  <view class="tiny-label">张数</view>
+                  <input class="input-modern mini" value="{{form.rewindingPrintCount}}" type="number" bindinput="onRewindingPrintCountInput" />
+                </view>
+              </view>
+              <button class="btn-secondary mt10" bindtap="printAndBackfillRewindingLabels">生成并批量打印小支标签</button>
+            </view>
+          </view>
+
+          <view class="form-group mt20">
+            <view class="section-label">备注内容</view>
+            <textarea class="textarea-modern" value="{{remark}}" placeholder="可记录生产异常或换档信息" bindinput="onRemarkInput"></textarea>
+          </view>
+
+          <view class="advance-options mt30">
+            <view class="option-item">
+              <view class="option-label">提交后推进至下一工序</view>
+              <switch color="#2563eb" checked="{{proceedNextProcess}}" bindchange="onProceedNextChange" />
+            </view>
+          </view>
+          
+          <view class="mt30">
+            <button class="btn-primary big-btn blue-grad" loading="{{submitting}}" disabled="{{!selectedScheduleId}}" bindtap="onSubmit">确认提交报工数</button>
+          </view>
+        </view>
       </view>
     </view>
 
-    <view class="row">
-      <view>
-        <view class="label">产量 producedQty</view>
-        <input class="input" value="{{producedQty}}" type="digit" placeholder="例如 120" bindinput="onProducedQtyInput" />
-      </view>
-      <view>
-        <view class="label">操作人</view>
-        <input class="input" value="{{operator}}" placeholder="可空，默认当前用户" bindinput="onOperatorInput" />
+    <!-- 结果通知卡片 -->
+    <view class="card shadow-sm res-card {{lastResult.success ? 'success' : 'fail'}}" wx:if="{{lastResult}}">
+      <view class="res-icon">{{lastResult.success ? '✅' : '❌'}}</view>
+      <view class="res-body">
+        <view class="res-title">{{lastResult.success ? '报工提交成功' : '提交失败'}}</view>
+        <view class="res-desc">ID: {{lastResult.scheduleId}} | {{lastResult.processTypeLabel || lastResult.processType}}</view>
       </view>
     </view>
-
-    <view class="label">开始时间（yyyy-MM-dd HH:mm:ss）</view>
-    <input class="input" value="{{startTime}}" placeholder="可空，默认当前时间" bindinput="onStartTimeInput" />
-
-    <view class="label">结束时间（yyyy-MM-dd HH:mm:ss）</view>
-    <input class="input" value="{{endTime}}" placeholder="可空，默认当前时间" bindinput="onEndTimeInput" />
-
-    <view class="label">备注</view>
-    <input class="input" value="{{remark}}" placeholder="可空" bindinput="onRemarkInput" />
-
-    <label class="label">
-      <switch checked="{{proceedNextProcess}}" bindchange="onProceedNextChange" />
-      报工后推进下道工序
-    </label>
-
-    <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">提交报工</button>
-    <button class="btn-secondary" bindtap="goIssue">去领料登记（出库）</button>
-    <button class="btn-secondary" bindtap="goHistory">查看报工记录</button>
+    
+    <view class="action-buttons-wrap pb100">
+      <view class="secondary-actions">
+        <button class="btn-outline" bindtap="goIssue">📦 去领料登记</button>
+        <button class="btn-outline" bindtap="goHistory">🕒 报工历史</button>
+      </view>
+    </view>
   </view>
 
-  <view class="card" wx:if="{{!canReport}}">
-    <view class="title">生产报工</view>
-    <view class="muted">当前账号无生产报工权限</view>
-  </view>
-
-  <view class="card" wx:if="{{lastResult}}">
-    <view class="label">提交结果</view>
-    <view class="tag">success: {{lastResult.success ? 'true' : 'false'}}</view>
-    <view class="muted">scheduleId: {{lastResult.scheduleId || '-'}}</view>
-    <view class="muted">orderDetailId: {{lastResult.orderDetailId || '-'}}</view>
-    <view class="muted">processType: {{lastResult.processType || '-'}}</view>
+  <!-- 修改规格弹窗 -->
+  <view class="modal-root" wx:if="{{showIssueEditModal}}" style="z-index: 2000;">
+    <view class="modal-mask" bindtap="setData" data-show-issue-edit-modal="{{false}}"></view>
+    <view class="modal-container">
+      <view class="card shadow-sm no-margin">
+        <view class="card-header-modern">
+          <view class="title-main">修改卷规格/面积</view>
+          <view class="close-modal-btn" bindtap="setData" data-show-issue-edit-modal="{{false}}">✕</view>
+        </view>
+        <view class="form-grid">
+           <view class="form-item">
+              <view class="section-label">宽度 (mm)</view>
+              <input class="input-modern" value="{{editingIssue.widthMm}}" type="digit" bindinput="onEditSpecInput" data-field="widthMm" />
+            </view>
+            <view class="form-item">
+              <view class="section-label">长度 (m)</view>
+              <input class="input-modern" value="{{editingIssue.lengthM}}" type="digit" bindinput="onEditSpecInput" data-field="lengthM" />
+            </view>
+            <view class="form-item flex-full">
+              <view class="section-label">最终面积 (㎡)</view>
+              <input class="input-modern" value="{{editingIssue.actualArea}}" type="digit" bindinput="onEditSpecInput" data-field="actualArea" />
+            </view>
+        </view>
+        <button class="btn-primary mt30" bindtap="confirmEditSpec">确认修改</button>
+      </view>
+    </view>
   </view>
 </view>

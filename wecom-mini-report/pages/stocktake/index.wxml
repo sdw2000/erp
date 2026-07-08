@@ -1,42 +1,246 @@
-<view class="container">
-  <view class="card">
-    <view class="title">扫码盘点</view>
-    <view class="muted">支持扫码或手输二维码编码，快速定位库存并盘点</view>
+<view class="container grey-bg pb100">
+  <view class="hero-mini purple-grad">
+    <view class="hero-title">扫码盘点</view>
+    <view class="hero-sub">同步实物库存与系统账面数据</view>
+  </view>
 
-    <view class="label">二维码编码</view>
-    <input class="input" value="{{qrCode}}" placeholder="扫码或手工输入" bindinput="onQrCodeInput" />
+  <view class="main-content">
+    <!-- 1. 仓库与卡板选择区 -->
+    <view class="card shadow-sm">
+      <view class="card-header-modern">
+        <view class="title-main">盘点配置</view>
+        <view class="stocktake-badge">单号: {{stocktakeNo}}</view>
+      </view>
+      
+      <view class="form-group mt20">
+        <view class="section-label">盘点仓库</view>
+        <picker mode="selector" range="{{warehouseList}}" range-key="warehouseName" bindchange="onWarehouseChange">
+          <view class="picker-modern {{selectedWarehouse ? '' : 'placeholder'}}">
+            <view class="picker-val">{{selectedWarehouse ? selectedWarehouse.warehouseName : '请选择盘点仓库'}}</view>
+            <view class="arrow-down">▼</view>
+          </view>
+        </picker>
+      </view>
 
-    <view class="row mt8">
-      <button class="btn-secondary" bindtap="onScanQrCode">扫码二维码</button>
-      <button class="btn-secondary" loading="{{loading}}" bindtap="queryByQrCode">查询库存</button>
+      <view class="form-group mt30">
+        <view class="section-label">卡板号 / 库位号</view>
+        <view class="search-bar-modern">
+          <input class="input-modern" value="{{palletNo}}" placeholder="扫码或手工输入卡板号" bindinput="onPalletInput" />
+          <view class="scan-icon-btn" bindtap="onScanPallet">🔍</view>
+        </view>
+      </view>
+      
+      <view class="btn-row mt30">
+        <button class="btn-primary-modern" loading="{{loading}}" bindtap="queryStocks">查卡板</button>
+        <button class="btn-outline-modern" bindtap="onScanContinuous">连续扫码</button>
+        <button class="btn-outline-modern" bindtap="openAddModal">无码新增</button>
+        <button class="btn-outline-modern" bindtap="startNewStocktakeSession">新建单</button>
+      </view>
+    </view>
+
+    <!-- 2. 已盘点列表 -->
+    <view class="section-divider" wx:if="{{scannedList.length > 0}}">
+      <view class="divider-text">待提交记录 ({{scannedList.length}})</view>
+      <view class="divider-hint">红色边框表示与账面数据不一致</view>
+    </view>
+
+    <view class="stocks-list">
+      <view class="stock-card-modern {{item.loading ? 'is-loading' : ''}} {{item.isError ? 'is-error' : ''}} {{item.actualRolls != item.systemRolls ? 'is-warning' : ''}}" wx:for="{{scannedList}}" wx:key="qrCode">
+        <view class="s-card-header">
+          <view class="s-material-code">{{item.materialCode}}</view>
+          <view class="s-batch" wx:if="{{!item.loading}}">{{item.batchNo}}</view>
+          <view class="status-badge inactive" wx:if="{{item.status === 0}}">已失效/出库</view>
+        </view>
+        <view class="s-name" wx:if="{{!item.loading}}">{{item.productName || item.materialName || '未命名物料'}}</view>
+        <view class="s-name" wx:else>信息加载中...</view>
+        <view class="s-specs">
+          <text class="spec-text">{{item.thickness}}μm * {{item.width}}mm * {{item.length}}m</text>
+          <text class="spec-text" style="color: #666; margin-left: 10rpx; display: block;" wx:if="{{item.location}}">卡板: {{item.location}}</text>
+          <text class="spec-text" style="color: #666; margin-left: 10rpx; display: block;">数字号: {{item.sequenceNo || ''}}</text>
+          <text class="system-count" wx:if="{{item.systemRolls > 0 && item.actualRolls != item.systemRolls}}">账面: {{item.systemRolls}}</text>
+        </view>
+        
+        <view class="s-input-grid">
+          <view class="s-input-box">
+            <text class="s-label">实盘数量</text>
+            <input class="s-input" type="digit" value="{{item.actualRolls}}" data-index="{{index}}" bindinput="onItemRollsInput" />
+          </view>
+          <view class="s-input-box">
+            <text class="s-label">实盘面积</text>
+            <input class="s-input" type="digit" value="{{item.actualSqm}}" data-index="{{index}}" bindinput="onItemSqmInput" />
+          </view>
+        </view>
+        
+        <view class="s-card-footer">
+          <view class="s-date">{{today}}</view>
+          <view class="footer-actions">
+            <view class="s-edit-btn mr20" bindtap="editItem" data-index="{{index}}">补齐资料</view>
+            <view class="s-delete-btn" bindtap="removeItem" data-index="{{index}}">移除 ×</view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="empty-state-modern" wx:if="{{!loading && scannedList.length === 0}}">
+      <view class="empty-vector">📋</view>
+      <view class="empty-txt">暂无盘点记录</view>
+      <view class="empty-tip">请查询卡板或开始连续扫码</view>
     </view>
   </view>
 
-  <view class="card" wx:if="{{stock}}">
-    <view class="title">库存信息</view>
-    <view class="muted">料号: {{stock.materialCode || stock.material_code || '-'}}</view>
-    <view class="muted">批次: {{stock.batchNo || stock.batch_no || '-'}}</view>
-    <view class="muted">库位: {{stock.location || '-'}}</view>
-    <view class="muted">系统卷数: {{stock.totalRolls || stock.total_rolls || '-'}}</view>
-    <view class="muted">系统面积: {{stock.totalArea || stock.total_area || '-'}}</view>
-
-    <view class="row">
-      <view>
-        <view class="label">实际卷数 actualRolls</view>
-        <input class="input" value="{{actualRolls}}" type="digit" bindinput="onActualRollsInput" />
+  <!-- 手工补齐弹窗 -->
+  <view class="modal-mask" wx:if="{{showEditModal}}" bindtap="closeEditModal"></view>
+  <view class="edit-modal {{showEditModal ? 'show' : ''}}" wx:if="{{showEditModal}}">
+    <view class="modal-header">
+      <text>补齐物料资料</text>
+      <text class="close-icon" bindtap="closeEditModal">×</text>
+    </view>
+    <view class="modal-body">
+      <view class="modal-qr">QR: {{editingItem.qrCode}}</view>
+      
+      <view class="m-form-item">
+        <text class="m-label">物料料号</text>
+        <input class="m-input" 
+               value="{{editingItem.materialCode || ''}}" 
+               placeholder="输入料号搜索" 
+               bindinput="onEditMaterialInput" 
+               focus="{{true}}" 
+               cursor-spacing="140" />
+        <scroll-view class="suggest-list" scroll-y wx:if="{{showSpecSuggest}}">
+          <view class="suggest-item" wx:for="{{specSuggestions}}" wx:key="id" bindtap="selectSpec" data-spec="{{item}}">
+            <text class="s-code">{{item.materialCode}}</text>
+            <text class="s-name">{{item.productName}}</text>
+          </view>
+        </scroll-view>
       </view>
-      <view>
-        <view class="label">实际面积 actualSqm</view>
-        <input class="input" value="{{actualSqm}}" type="digit" bindinput="onActualSqmInput" />
+
+      <view class="m-form-item">
+        <text class="m-label">产品名称</text>
+        <input class="m-input" value="{{editingItem.productName || ''}}" placeholder="请选择料号或输入" bindinput="onEditParamInput" data-field="productName" />
+      </view>
+
+      <view class="m-grid">
+        <view class="m-form-item">
+          <text class="m-label">厚度(μm)</text>
+          <input class="m-input" type="number" value="{{editingItem.thickness}}" bindinput="onEditParamInput" data-field="thickness" />
+        </view>
+        <view class="m-form-item">
+          <text class="m-label">宽度(mm)</text>
+          <input class="m-input" type="number" value="{{editingItem.width}}" placeholder="补录宽度" bindinput="onEditParamInput" data-field="width" />
+        </view>
+      </view>
+
+      <view class="m-grid">
+        <view class="m-form-item">
+          <text class="m-label">长度(M)</text>
+          <input class="m-input" type="number" value="{{editingItem.length}}" placeholder="补录长度" bindinput="onEditParamInput" data-field="length" />
+        </view>
+        <view class="m-form-item">
+           <text class="m-label">卡板号</text>
+           <input class="m-input" value="{{editingItem.location}}" placeholder="库位/卡板号" bindinput="onEditParamInput" data-field="location" />
+        </view>
+      </view>
+
+      <view class="m-grid">
+        <view class="m-form-item">
+          <text class="m-label">数字号</text>
+          <input class="m-input" type="number" value="{{editingItem.sequenceNo}}" placeholder="补录数字号" bindinput="onEditParamInput" data-field="sequenceNo" />
+        </view>
+        <view class="m-form-item" style="opacity: 0.5;"></view>
+      </view>
+
+      <view class="m-grid">
+        <view class="m-form-item">
+           <text class="m-label">实盘卷数</text>
+           <input class="m-input" type="number" value="{{editingItem.actualRolls}}" bindinput="onEditParamInput" data-field="actualRolls" />
+        </view>
+        <view class="m-form-item" style="opacity: 0.5;">
+          <text class="m-label">计算面积</text>
+          <view class="m-input" style="border:none;">{{editingItem.actualSqm}} ㎡</view>
+        </view>
       </view>
     </view>
+    <view class="modal-footer">
+      <button class="m-btn-cancel" bindtap="closeEditModal">取消</button>
+      <button class="m-btn-save" bindtap="saveEdit">确认保存</button>
+    </view>
+  </view>
 
-    <view class="label">盘点人 operator</view>
-    <input class="input" value="{{operator}}" bindinput="onOperatorInput" />
+  <!-- 3. 底部悬浮提交栏 -->
+  <view class="sticky-footer-modern" wx:if="{{scannedList.length > 0}}">
+    <view class="footer-summary">
+      <view class="total-label">合计项</view>
+      <view class="total-val">{{scannedList.length}}</view>
+    </view>
+    <button class="footer-btn purple-bg" loading="{{submitting}}" bindtap="submitPalletStocktake">完成提交</button>
+  </view>
 
-    <view class="label">原因 reason</view>
-    <input class="input" value="{{reason}}" bindinput="onReasonInput" />
-
-    <button class="btn-primary" loading="{{submitting}}" bindtap="submitStocktake">提交盘点</button>
+  <!-- 新增无码明细弹窗 -->
+  <view class="modal-mask" wx:if="{{showAddModal}}" bindtap="closeAddModal"></view>
+  <view class="edit-modal {{showAddModal ? 'show' : ''}}" wx:if="{{showAddModal}}">
+    <view class="modal-header">
+      <text>新增无码明细</text>
+      <text class="close-icon" bindtap="closeAddModal">×</text>
+    </view>
+    <view class="modal-body">
+      <view class="m-form-item">
+        <text class="m-label">物料料号</text>
+        <input class="m-input" value="{{addItem.materialCode}}" placeholder="输入料号模糊搜索" bindinput="onAddMaterialInput" />
+        <scroll-view class="suggest-list" scroll-y wx:if="{{showAddSpecSuggest}}">
+          <view class="suggest-item" wx:for="{{addSpecSuggestions}}" wx:key="id" bindtap="selectAddSpec" data-spec="{{item}}">
+            <text class="s-code">{{item.materialCode}}</text>
+            <text class="s-name">{{item.productName}}</text>
+          </view>
+        </scroll-view>
+      </view>
+      <view class="m-form-item">
+        <text class="m-label">产品名称</text>
+        <input class="m-input" value="{{addItem.productName}}" placeholder="根据料号自动带出，可手改" bindinput="onAddFieldInput" data-field="productName" />
+      </view>
+      <view class="m-form-item">
+        <text class="m-label">批次号</text>
+        <input class="m-input" value="{{addItem.batchNo}}" placeholder="输入批次号，自动联想历史批次" bindinput="onAddBatchInput" />
+        <scroll-view class="suggest-list" scroll-y wx:if="{{showAddBatchSuggest}}">
+          <view class="suggest-item" wx:for="{{addBatchSuggestions}}" wx:key="*this" bindtap="selectAddBatch" data-batch="{{item}}">
+            <text class="s-code">{{item}}</text>
+          </view>
+        </scroll-view>
+      </view>
+      <view class="m-grid">
+        <view class="m-form-item">
+          <text class="m-label">卡板号</text>
+          <input class="m-input" value="{{addItem.location}}" placeholder="默认取当前卡板，可修改" bindinput="onAddFieldInput" data-field="location" />
+        </view>
+        <view class="m-form-item">
+          <text class="m-label">数字号</text>
+          <input class="m-input" type="number" value="{{addItem.sequenceNo}}" placeholder="可选" bindinput="onAddFieldInput" data-field="sequenceNo" />
+        </view>
+      </view>
+      <view class="m-grid">
+        <view class="m-form-item">
+          <text class="m-label">宽度(mm)</text>
+          <input class="m-input" type="number" value="{{addItem.width}}" bindinput="onAddFieldInput" data-field="width" />
+        </view>
+        <view class="m-form-item">
+          <text class="m-label">长度(m)</text>
+          <input class="m-input" type="number" value="{{addItem.length}}" bindinput="onAddFieldInput" data-field="length" />
+        </view>
+      </view>
+      <view class="m-grid">
+        <view class="m-form-item">
+          <text class="m-label">实盘卷数</text>
+          <input class="m-input" type="number" value="{{addItem.actualRolls}}" bindinput="onAddFieldInput" data-field="actualRolls" />
+        </view>
+        <view class="m-form-item">
+          <text class="m-label">实盘面积(㎡)</text>
+          <input class="m-input" type="digit" value="{{addItem.actualSqm}}" bindinput="onAddFieldInput" data-field="actualSqm" />
+        </view>
+      </view>
+    </view>
+    <view class="modal-footer">
+      <button class="m-btn-cancel" bindtap="closeAddModal">取消</button>
+      <button class="m-btn-cancel" bindtap="onReprintNoCodeLabel">补打标签</button>
+      <button class="m-btn-save" bindtap="saveAddItem">确认新增</button>
+    </view>
   </view>
 </view>

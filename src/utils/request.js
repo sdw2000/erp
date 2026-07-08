@@ -85,6 +85,16 @@ service.interceptors.request.use(
       config.headers['token'] = tk
     }
 
+    const method = String(config.method || 'get').toLowerCase()
+    if (method === 'get' && !config.disableCacheBust) {
+      config.params = config.params || {}
+      // 防止浏览器/代理缓存旧响应，确保列表和详情读取最新数据
+      config.params._t = Date.now()
+      config.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+      config.headers.Pragma = 'no-cache'
+      config.headers.Expires = '0'
+    }
+
     if (config && config.params) {
       sanitizeCodeFields(config.params)
     }

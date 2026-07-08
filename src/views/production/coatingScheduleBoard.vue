@@ -1,7 +1,7 @@
 <template>
-  <div class="app-container">
+  <div class="app-container board-page" :style="{ height: pageHeight + 'px' }">
     <!-- 页面标题 -->
-    <el-card shadow="never" style="margin-bottom: 15px">
+    <el-card shadow="never" class="stat-header-card">
       <div slot="header" class="clearfix">
         <span style="font-weight: bold; font-size: 16px">排程看板</span>
         <div style="float: right">
@@ -78,9 +78,9 @@
     </el-card>
 
     <!-- 涂布队列 -->
-    <el-row :gutter="15">
-      <el-col :span="24">
-        <el-card shadow="never" style="margin-bottom: 15px">
+    <el-row :gutter="15" class="board-table-row">
+      <el-col :span="24" class="board-table-col">
+        <el-card shadow="never" class="board-table-card">
           <div slot="header" class="clearfix">
             <span style="font-weight: bold">任务列表</span>
           </div>
@@ -96,6 +96,7 @@
             :data="queueList"
             border
             stripe
+            height="100%"
             :row-class-name="tableRowClassName"
           >
             <template v-if="activeTaskTab === 'coating'">
@@ -252,14 +253,14 @@
             </template>
           </el-table>
 
-          <div style="text-align: right; margin-top: 10px">
+          <div class="pagination-container" style="text-align: right;">
             <el-pagination
               background
               layout="prev, pager, next, sizes, jumper, total"
               :total="queueTotal"
               :page-size="queuePageSize"
               :current-page="queuePageNum"
-              :page-sizes="[10, 20, 50, 100]"
+              :page-sizes="pageSizes"
               @current-change="handleQueuePageChange"
               @size-change="handleQueueSizeChange"
             />
@@ -499,18 +500,22 @@ import { getUnscheduledOrdersPage } from '@/api/unscheduledOrders'
 import { getRewindingTasks, updateRewindingEquipment, adjustRewindingTaskTime } from '@/api/schedule'
 import { getOrderDetailForProduction } from '@/api/sales'
 import { getAvailableByType } from '@/api/equipment'
+import uiConfig from '@/config/ui'
 
 export default {
   name: 'CoatingScheduleBoard',
   data() {
     return {
       loading: false,
+      pageHeight: 800,
       planDateRange: [],
       queueList: [],
       queueTotal: 0,
       queuePageNum: 1,
-      queuePageSize: 10,
+      queuePageSize: uiConfig.defaultPageSize,
+      pageSizes: uiConfig.pageSizes,
       activeTaskTab: 'coating',
+      tableMaxHeight: 600,
       // 复卷汇总列表（从待排程池聚合）
       rewindingList: [],
       rewindingEquipmentOptions: [],
@@ -566,7 +571,20 @@ export default {
     this.planDateRange = [todayStr, todayStr]
     this.loadData()
   },
+  mounted() {
+    this.updateTableMaxHeight()
+    window.addEventListener('resize', this.updateTableMaxHeight)
+  },
+  beforeDestroy() {
+    window.removeEventListener('resize', this.updateTableMaxHeight)
+  },
   methods: {
+    updateTableMaxHeight() {
+      this.$nextTick(() => {
+        const rootRect = this.$el.getBoundingClientRect()
+        this.pageHeight = Math.max(600, Math.floor(window.innerHeight - rootRect.top - 2))
+      })
+    },
     handleDateChange(val) {
       this.planDateRange = val || []
       this.queuePageNum = 1
@@ -931,6 +949,7 @@ export default {
       this.queueTotal = 0
       this.queueList = []
       this.loadQueue()
+      this.updateTableMaxHeight()
     },
     async loadRewindingEquipmentOptions() {
       if (this.rewindingEquipmentOptions && this.rewindingEquipmentOptions.length) return
@@ -1077,6 +1096,57 @@ export default {
   color: #303133;
   font-size: 13px;
   word-break: break-all;
+}
+
+.board-page {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 8px 40px !important;
+  background-color: #f0f2f5;
+}
+
+.stat-header-card {
+  margin-bottom: 8px !important;
+  flex-shrink: 0;
+}
+
+.board-table-row {
+  flex: 1;
+  display: flex !important;
+  flex-direction: column;
+}
+
+.board-table-col {
+  flex: 1;
+  display: flex !important;
+  flex-direction: column;
+}
+
+.board-table-card {
+  flex: 1;
+  display: flex !important;
+  flex-direction: column;
+  margin-bottom: 0 !important;
+}
+
+.board-table-card ::v-deep .el-card__header {
+  padding: 8px 16px;
+  flex-shrink: 0;
+}
+
+.board-table-card ::v-deep .el-card__body {
+  flex: 1;
+  padding: 0 12px 12px 12px !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.board-table-card ::v-deep .el-tabs {
+  flex-shrink: 0;
+}
+
+.board-table-card ::v-deep .el-table {
+  flex: 1;
 }
 </style>
 

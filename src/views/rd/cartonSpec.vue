@@ -50,7 +50,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
-        <el-table-column v-if="$hasRole('admin') || $hasRole('rd')" label="操作" width="150" fixed="right" align="center">
+        <el-table-column v-if="$hasRole('admin') || $hasRole('rd')" label="操作" width="150" align="center">
           <template slot-scope="scope">
             <el-button type="text" size="small" @click="handleEdit(scope.row)">编辑</el-button>
             <el-button type="text" size="small" style="color:#f56c6c" @click="handleDelete(scope.row)">删除</el-button>

@@ -14,31 +14,31 @@
     "pages/stocktake/index",
     "pages/issue/index",
     "pages/history/index",
-    "pages/workshop-return/index",
-    "pages/workshop-receive/index"
+    "pages/qc/index",
+    "pages/dashboard/index",
+    "pages/workshop-warehouse/index"
   ],
   "window": {
-    "navigationBarTitleText": "MES 报工",
+    "navigationBarTitleText": "MES 报工系统",
     "navigationBarBackgroundColor": "#2563eb",
     "navigationBarTextStyle": "white",
     "backgroundColor": "#f5f7fb"
   },
   "tabBar": {
-    "position": "top",
     "color": "#64748b",
     "selectedColor": "#2563eb",
     "list": [
       {
         "pagePath": "pages/home/index",
-        "text": "工具首页"
+        "text": "首页"
       },
       {
         "pagePath": "pages/report/index",
-        "text": "生产报工"
+        "text": "报工"
       },
       {
         "pagePath": "pages/warehouse/index",
-        "text": "仓库"
+        "text": "库存"
       },
       {
         "pagePath": "pages/sales/index",

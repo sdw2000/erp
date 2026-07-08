@@ -22,7 +22,10 @@
       </div>
 
       <div v-else-if="notices.length === 0" class="empty-state">
-        <el-empty description="未找到相关发货记录"></el-empty>
+        <div style="text-align: center; color: #909399; padding: 40px 0;">
+          <i class="el-icon-warning-outline" style="font-size: 40px; margin-bottom: 10px;"></i>
+          <p>未找到相关发货记录</p>
+        </div>
       </div>
 
       <div v-else>

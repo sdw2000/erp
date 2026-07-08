@@ -33,10 +33,5 @@
   "compileType": "miniprogram",
   "libVersion": "2.33.0",
   "projectname": "mes-wecom-report",
-  "condition": {},
-  "simulatorPluginLibVersion": {
-    "wxext14566970e7e9f62": "2.27.3"
-  },
-  "editorSetting": {},
-  "projectArchitecture": "multiPlatform"
+  "condition": {}
 }

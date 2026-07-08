@@ -41,7 +41,7 @@
           :current-page.sync="pagination.page"
           :page-size="pagination.size"
           :total="pagination.total"
-          :page-sizes="[10,20,50]"
+          :page-sizes="pageSizes"
           layout="sizes, prev, pager, next, jumper, ->, total"
           @size-change="onSizeChange"
           @current-change="onPageChange"
@@ -181,6 +181,7 @@
 
 <script>
 import { listPurchaseSamples, getPurchaseSampleDetail, createPurchaseSample, updatePurchaseSample, deletePurchaseSample } from '@/api/purchaseSample'
+import uiConfig from '@/config/ui'
 
 export default {
   name: 'PurchaseSamples',
@@ -189,7 +190,8 @@ export default {
       loading: false,
       records: [],
       filters: { supplier: '', status: '' },
-      pagination: { page: 1, size: 10, total: 0 },
+      pagination: { page: 1, size: uiConfig.defaultPageSize, total: 0 },
+      pageSizes: uiConfig.pageSizes,
       detailVisible: false,
       editVisible: false,
       isEdit: false,

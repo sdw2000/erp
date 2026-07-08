@@ -59,7 +59,7 @@
           :current-page.sync="pagination.page"
           :page-size="pagination.size"
           :total="pagination.total"
-          :page-sizes="[10,20,50]"
+          :page-sizes="pageSizes"
           layout="sizes, prev, pager, next, jumper, ->, total"
           @size-change="onSizeChange"
           @current-change="onPageChange"
@@ -339,6 +339,7 @@ import { listSuppliers } from '@/api/purchaseSupplier'
 import { getAllEnabledSpecs } from '@/api/tapeSpec'
 import { getRawMaterialList } from '@/api/tapeRawMaterial'
 import { dateStampInShanghai } from '@/utils/time'
+import uiConfig from '@/config/ui'
 
 const KG_PRICING_FILM_CODES = ['PETLXM-D25', 'PETLXM-D36']
 
@@ -349,7 +350,7 @@ export default {
       loading: false,
       records: [],
       filters: { supplier: '', status: '', materialCode: '' },
-      pagination: { page: 1, size: 10, total: 0 },
+      pagination: { page: 1, size: uiConfig.defaultPageSize, total: 0 },
       importMode: 'normal',
       detailVisible: false,
       editVisible: false,
@@ -359,7 +360,8 @@ export default {
       specs: [],
       rawMaterials: [],
       materialSearchKeyword: '',
-      form: this.emptyForm()
+      form: this.emptyForm(),
+      pageSizes: uiConfig.pageSizes
     }
   },
   created() {
@@ -1077,8 +1079,11 @@ export default {
       if (text.includes('公斤') || text.includes('千克') || upper.includes('KG')) {
         return 'kg'
       }
-      if (text.includes('支') || text.includes('个') || upper.includes('PCS') || text.includes('卷')) {
+      if (text.includes('卷')) {
         return '卷'
+      }
+      if (text.includes('支') || text.includes('个') || upper.includes('PCS')) {
+        return '支'
       }
       if (text === 'm' || text === '米' || upper === 'M') {
         return 'm'

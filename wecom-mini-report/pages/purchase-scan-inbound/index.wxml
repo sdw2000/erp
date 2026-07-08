@@ -1,100 +1,177 @@
-<view class="container">
-  <view class="card">
-    <view class="title">步骤1：选择单据（或扫码收货单号）</view>
-    <view class="row">
-      <input class="input" value="{{keyword}}" placeholder="输入/扫码收货单号" bindinput="onKeywordInput" />
-      <button class="btn-secondary small" bindtap="onScanReceiptNo">扫码</button>
-    </view>
-    <button class="btn-secondary" loading="{{listLoading}}" bindtap="queryDocuments">查询单据</button>
+<view class="container inbound-bg">
+  <view class="hero-mini blue-grad">
+    <view class="hero-title">采购入库</view>
+    <view class="hero-sub">收货单扫码验证与实物入仓同步</view>
+  </view>
 
-    <view wx:if="{{documentList.length === 0}}" class="muted mt8">暂无可扫描单据</view>
-    <block wx:for="{{documentList}}" wx:key="id">
-      <view class="doc-row">
-        <view class="doc-main">
-          <view class="doc-no">{{item.receiptNo}}</view>
-          <view class="muted">供应商代码：{{item.supplierCode || '-'}}</view>
-          <view class="muted">采购单：{{item.purchaseOrderNo || '-'}}</view>
-          <view class="muted">状态：{{item.status || '-'}}</view>
-        </view>
-        <button class="btn-secondary small" data-id="{{item.id}}" data-receiptno="{{item.receiptNo}}" data-scancode="{{item.scanCode}}" bindtap="onSelectDocument">选择</button>
+  <view class="main-content">
+    <!-- 步骤1：选择单据 -->
+    <view class="card shadow-sm step-card {{document ? 'completed' : 'active'}}">
+      <view class="card-header">
+        <view class="step-num">1</view>
+        <view class="card-title">选择单据</view>
+        <view class="step-status" wx:if="{{document}}">已选单据：PRB...{{document.receiptNo ? document.receiptNo.slice(-4) : ''}}</view>
       </view>
-    </block>
-  </view>
 
-  <view class="card" wx:if="{{document}}">
-    <view class="title">步骤2：连续扫码</view>
-    <view class="muted">当前单据：{{document.receiptNo}}</view>
-    <view class="muted">供应商代码：{{document.supplierCode || '-'}}</view>
-    <view class="muted" wx:if="{{focusedCode}}">当前定位码：{{focusedCode}}</view>
-
-    <view class="grid">
-      <view class="cell">计划数量：{{(focusedSummary && focusedSummary.planQty) || (document.summary && document.summary.planQty) || 0}}</view>
-      <view class="cell">已打印数量：{{(focusedSummary && focusedSummary.printedQty) || (document.summary && document.summary.printedQty) || 0}}</view>
-      <view class="cell">累计已入库：{{(focusedSummary && focusedSummary.scannedQty) || (document.summary && document.summary.scannedQty) || 0}}</view>
-      <view class="cell">本次已扫码：{{scanCodes.length || 0}}</view>
-    </view>
-
-    <view class="label">库位（支持先扫一次）</view>
-    <view class="row">
-      <input class="input" value="{{scannedLocation}}" placeholder="请扫码或输入库位" bindinput="onLocationInput" />
-      <button class="btn-secondary small" bindtap="onScanLocation">扫码库位</button>
-    </view>
-
-    <view class="actions">
-      <button class="btn-primary big scan-inbound-btn" wx:if="{{!scanning}}" bindtap="onStartScan">扫码入库</button>
-      <button class="btn-danger big" wx:if="{{scanning}}" bindtap="onStopScan">停止扫码</button>
-    </view>
-
-    <view class="label">手工补录标签码</view>
-    <view class="row">
-      <input class="input" value="{{scanCodeInput}}" placeholder="输入标签码" bindinput="onScanCodeInput" />
-      <button class="btn-secondary small" bindtap="onAddManualCode">添加</button>
-    </view>
-
-    <view class="muted mt8">本次已扫码：{{scanCodes.length}} 条</view>
-    <view class="code-list" wx:if="{{scanCodes.length > 0}}">
-      <block wx:for="{{scanCodes}}" wx:key="*this">
-        <view class="tag {{failedCodeMap[item] ? 'tag-fail' : ''}}">{{item}}</view>
-      </block>
-    </view>
-
-    <view class="items" wx:if="{{scanGroupedItems && scanGroupedItems.length > 0}}">
-      <view class="label">本次扫码汇总（按材料）</view>
-      <block wx:for="{{scanGroupedItems}}" wx:key="incomingBatchNo">
-        <view class="item-row">
-          <view>料号：{{item.materialCode || '-'}}</view>
-          <view>品名：{{item.materialName || '-'}}</view>
-          <view>来料批次：{{item.incomingBatchNo || '-'}}</view>
-          <view>本次扫码：{{item.scannedThisRound || 0}}</view>
+      <view class="form-section" wx:if="{{!document}}">
+        <view class="search-bar-modern">
+          <input class="input-modern" value="{{keyword}}" placeholder="输入或扫码收货单号" bindinput="onKeywordInput" />
+          <view class="scan-icon-btn" bindtap="onScanReceiptNo">
+            <text class="scan-icon-text">扫码</text>
+            <text>🔍</text>
+          </view>
         </view>
-      </block>
-    </view>
+        <button class="btn-primary mt20" loading="{{listLoading}}" bindtap="queryDocuments">查询待入库单据</button>
 
-    <view class="items" wx:if="{{displayItems && displayItems.length > 0 && (!scanGroupedItems || scanGroupedItems.length === 0)}}">
-      <view class="label">{{focusedCode ? '匹配明细（按当前定位码）' : '单据明细'}}</view>
-      <block wx:for="{{displayItems}}" wx:key="itemId">
-        <view class="item-row">
-          <view>料号：{{item.materialCode || '-'}}</view>
-          <view>品名：{{item.materialName || '-'}}</view>
-          <view>规格：{{item.specification || '-'}}</view>
-          <view>来料批次：{{item.incomingBatchNo || '-'}}</view>
-          <view>计划：{{item.planQty || 0}} / 已打印：{{item.printedQty || 0}} / 累计已入库：{{item.scannedQty || 0}}</view>
+        <view wx:if="{{documentList.length === 0}}" class="empty-hint">{{emptyHintText || '暂无可扫描单据'}}</view>
+        <view class="doc-list-wrap">
+          <view class="doc-card-modern" wx:for="{{documentList}}" wx:key="id">
+            <view class="doc-badge blue">待入库</view>
+            <view class="doc-info">
+              <view class="doc-no-text">{{item.receiptNo}}</view>
+              <view class="doc-detail-row">
+                <text>采购单: {{item.purchaseOrderNo || '-'}}</text>
+                <text>供应商: {{item.supplierCode || '-'}}</text>
+              </view>
+            </view>
+            <view class="select-btn" data-id="{{item.id}}" data-receiptno="{{item.receiptNo}}" data-scancode="{{item.scanCode}}" bindtap="onSelectDocument">
+              选择
+            </view>
+          </view>
         </view>
-      </block>
+
+        <!-- 分页控制 -->
+        <view class="pagination-modern" wx:if="{{totalPages > 1}}">
+          <view class="page-btn {{page <= 1 ? 'disabled' : ''}}" bindtap="onPrevPage">上一页</view>
+          <view class="page-info">{{page}} / {{totalPages}}</view>
+          <view class="page-btn {{page >= totalPages ? 'disabled' : ''}}" bindtap="onNextPage">下一页</view>
+        </view>
+      </view>
+      <view class="selected-doc-summary" wx:else bindtap="resetDocument">
+        <view class="doc-summary-main">{{document.receiptNo}}</view>
+        <view class="doc-summary-sub">{{document.supplierCode}} | 重选单据 ×</view>
+      </view>
     </view>
-  </view>
 
-  <view class="card" wx:if="{{document}}">
-    <view class="title">步骤3：提交入仓</view>
-    <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmitInbound">提交入仓</button>
+    <!-- 步骤2：连续扫码 -->
+    <view class="card shadow-sm step-card {{document ? 'active' : 'disabled'}}" wx:if="{{document}}">
+      <view class="card-header">
+        <view class="step-num">2</view>
+        <view class="card-title">实物扫码验证</view>
+      </view>
 
-    <view class="summary" wx:if="{{submitSummary}}">
-      <view class="muted">状态：{{submitSummary.status || '-'}}</view>
-      <view class="muted">成功：{{submitSummary.successCount || 0}}，失败：{{submitSummary.failureCount || 0}}</view>
-      <view class="muted">失败原因清单：</view>
-      <block wx:for="{{submitSummary.failures || []}}" wx:key="code">
-        <view class="fail-row">{{item.code}} - {{item.reason}}</view>
-      </block>
+      <view class="progress-section" wx:if="{{document.summary}}">
+        <view class="progress-info">
+          <text class="progress-label">总入库进度</text>
+          <text class="progress-percent">{{progressPercent || 0}}%</text>
+        </view>
+        <view class="progress-bar-bg">
+          <view class="progress-bar-inner blue-grad" style="width: {{progressPercent || 0}}%"></view>
+        </view>
+      </view>
+
+      <view class="stats-panel-modern">
+        <view class="stat-box">
+          <view class="stat-label">计划数</view>
+          <view class="stat-value">{{(focusedSummary && focusedSummary.planQty) || (document.summary && document.summary.planQty) || 0}}</view>
+        </view>
+        <view class="stat-box">
+          <view class="stat-label">已打印</view>
+          <view class="stat-value">{{(focusedSummary && focusedSummary.printedQty) || (document.summary && document.summary.printedQty) || 0}}</view>
+        </view>
+        <view class="stat-box">
+          <view class="stat-label">已入库(含本次)</view>
+          <view class="stat-value blue-txt">
+            {{(((focusedSummary && focusedSummary.scannedQty) || (document.summary && document.summary.scannedQty) || 0) + (scanCodes.length || 0))}}
+          </view>
+        </view>
+        <view class="stat-box">
+          <view class="stat-label">本次待提交</view>
+          <view class="stat-value orange-txt">{{scanCodes.length || 0}}</view>
+        </view>
+      </view>
+
+      <view class="location-picker">
+        <view class="section-label">入库库位</view>
+        <view class="search-bar-modern mini">
+          <input class="input-modern" value="{{scannedLocation}}" placeholder="扫码或输入库位" bindinput="onLocationInput" />
+          <view class="scan-icon-btn" bindtap="onScanLocation">📍</view>
+        </view>
+      </view>
+
+      <view class="last-scan-info-card animate-fade-in" wx:if="{{lastScannedItem}}">
+        <view class="last-scan-tag">最近扫描</view>
+        <view class="last-scan-main">
+          <view class="last-scan-name">{{lastScannedItem.materialName || '未知物料'}}</view>
+          <view class="last-scan-spec">{{lastScannedItem.specification || '-'}}</view>
+          <view class="last-scan-spec">供应商代码: {{lastScannedItem.supplierCode || (document && document.supplierCode) || '-'}}</view>
+        </view>
+        <view class="last-scan-side">
+          <view class="last-scan-qty">{{lastScannedItem.planQty}}<text class="last-scan-unit"> {{lastScannedItem.unit || '卷'}}</text></view>
+          <view class="last-scan-batch">批次: {{lastScannedItem.incomingBatchNo || lastScannedItem.requestNo || '-'}}</view>
+        </view>
+      </view>
+
+      <view class="scan-control">
+        <button class="mega-scan-btn green-grad" wx:if="{{!scanning}}" bindtap="onStartScan">
+          <view class="mega-icon">📱</view>
+          <view class="mega-text">开始批量扫码入库</view>
+        </button>
+        <button class="mega-scan-btn red-grad" wx:if="{{scanning}}" bindtap="onStopScan">
+          <view class="mega-icon">⏹</view>
+          <view class="mega-text">停止扫码</view>
+        </button>
+      </view>
+
+      <view class="manual-input-section mt30">
+        <view class="section-label">手动补录</view>
+        <view class="search-bar-modern mini">
+          <input class="input-modern" value="{{scanCodeInput}}" placeholder="输入标签码" bindinput="onScanCodeInput" />
+          <view class="add-btn-inline" bindtap="onAddManualCode">添加</view>
+        </view>
+      </view>
+
+      <view class="scan-history mt30" wx:if="{{scanCodes.length > 0}}">
+        <view class="section-label">本次扫码记录</view>
+        <view class="tag-cloud">
+          <block wx:for="{{scanCodes}}" wx:key="*this">
+            <view class="history-tag {{failedCodeMap[item] ? 'fail' : ''}}">{{item}}</view>
+          </block>
+        </view>
+      </view>
+    </view>
+
+    <!-- 步骤3：提交入仓 (吸底或卡片) -->
+    <view class="card shadow-sm step-card {{scanCodes.length > 0 ? 'active' : 'disabled'}}" wx:if="{{document}}">
+      <view class="card-header">
+        <view class="step-num">3</view>
+        <view class="card-title">提交结果</view>
+      </view>
+      <button class="btn-primary big-btn orange-bg" loading="{{submitting}}" disabled="{{scanCodes.length === 0}}" bindtap="onSubmitInbound">确认提交入仓</button>
+
+      <view class="submit-summary-box" wx:if="{{submitSummary}}">
+        <view class="summary-line">
+          <text>处理结果：</text>
+          <text class="status-tag">{{submitSummary.status}}</text>
+        </view>
+        <view class="summary-grid">
+          <view class="summary-item">
+            <view class="s-val green-txt">{{submitSummary.successCount}}</view>
+            <view class="s-lab">成功</view>
+          </view>
+          <view class="summary-item">
+            <view class="s-val red-txt">{{submitSummary.failureCount}}</view>
+            <view class="s-lab">失败</view>
+          </view>
+        </view>
+        <view class="fail-list" wx:if="{{submitSummary.failures.length}}">
+          <view class="fail-title">失败原因详情：</view>
+          <view class="fail-item" wx:for="{{submitSummary.failures}}" wx:key="code">
+            <text class="fail-code">{{item.code}}</text>
+            <text class="fail-reason">{{item.reason}}</text>
+          </view>
+        </view>
+      </view>
     </view>
   </view>
 </view>

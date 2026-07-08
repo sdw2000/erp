@@ -17,7 +17,16 @@ function getInfo(token) {
   })
 }
 
+function getStaffList(data) {
+  return request({
+    url: '/production/staff/list',
+    method: 'GET',
+    data
+  })
+}
+
 module.exports = {
   login,
-  getInfo
+  getInfo,
+  getStaffList
 }

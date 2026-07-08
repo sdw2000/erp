@@ -72,11 +72,12 @@
             {{ formatSpecDesc(scope.row) }}
           </template>
         </el-table-column>
-        <el-table-column prop="rolls" label="入库数量" width="110" align="center" sortable="custom">
+        <el-table-column prop="rolls" label="入库数量" width="120" align="center" sortable="custom">
           <template slot-scope="scope">
             <el-tag type="success">{{ formatInboundQty(scope.row) }}</el-tag>
           </template>
         </el-table-column>
+        
         <el-table-column prop="location" label="卡板位" width="80" align="center" sortable="custom" />
         <el-table-column prop="applicant" label="申请人" width="90" sortable="custom" />
         <el-table-column prop="applyDept" label="申请部门" width="100" sortable="custom" />
@@ -100,25 +101,23 @@
             <span>{{ parseInboundSource(scope.row) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        
+
+        <el-table-column label="操作" width="380">
           <template slot-scope="scope">
-            <template v-if="scope.row.status === 0">
+            <template v-if="Number(scope.row.status) === 0">
               <el-button type="text" size="small" icon="el-icon-check" @click="handleApprove(scope.row, true)">通过</el-button>
               <el-button type="text" size="small" icon="el-icon-close" @click="handleApprove(scope.row, false)">拒绝</el-button>
               <el-button type="text" size="small" icon="el-icon-delete" @click="handleCancel(scope.row)">取消</el-button>
             </template>
-            <el-button
-              v-if="canPrintPurchaseLabel(scope.row)"
-              type="text"
-              size="small"
-              icon="el-icon-printer"
-              @click="openPurchasePrintDialog(scope.row)"
-            >打印标签</el-button>
-            <span v-if="scope.row.status !== 0 && !canPrintPurchaseLabel(scope.row)" class="text-muted">已处理</span>
+            <el-button v-if="canPrintPurchaseLabel(scope.row)" type="text" size="small" icon="el-icon-printer" @click="openPurchasePrintDialog(scope.row)">打印标签</el-button>
+            <span v-if="Number(scope.row.status) !== 0 && !canPrintPurchaseLabel(scope.row)" class="text-muted">已处理</span>
           </template>
         </el-table-column>
       </el-table>
+    </el-card>
 
+    <div class="pagination-footer">
       <el-pagination
         :current-page="pagination.page"
         :page-sizes="[20, 50, 100]"
@@ -128,7 +127,7 @@
         @size-change="handleSizeChange"
         @current-change="handleCurrentChange"
       />
-    </el-card>
+    </div>
 
     <!-- 新增入库申请弹窗 -->
     <el-dialog title="新增入库申请" :visible.sync="dialogVisible" width="650px" :close-on-click-modal="false">
@@ -512,7 +511,7 @@ export default {
     formatSpecDesc(row) {
       if (!row) return '-'
       const sourceType = this.resolveInboundSourceType(row)
-      const specDesc = row.specDesc ? String(row.specDesc).trim() : ''
+      const specDesc = (row.specDesc || row.spec_desc) ? String(row.specDesc || row.spec_desc).trim() : ''
 
       // 采购来料规格必须以采购端原文为准（如 6mm*77mm*1080m），
       // 不能按系统默认 μm 模板“重写显示”。
@@ -552,10 +551,7 @@ export default {
       if (direct !== null && direct !== undefined && String(direct).trim() !== '') {
         return String(direct).trim()
       }
-
-      const text = String((row && row.remark) || '')
-      const m = text.match(/数字号\s*[:：=]\s*([^；;,\s|]+)/)
-      if (m && m[1]) return String(m[1]).trim()
+      // 不再从备注中自动解析数字号，数字号必须由用户手动填写
       return '-'
     },
     formatPlanTime(row) {
@@ -619,20 +615,72 @@ export default {
     formatInboundQty(row) {
       if (!row) return '-'
       const qtyNum = Number(row.rolls)
-      const qtyText = Number.isFinite(qtyNum) ? String(qtyNum) : (row.rolls === null || row.rolls === undefined ? '-' : String(row.rolls))
+      const qtyText = Number.isFinite(qtyNum)
+        ? (Number.isInteger(qtyNum) ? String(qtyNum) : String(Number(qtyNum.toFixed(4))))
+        : (row.rolls === null || row.rolls === undefined ? '-' : String(row.rolls))
       if (qtyText === '-') return qtyText
       const unit = this.resolveInboundQtyUnit(row)
       return unit ? `${qtyText}${unit}` : qtyText
     },
+    inferPurchaseUnitFromSpec(row) {
+      const spec = String((row && (row.specDesc || row.spec_desc)) || '').trim().toLowerCase()
+      if (!spec) return ''
+      if (spec.includes('桶')) return '桶'
+      if (spec.includes('kg') || spec.includes('公斤') || spec.includes('千克')) return 'kg'
+      if (spec.includes('箱')) return '箱'
+      if (spec.includes('支') || spec.includes('纸管') || spec.includes('管')) return '支'
+      return ''
+    },
+    isSpecPerDrum(row) {
+      const spec = String((row && (row.specDesc || row.spec_desc)) || '').trim().toLowerCase().replace(/\s+/g, '')
+      if (!spec) return false
+      return spec.includes('/桶') || spec.includes('kg/桶') || spec.includes('kgs/桶') || spec.includes('公斤/桶') || spec.includes('千克/桶')
+    },
     resolveInboundQtyUnit(row) {
-      const unit = row && row.qtyUnit ? String(row.qtyUnit).trim() : ''
-      if (unit) return unit
+      const unit = row && (row.qtyUnit || row.qty_unit) ? String(row.qtyUnit || row.qty_unit).trim() : ''
+      if (unit) {
+        if (this.resolveInboundSourceType(row) === 'PURCHASE_RECEIVING' && this.isSpecPerDrum(row) && String(unit).toLowerCase() === 'kg') {
+          return '桶'
+        }
+        return unit
+      }
       const unitFromToken = this.extractInboundTokenFromRemark(row && row.remark, 'qtyUnit')
-      if (unitFromToken) return unitFromToken
+      if (unitFromToken) {
+        if (this.resolveInboundSourceType(row) === 'PURCHASE_RECEIVING' && this.isSpecPerDrum(row) && String(unitFromToken).toLowerCase() === 'kg') {
+          return '桶'
+        }
+        return unitFromToken
+      }
+      // 兼容历史入库备注token（由采购收货链路回写）
+      const purchaseUom = this.extractInboundTokenFromRemark(row && row.remark, 'purchaseUomCode')
+      const stockUom = this.extractInboundTokenFromRemark(row && row.remark, 'stockUomCode')
+      const priceUom = this.extractInboundTokenFromRemark(row && row.remark, 'priceUomCode')
+      const normalizeUom = (raw) => {
+        const text = String(raw || '').trim().toUpperCase()
+        if (!text) return ''
+        if (['KG', 'KGS', '公斤', '千克'].includes(text)) return 'kg'
+        if (['DRUM', 'BARREL', '桶'].includes(text)) return '桶'
+        if (['PCS', 'PC', 'EA', '支'].includes(text)) return '支'
+        if (['BOX', 'CTN', '箱'].includes(text)) return '箱'
+        if (['ROLL', 'RL', '卷'].includes(text)) return '卷'
+        if (['M2', 'M²', '㎡'].includes(text)) return '㎡'
+        return String(raw || '').trim()
+      }
+      const normalizedPurchaseUom = normalizeUom(purchaseUom) || normalizeUom(stockUom) || normalizeUom(priceUom)
       const sourceType = this.resolveInboundSourceType(row)
+      if (normalizedPurchaseUom) {
+        if (sourceType === 'PURCHASE_RECEIVING' && this.isSpecPerDrum(row) && String(normalizedPurchaseUom).toLowerCase() === 'kg') {
+          return '桶'
+        }
+        return normalizedPurchaseUom
+      }
+      if (sourceType === 'PURCHASE_RECEIVING') {
+        const inferred = this.inferPurchaseUnitFromSpec(row)
+        if (inferred) return inferred
+      }
       return sourceType === 'SALES_RETURN' || sourceType === 'PROD_COATING' || sourceType === 'PROD_PACKAGING' || sourceType === 'PRODUCTION'
         ? '卷'
-        : (sourceType === 'PURCHASE_RECEIVING' ? '卷' : '数量')
+        : '数量'
     },
     parseInboundSource(row) {
       if (!row) return '-'
@@ -719,11 +767,58 @@ export default {
       const qty = Math.max(1, Number((row && row.rolls) || 1) || 1)
       this.purchasePrintForm = {
         productionDate: this.resolveRowProductionDate(row) || this.todayDateString(),
-        incomingBatchNo: '',
+        incomingBatchNo: '自动生成中...',
         quantity: qty,
         copies: isPaperBoxTube ? 1 : qty
       }
       this.purchasePrintVisible = true
+      // 异步从后端获取唯一批次号（重试最多3次）
+      this.$nextTick(() => {
+        this.fetchAutoBatchNo(row, 0)
+      })
+    },
+    async fetchAutoBatchNo(row, attempt) {
+      const maxRetries = 3
+      try {
+        const res = await preparePurchaseInboundLabel(row.id, {
+          productionDate: this.purchasePrintForm.productionDate,
+          incomingBatchNo: '',
+          quantity: 1,
+          copies: 1,
+          operator: this.name,
+          manualBatchNo: true
+        })
+        if (this.isApiSuccess(res)) {
+          const data = (res && res.data) || {}
+          const labels = Array.isArray(data.labels) ? data.labels : []
+          if (labels.length > 0 && labels[0].incomingBatchNo) {
+            this.purchasePrintForm.incomingBatchNo = labels[0].incomingBatchNo
+            return
+          } else if (labels.length > 0 && labels[0].batchNo) {
+            this.purchasePrintForm.incomingBatchNo = labels[0].batchNo
+            return
+          } else if (data.incomingBatchNo) {
+            this.purchasePrintForm.incomingBatchNo = data.incomingBatchNo
+            return
+          }
+        }
+        // 未获取到批次号，重试
+        if (attempt < maxRetries - 1) {
+          this.purchasePrintForm.incomingBatchNo = `重试中(${attempt + 2}/${maxRetries})...`
+          setTimeout(() => this.fetchAutoBatchNo(row, attempt + 1), 1000)
+        } else {
+          this.purchasePrintForm.incomingBatchNo = ''
+          this.$message.error('自动生成来料批次号失败，请手动输入')
+        }
+      } catch (e) {
+        if (attempt < maxRetries - 1) {
+          this.purchasePrintForm.incomingBatchNo = `重试中(${attempt + 2}/${maxRetries})...`
+          setTimeout(() => this.fetchAutoBatchNo(row, attempt + 1), 1000)
+        } else {
+          this.purchasePrintForm.incomingBatchNo = ''
+          this.$message.error('自动生成来料批次号失败，请手动输入')
+        }
+      }
     },
     purchaseCopiesHintText() {
       return this.purchasePrintMeta && this.purchasePrintMeta.allowManualCopies
@@ -828,6 +923,7 @@ export default {
       return {
         materialCode: '',
         productName: '',
+        sequenceNo: null,
         batchNo: '',
         customerBatchNo: '',
         rolls: 1,
@@ -851,6 +947,7 @@ export default {
       const m = text.match(reg)
       return m && m[1] ? String(m[1]).trim() : ''
     },
+    // 注：自动从备注解析数字号的逻辑已移除，数字号需由用户在表单中手动填写
     aggregateInboundRows(rows) {
       const src = Array.isArray(rows) ? rows : []
       const pending = src.filter(r => Number((r && r.status) || 0) === 0)
@@ -948,6 +1045,7 @@ export default {
           status: this.searchForm.status === null || this.searchForm.status === undefined || this.searchForm.status === '' ? undefined : this.searchForm.status,
           materialCode: this.searchForm.materialCode ? this.searchForm.materialCode.trim() : undefined,
           sourceType: this.searchForm.sourceType || undefined,
+          autoSync: this.searchForm.sourceType === 'PURCHASE_RECEIVING' ? true : undefined,
           receiptId,
           itemId
         }
@@ -955,7 +1053,16 @@ export default {
         if (this.isApiSuccess(res)) {
           const records = Array.isArray(res.data.records) ? res.data.records : []
           const total = Number(res.data.total) || 0
-          this.list = this.applySortOnRows(records)
+          // Normalize each record: ensure numeric status and unify sequenceNo field
+          const normalized = records.map(r => {
+            const rec = Object.assign({}, r)
+            // status may be string or number
+            rec.status = Number(rec.status)
+            // unify sequenceNo from different possible keys
+            rec.sequenceNo = (rec.sequenceNo ?? rec.sequence_no ?? rec.sequence) || null
+            return rec
+          })
+          this.list = this.applySortOnRows(normalized)
           this.pagination.total = total
         }
       } catch (e) {
@@ -1022,6 +1129,7 @@ export default {
         try {
           this.form.applicant = this.name
           this.form.customerBatchNo = String(this.form.customerBatchNo || '').trim() || String(this.form.batchNo || '').trim()
+          // 数字号必须由用户手动填写，前端不再自动从备注或其他字段推断或填充
           this.form.qtyUnit = this.form.qtyUnit || '卷'
           const res = await createInboundRequest(this.form)
           if (this.isApiSuccess(res)) {
@@ -1206,8 +1314,21 @@ export default {
 <style lang="scss" scoped>
 .inbound-container {
   padding: 20px;
+  padding-bottom: 70px;
   .search-card, .toolbar-card { margin-bottom: 15px; }
-  .el-pagination { margin-top: 15px; text-align: right; }
   .text-muted { color: #909399; }
+}
+
+.pagination-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: #fff;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  padding: 12px 0;
+  display: flex;
+  justify-content: center;
 }
 </style>

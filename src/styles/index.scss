@@ -12,8 +12,7 @@ body {
   text-rendering: optimizeLegibility;
   font-family: Microsoft YaHei, PingFang SC, Hiragino Sans GB, Helvetica Neue, Helvetica, Arial, sans-serif;
   min-width: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   font-size: 13px;
   color: #111111;
 }
@@ -25,6 +24,7 @@ label {
 html {
   height: 100%;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 #app {
@@ -126,7 +126,8 @@ aside {
 
 //main-container全局样式
 .app-container {
-  padding: 8px 10px;
+  padding: 8px 10px 60px;
+  position: relative;
 }
 
 .components-container {
@@ -135,7 +136,20 @@ aside {
 }
 
 .pagination-container {
-  margin-top: 8px;
+  margin-top: 10px;
+  background: #fff;
+  padding: 10px 15px;
+  position: sticky; /* 改为吸底，保证始终可见 */
+  bottom: 0px;
+  left: 0;
+  width: 100%;
+  z-index: 200; /* 确保在最上层 */
+  border-top: 1px solid #ebeef5;
+  box-shadow: 0 -4px 12px 0 rgba(0, 0, 0, 0.08); /* 增强悬浮感 */
+  display: flex;
+  justify-content: center; /* 默认底部居中 */
+  align-items: center;
+  gap: 8px;
 }
 
 .text-center {
@@ -186,11 +200,22 @@ aside {
   }
 }
 
-/* ===== 全局紧凑模式（默认开启） ===== */
+/* ===== 全局布局优化（解决多滚动条问题） ===== */
 #app,
-.app-wrapper,
+.app-wrapper {
+  height: 100%;
+  width: 100%;
+  overflow-y: hidden;
+  overflow-x: visible;
+}
+
 .main-container {
-  overflow-x: hidden;
+  overflow-y: auto;
+  overflow-x: visible;
+}
+
+.app-main {
+  overflow: visible; /* 强制父容器不裁剪 */
 }
 
 .el-card__header {
@@ -224,7 +249,12 @@ aside {
 }
 
 .el-table {
-  width: 100% !important;
+  width: 100%;
+}
+
+.el-table--scrollable-x .el-table__body-wrapper {
+  overflow-x: auto !important;
+  z-index: 10;
 }
 
 .el-table th.el-table__cell,
@@ -244,9 +274,32 @@ aside {
 }
 
 .el-table .cell {
-  white-space: normal;
-  word-break: break-all;
+  white-space: nowrap !important; /* 强制不换行，确保出现横向滚动条 */
+  word-break: keep-all !important;
   line-height: 1.25;
+}
+
+/* 分页组件吸底效果（统一底部居中） */
+.pagination-container {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  z-index: 200;
+  background: #fff;
+  border-top: 2px solid #409EFF; /* 显著的蓝边 */
+  padding: 10px 16px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  margin-top: 0 !important;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 右对齐例外（若页面需要右对齐，可加此类） */
+.pagination-container--right {
+  justify-content: flex-end !important;
+  padding-right: 24px;
 }
 
 /* 操作列按钮紧凑化（全局） */
@@ -277,3 +330,205 @@ aside {
 .multiselect--active {
   z-index: 1000 !important;
 }
+
+/* ===== 全局专业滚动条样式 ===== */
+/* 统一为更醒目的蓝色滚动条，宽度略增以便交互 */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2A7FF0; /* 明亮蓝色 */
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #1767d6; /* 悬停稍深 */
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 针对 element-ui 表格内部滚动区域做相同样式，防止被局部样式覆盖 */
+.el-table__body-wrapper::-webkit-scrollbar {
+  height: 12px;
+}
+.el-table__body-wrapper::-webkit-scrollbar-thumb {
+  background: #2A7FF0;
+  border-radius: 6px;
+}
+
+/* ===== 响应式：小屏幕下改善表格显示与滚动 ===== */
+@media (max-width: 1280px) {
+  /* 小屏幕允许表格内容换行以避免被截断 */
+  .el-table .cell {
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+
+  /* 在窄宽度下取消分页吸底（避免遮挡或布局溢出），改为内容流内展示 */
+  .pagination-container {
+    position: static !important;
+    box-shadow: none !important;
+    border-top: 1px solid #ebeef5 !important;
+    width: auto !important;
+    padding: 8px 12px !important;
+    justify-content: center !important;
+  }
+
+  /* 确保表格外层和 Element 表格滚动区域可横向滚动并支持触摸惯性 */
+  .table-main-area,
+  .el-table__body-wrapper,
+  .manual-schedule-page ::v-deep .manual-schedule-table {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* 对话框内表格若仍被追加到 body（旧代码/第三方情况），为其容器提供横向滚动 */
+  .el-dialog__wrapper .el-dialog {
+    max-width: 96% !important;
+  }
+}
+
+/* ===== 增强水平滚动条可见性与避免被分页遮挡 ===== */
+/* 保证横向滚动条高度与纵向一致，并减少 thumb 的外边距使其更粗壮可见 */
+.el-table__body-wrapper {
+  /* 为避免被底部 sticky 分页遮挡，预留底部内边距 */
+  padding-bottom: 14px; /* 与滚动条高度匹配 */
+}
+
+/* 强制表格滚动条高度与样式一致（覆盖可能的主题覆盖） */
+.el-table__body-wrapper::-webkit-scrollbar {
+  height: 12px !important;
+  width: 12px !important;
+}
+.el-table__body-wrapper::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+.el-table__body-wrapper::-webkit-scrollbar-thumb {
+  background: #2A7FF0 !important;
+  border-radius: 6px !important;
+  border: 0px !important; /* 去掉额外透明边框以增大可视面积 */
+}
+.el-table__body-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #1767d6 !important;
+}
+
+/* 确保角落区域可见且与滚动条一致 */
+::-webkit-scrollbar-corner {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+/* 当表格有横向滚动时，预留底部空间以避免下方元素被遮挡 */
+/* 为真正出现横向滚动的表格单独预留空间（按需生效，使用 JS 添加 .h-scroll） */
+.el-table.h-scroll {
+  margin-bottom: 24px !important; /* 为带横向滚动的表格增加外部间距 */
+}
+
+.el-table .el-table__body-wrapper.h-scroll {
+  padding-bottom: 24px !important; /* 仅为有溢出的滚动区预留内边距，避免覆盖下方元素 */
+}
+
+/* spacer 用于在表格后创建占位，防止下方元素被遮挡 */
+.h-scroll-spacer {
+  height: 24px;
+  width: 100%;
+  pointer-events: none;
+}
+
+/* 当任意表格存在横向滚动（由 JS 检测添加 .has-h-scroll 到 body）时，调整 sticky 分页位置，避免遮挡 */
+body.has-h-scroll .pagination-container {
+  bottom: 28px !important; /* 上移以避免与横向滚动条重叠 */
+}
+
+/* ===== 强制可见且稍粗的滚动条覆盖（最后优先级，覆盖主题或浏览器样式） ===== */
+/* 1) Chromium/WebKit */
+::-webkit-scrollbar {
+  width: 14px !important;
+  height: 14px !important;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.03) !important;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.36) !important;
+  border-radius: 8px !important;
+  border: 3px solid transparent !important;
+  background-clip: padding-box !important;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.56) !important;
+}
+
+/* 针对 Element 表格滚动区的强制覆盖（更具体） */
+.el-table__body-wrapper::-webkit-scrollbar {
+  height: 14px !important;
+  width: 14px !important;
+}
+.el-table__body-wrapper::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.36) !important;
+  border-radius: 8px !important;
+}
+
+/* 2) Firefox */
+html, body, .el-table__body-wrapper, .custom-theme {
+  scrollbar-width: auto !important; /* auto | thin | none */
+  scrollbar-color: rgba(0,0,0,0.36) rgba(0,0,0,0.03) !important;
+}
+
+/* 如果主题使用 .custom-theme 前缀，额外覆盖 */
+.custom-theme ::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.36) !important;
+}
+
+/* 保底：为出现横向滚动的表格再预留一点内/外边距，避免被 sticky 分页遮挡 */
+.el-table__body-wrapper.h-scroll {
+  padding-bottom: 20px !important;
+}
+.el-table.h-scroll {
+  margin-bottom: 20px !important;
+}
+
+/* 手动分切弹窗专用样式，改善对话框宽度、表格滚动与分页遮挡 */
+.manual-slitting-dialog .el-dialog__body {
+  padding: 8px 16px !important;
+}
+.manual-slitting-dialog .manual-schedule-table {
+  max-height: 320px !important;
+  overflow: auto !important;
+}
+.manual-slitting-dialog .el-table__body-wrapper {
+  padding-bottom: 18px !important; /* 预留空间给滚动条 */
+}
+.manual-slitting-dialog .pagination-container {
+  position: static !important;
+  box-shadow: none !important;
+}
+
+/* 小屏幕下对话框内表格显示优化 */
+@media (max-width: 1280px) {
+  .manual-slitting-dialog {
+    max-width: 96% !important;
+  }
+  .manual-slitting-dialog .manual-schedule-table {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+}
+
+/* 微调：表格内容列允许换行，避免超出页面 */
+.manual-slitting-dialog .el-table .cell {
+  white-space: normal !important;
+  word-break: break-word !important;
+}
+
+

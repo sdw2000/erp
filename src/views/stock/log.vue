@@ -16,6 +16,17 @@
         <el-form-item label="批次号">
           <el-input v-model="searchForm.batchNo" placeholder="请输入批次号" clearable />
         </el-form-item>
+        <el-form-item label="时间范围">
+          <el-date-picker
+            v-model="searchForm.dateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            value-format="yyyy-MM-dd"
+            style="width: 240px"
+          />
+        </el-form-item>
         <el-form-item label="出库汇总">
           <el-switch v-model="outboundSummary" active-text="开启" inactive-text="关闭" />
         </el-form-item>
@@ -51,7 +62,11 @@
         <el-table-column prop="beforeRolls" label="变动前" width="80" align="center" />
         <el-table-column prop="afterRolls" label="变动后" width="80" align="center" />
         <el-table-column prop="refNo" label="关联单号" width="160" />
-        <el-table-column prop="operator" label="操作人" width="90" />
+        <el-table-column prop="operator" label="操作人" width="100">
+          <template slot-scope="scope">
+            {{ getOperatorText(scope.row) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
       </el-table>
 
@@ -81,7 +96,8 @@ export default {
       searchForm: {
         type: '',
         materialCode: '',
-        batchNo: ''
+        batchNo: '',
+        dateRange: null
       },
       list: [],
       loading: false,
@@ -95,7 +111,17 @@ export default {
     async fetchData() {
       this.loading = true
       try {
-        const params = { page: this.pagination.page, size: this.pagination.size, ...this.searchForm }
+        const params = {
+          page: this.pagination.page,
+          size: this.pagination.size,
+          type: this.searchForm.type || undefined,
+          materialCode: this.searchForm.materialCode || undefined,
+          batchNo: this.searchForm.batchNo || undefined
+        }
+        if (this.searchForm.dateRange && this.searchForm.dateRange.length === 2) {
+          params.startDate = this.searchForm.dateRange[0]
+          params.endDate = this.searchForm.dateRange[1]
+        }
         const useOutboundSummary = this.outboundSummary && String(this.searchForm.type || '').toUpperCase() === 'OUT'
         const requestFn = useOutboundSummary ? getOutboundSummaryLogList : getStockLogList
         const res = await requestFn(params)
@@ -115,7 +141,7 @@ export default {
       this.fetchData()
     },
     handleReset() {
-      this.searchForm = { type: '', materialCode: '', batchNo: '' }
+      this.searchForm = { type: '', materialCode: '', batchNo: '', dateRange: null }
       this.outboundSummary = true
       this.handleSearch()
     },
@@ -138,6 +164,9 @@ export default {
     getTypeText(type) {
       const map = { 'IN': '入库', 'OUT': '出库', 'ADJUST': '调整' }
       return map[type] || type
+    },
+    getOperatorText(row) {
+      return row.operator || '-'
     }
   }
 }

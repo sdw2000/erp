@@ -25,17 +25,11 @@
   <block wx:for="{{list}}" wx:key="id">
     <view class="card">
       <view class="tag">报工ID: {{item.id || '-'}}</view>
-      <view class="muted" style="color: #333; font-weight: bold;">订单号: {{item.order_no || item.orderNo || '非订单/样卷'}}</view>
-      <view class="muted">规格: {{item.spec_desc || item.specDesc || '-'}}</view>
       <view class="muted">开始: {{item.start_time || item.startTime || '-'}}</view>
       <view class="muted">结束: {{item.end_time || item.endTime || '-'}}</view>
-      <view class="muted">产量: {{item.produced_qty || item.producedQty || '-'}}卷</view>
-      <view class="muted">操作人: {{item.operator_name || item.operatorName || item.operator || '-'}}</view>
+      <view class="muted">产量: {{item.produced_qty || item.producedQty || '-'}}</view>
+      <view class="muted">操作人: {{item.operator || '-'}}</view>
       <view class="muted">备注: {{item.remark || '-'}}</view>
     </view>
   </block>
-
-  <view class="muted" style="text-align: center; padding: 20rpx;" wx:if="{{list.length > 0 && !hasMore}}">
-    已加载全部记录
-  </view>
 </view>

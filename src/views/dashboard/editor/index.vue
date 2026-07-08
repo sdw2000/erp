@@ -65,10 +65,14 @@
             <el-table-column prop="orderNo" label="订单号" width="120" />
             <el-table-column prop="materialCode" label="料号" width="140" show-overflow-tooltip />
             <el-table-column prop="specDesc" label="规格" min-width="180" show-overflow-tooltip />
-            <el-table-column prop="taskType" label="工序" width="90" align="center" />
-            <el-table-column prop="staffName" label="报工人" width="100" align="center" />
             <el-table-column prop="outputQty" label="卷数" width="80" align="right" />
             <el-table-column prop="outputSqm" label="平米数" width="100" align="right" />
+            <el-table-column prop="taskType" label="工序" width="90" align="center">
+              <template slot-scope="scope">
+                {{ getProcessText(scope.row.taskType) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="staffName" label="报工人" width="100" align="center" />
             <el-table-column prop="shiftCode" label="班次" width="70" align="center" />
           </el-table>
           <pagination
@@ -237,11 +241,23 @@ export default {
         todayReportCount: Number(source.todayReportCount || 0)
       }
     },
+    getProcessText(type) {
+      if (!type) return '-'
+      const map = {
+        'COATING': '涂布',
+        'REWINDING': '复卷',
+        'SLITTING': '分切',
+        'PACKAGING': '包装',
+        'FINISHING': '完工'
+      }
+      return map[type] || type
+    },
     normalizeTop(data = []) {
       const categories = []
       const values = []
       ;(Array.isArray(data) ? data : []).slice(0, 10).forEach(item => {
-        categories.push(item.processName || item.name || '-')
+        const rawName = item.processName || item.name || '-'
+        categories.push(this.getProcessText(rawName))
         values.push(Number(item.totalArea || item.value || 0))
       })
       return { categories, data: values }
@@ -279,7 +295,7 @@ export default {
         yearQty: 0,
         todayReportCount: 0
       }
-      this.topProcesses = { categories: ['COATING', 'REWINDING', 'SLITTING'], data: [0, 0, 0] }
+      this.topProcesses = { categories: ['涂布', '复卷', '分切'], data: [0, 0, 0] }
       this.yearTrend = { xAxis: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'], series: [{ name: '报工面积', data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }] }
       this.todayReports = []
     },

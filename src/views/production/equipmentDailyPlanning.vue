@@ -80,7 +80,7 @@
         </el-form-item>
       </el-form>
 
-      <el-table v-loading="loadingStatus" :data="dailyStatusList" stripe border style="width: 100%">
+      <el-table v-loading="loadingStatus" :data="dailyStatusList" stripe border style="width: 100%" max-height="calc(100vh - 280px)">
         <el-table-column prop="equipmentCode" label="设备编号" width="110" />
         <el-table-column prop="equipmentName" label="设备名称" width="150" />
         <el-table-column prop="equipmentTypeName" label="设备类型" width="120" />
@@ -195,7 +195,7 @@
         </el-form-item>
       </el-form>
 
-      <el-table v-loading="loadingAssignment" :data="assignment.list" stripe border style="width: 100%">
+      <el-table v-loading="loadingAssignment" :data="assignment.list" stripe border style="width: 100%" max-height="400px">
         <el-table-column type="index" label="#" width="50" align="center" />
         <el-table-column label="班次" width="180">
           <template slot-scope="scope">

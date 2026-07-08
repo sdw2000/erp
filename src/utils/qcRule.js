@@ -89,7 +89,7 @@ function compareByRuleMode(normalized, actualValue, actualNumber) {
     }
   }
 
-  if (normalized.judgeMode === 'min') {
+  if (normalized.judgeMode === 'min' || normalized.judgeMode === 'gte') {
     if (actualNumber === null || normalized.min === '') {
       return { status: 'pending', passed: false, message: '最小值判定所需数据不足' }
     }
@@ -97,7 +97,7 @@ function compareByRuleMode(normalized, actualValue, actualNumber) {
     return { status: passed ? 'pass' : 'fail', passed, message: passed ? '达到下限要求' : `低于下限(${normalized.min})` }
   }
 
-  if (normalized.judgeMode === 'max') {
+  if (normalized.judgeMode === 'max' || normalized.judgeMode === 'lte') {
     if (actualNumber === null || normalized.max === '') {
       return { status: 'pending', passed: false, message: '最大值判定所需数据不足' }
     }
@@ -128,13 +128,13 @@ function compareSingleRule(rule, actual) {
   const actualValues = parseActualValues(actual)
 
   const nonEmptyValues = actualValues.filter(v => !(v === '' || v === null || v === undefined))
-  if (nonEmptyValues.length !== 5) {
+  if (nonEmptyValues.length === 0) {
     return {
       passed: false,
       status: 'pending',
       actual: actualValues,
       expected: normalized,
-      message: `请录入5个实测值（当前${nonEmptyValues.length}个）`
+      message: '请录入实测值'
     }
   }
 

@@ -1,24 +1,108 @@
-<view class="container">
-  <view class="card" wx:if="{{canWarehouse}}">
-    <view class="title">仓库模块</view>
-    <view class="muted">按原有接口提供不同业务入口</view>
-    <button class="btn-primary" bindtap="goPurchaseScanInbound">采购扫码入库</button>
-    <button class="btn-secondary" bindtap="goCoatingInbound">涂布入库</button>
-    <button class="btn-secondary" bindtap="goPackagingReturnInbound">包装车间退仓</button>
-    <button class="btn-primary" style="background: #10b981; color: white;" bindtap="goWorkshopReturn">车间批量退料</button>
-    <button class="btn-primary" style="background: #3b82f6; color: white;" bindtap="goWorkshopReceive">车间批量收货</button>
-    <button class="btn-secondary" bindtap="goCoatingIssue">涂布领料</button>
-    <button class="btn-secondary" bindtap="goPackagingIssue">包装领料</button>
-    <button class="btn-secondary" bindtap="goSalesOutbound">销售出库</button>
-
-    <view class="muted" style="margin-top: 16rpx;">通用入口</view>
-    <button class="btn-secondary" bindtap="goOutbound">成品出库（通用）</button>
-    <button class="btn-secondary" bindtap="goInbound">完工入库（通用）</button>
-    <button class="btn-secondary" bindtap="goStocktake">扫码盘点</button>
+﻿<view class="container warehouse-bg">
+  <view class="hero blue-grad">
+    <view class="hero-title">仓库管理中心</view>
+    <view class="hero-subtitle">原材料 / 半成品 / 成品 数字化流转</view>
   </view>
 
-  <view class="card" wx:else>
-    <view class="title">仓库模块</view>
-    <view class="muted">当前账号无仓库权限</view>
+  <view class="main-content">
+    <view class="card shadow-sm" wx:if="{{canWarehouse}}">
+      <view class="tool-section">
+        <view class="section-label">快速扫码</view>
+        <view class="scan-btn-large" bindtap="onUniversalScan">
+          <view class="scan-icon">🔍</view>
+          <view class="scan-text">全能扫码识别</view>
+          <view class="scan-hint">支持库存、报工标签、托盘码</view>
+        </view>
+      </view>
+
+      <view class="tool-grid">
+        <view class="tool-item" bindtap="goPurchaseScanInbound">
+          <view class="tool-icon blue shadow-sm">📥</view>
+          <view class="tool-name">采购入库</view>
+        </view>
+        <view class="tool-item" bindtap="goCoatingInbound">
+          <view class="tool-icon green shadow-sm">🏭</view>
+          <view class="tool-name">涂布入库</view>
+        </view>
+        <view class="tool-item" bindtap="goInbound">
+          <view class="tool-icon orange shadow-sm">✅</view>
+          <view class="tool-name">完工入库</view>
+        </view>
+        <view class="tool-item" bindtap="goStocktake">
+          <view class="tool-icon purple shadow-sm">⚖️</view>
+          <view class="tool-name">扫码盘点</view>
+        </view>
+        <view class="tool-item" bindtap="goCoatingIssue">
+          <view class="tool-icon teal shadow-sm">📦</view>
+          <view class="tool-name">涂布领料</view>
+        </view>
+        <view class="tool-item" bindtap="goPackagingIssue">
+          <view class="tool-icon indigo shadow-sm">🎀</view>
+          <view class="tool-name">包装领料</view>
+        </view>
+        <view class="tool-item" bindtap="goSalesOutbound">
+          <view class="tool-icon red shadow-sm">🚚</view>
+          <view class="tool-name">销售出库</view>
+        </view>
+        <view class="tool-item" bindtap="goOutbound">
+          <view class="tool-icon gray shadow-sm">📤</view>
+          <view class="tool-name">通用出库</view>
+        </view>
+        <view class="tool-item" bindtap="goPackagingReturnInbound">
+          <view class="tool-icon cyan shadow-sm">↩️</view>
+          <view class="tool-name">车间退仓</view>
+        </view>
+        <view class="tool-item" bindtap="goWorkshopWarehouse">
+          <view class="tool-icon brown shadow-sm">🏚️</view>
+          <view class="tool-name">线边仓</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card" wx:else>
+      <view class="title">仓库模块</view>
+      <view class="muted">当前账号无仓库权限，请联系管理员</view>
+    </view>
+
+    <!-- 扫码结果展示弹窗 -->
+    <view class="modal-mask" wx:if="{{showScanModal}}" bindtap="closeScanModal"></view>
+    <view class="modal-content {{showScanModal ? 'modal-show' : ''}}" wx:if="{{showScanModal}}">
+      <view class="modal-header">
+        <view class="modal-title">扫描结果</view>
+        <view class="modal-close" bindtap="closeScanModal">×</view>
+      </view>
+      <view class="modal-body">
+        <view class="scan-result-type tag-{{scanResult.tag}}">{{scanResult.tag === 'STOCK' ? '现有记录' : (scanResult.tag === 'WORKSHOP' ? '车间在制' : '生产任务')}}</view>
+        
+        <view class="info-list">
+          <view class="info-item">
+            <view class="info-label">标识/批号</view>
+            <view class="info-value highlight">{{scanResult.qrCode}}</view>
+          </view>
+          <view class="info-item">
+            <view class="info-label">品名料号</view>
+            <view class="info-value">{{scanResult.materialCode}}</view>
+          </view>
+          <view class="info-item" wx:if="{{scanResult.materialName}}">
+            <view class="info-label">名称规格</view>
+            <view class="info-value">{{scanResult.materialName}}</view>
+          </view>
+          <view class="info-item">
+            <view class="info-label">{{scanResult.tag === 'PRODUCTION_TASK' ? '计划面积' : '实时面积'}}</view>
+            <view class="info-value">{{scanResult.area}} ㎡</view>
+          </view>
+          <view class="info-item" wx:if="{{scanResult.status}}">
+            <view class="info-label">当前状态</view>
+            <view class="info-value">{{scanResult.status}}</view>
+          </view>
+        </view>
+      </view>
+      <view class="modal-footer">
+        <button class="btn-primary" bindtap="onScanAction">
+          {{scanResult.tag === 'PRODUCTION_TASK' ? '前往生产报工' : '前往入库审批'}}
+        </button>
+        <button class="btn-secondary" bindtap="closeScanModal">关闭</button>
+      </view>
+    </view>
   </view>
 </view>

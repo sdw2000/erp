@@ -312,12 +312,6 @@ export const asyncRoutes = [
         meta: { title: '线边仓进出明细', icon: 'el-icon-notebook-2', roles: ['warehouse', 'admin', 'production'] }
       },
       {
-        path: 'workshop-warehouse',
-        component: () => import('@/views/stock/workshop-warehouse'),
-        name: 'StockWorkshopWarehouse',
-        meta: { title: '线边仓实时看板', icon: 'el-icon-monitor', roles: ['warehouse', 'admin'] }
-      },
-      {
         path: 'outbound',
         component: () => import('@/views/stock/outbound'),
         name: 'OutboundRequest',
@@ -370,6 +364,12 @@ export const asyncRoutes = [
         component: () => import('@/views/production/safetyStock'),
         name: 'TapeSafetyStock',
         meta: { title: '胶带安全库存', icon: 'chart', roles: ['warehouse', 'admin', 'production'] }
+      },
+      {
+        path: 'stocktake',
+        component: () => import('@/views/stock/stocktake'),
+        name: 'WarehouseStocktake',
+        meta: { title: '库存盘点', icon: 'el-icon-check', roles: ['warehouse', 'admin'] }
       }
     ]
   },
@@ -549,7 +549,7 @@ export const asyncRoutes = [
     path: '/basic-data',
     component: Layout,
     name: 'BasicData',
-    redirect: '/basic-data/company-config',
+    redirect: '/basic-data/print-config',
     meta: { title: '基本资料', icon: 'documentation', roles: ['production', 'admin', 'packaging', 'packing', 'coating'] },
     children: [
       {
@@ -568,7 +568,7 @@ export const asyncRoutes = [
         path: 'label-qr-rule-config',
         component: () => import('@/views/production/labelQrRuleConfig'),
         name: 'LabelQrRuleConfig',
-        meta: { title: '二维码规则管理', icon: 'el-icon-document', roles: ['production', 'admin', 'packaging', 'packing', 'coating'] }
+        meta: { title: '二维码规则管理', icon: 'el-icon-document', roles: ['production', 'admin', 'packaging', 'packing'] }
       }
     ]
   },

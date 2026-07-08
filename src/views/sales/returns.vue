@@ -35,24 +35,29 @@
       </div>
 
       <el-table ref="returnsTable" class="returns-table" :data="list" stripe style="width:100%">
-        <el-table-column type="index" label="序号" width="60" align="center" :index="indexMethod" />
-        <el-table-column prop="returnNo" label="退货单号" min-width="123" class-name="return-no-col" />
-        <el-table-column label="客户" min-width="96" class-name="customer-col">
+        <el-table-column type="index" label="序号" width="50" align="center" :index="indexMethod" />
+        <el-table-column prop="returnNo" label="单号" min-width="110" class-name="return-no-col" />
+        <el-table-column label="客户" min-width="90" class-name="customer-col">
           <template slot-scope="scope">{{ getCustomerDisplay(scope.row.customer) }}</template>
         </el-table-column>
-        <el-table-column prop="reason" label="退货原因" min-width="150" show-overflow-tooltip>
+        <el-table-column prop="reason" label="原因" min-width="120" show-overflow-tooltip>
           <template slot-scope="scope">{{ scope.row.reason || '-' }}</template>
         </el-table-column>
-        <el-table-column prop="returnDate" label="退货日期" width="120">
+        <el-table-column prop="returnDate" label="日期" width="90">
           <template slot-scope="scope">{{ formatReturnDateShort(scope.row.returnDate) }}</template>
         </el-table-column>
-        <el-table-column label="总面积(㎡)" width="108" class-name="area-col" align="right">
+        <el-table-column label="面积(㎡)" width="90" class-name="area-col" align="right">
           <template slot-scope="scope">{{ formatNumber(scope.row.totalArea) }}</template>
         </el-table-column>
-        <el-table-column label="总金额" width="108" class-name="amount-col" align="right">
+        <el-table-column label="金额" width="100" class-name="amount-col" align="right">
           <template slot-scope="scope">{{ formatAmount(scope.row.totalAmount) }}</template>
         </el-table-column>
-        <el-table-column label="对账金额" width="120" align="right">
+        <el-table-column label="质量成本" width="100" align="right">
+          <template slot-scope="scope">
+            <span :class="{ 'negative-amount': Number(scope.row.qualityCost) > 0 }">{{ formatAmount(scope.row.qualityCost) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="对账金额" width="100" align="right">
           <template slot-scope="scope">
             <span :class="{ 'negative-amount': Number(scope.row.statementAmount) < 0 }">{{ formatAmount(scope.row.statementAmount) }}</span>
           </template>
@@ -117,18 +122,22 @@
             <div class="summary-value">{{ formatNumber(current.totalArea) }}㎡</div>
           </div>
           <div class="summary-card">
-            <div class="summary-label">总金额</div>
+            <div class="summary-label">单总额</div>
             <div class="summary-value">{{ formatAmount(current.totalAmount) }}</div>
           </div>
-          <div class="summary-card negative-card">
-            <div class="summary-label">对账金额</div>
+          <div class="summary-card">
+            <div class="summary-label">质量成本</div>
+            <div class="summary-value" :class="{ 'negative-val': Number(current.qualityCost) > 0 }">{{ formatAmount(current.qualityCost) }}</div>
+          </div>
+          <div class="summary-card statement-card">
+            <div class="summary-label">最终对账</div>
             <div class="summary-value">{{ formatAmount(current.statementAmount) }}</div>
           </div>
         </div>
         <el-table class="returns-table" :data="current.items || []" stripe style="width:100%">
           <el-table-column prop="orderNo" label="订单号" min-width="110" />
           <el-table-column prop="materialCode" label="料号" min-width="110" />
-          <el-table-column label="规格（厚度*宽度*长度）" min-width="130" show-overflow-tooltip>
+          <el-table-column label="规格（厚度μm*宽度mm*长度m）" min-width="130" show-overflow-tooltip>
             <template slot-scope="scope">{{ formatSpecWithUnit(scope.row) }}</template>
           </el-table-column>
           <el-table-column prop="rolls" label="退货数量（R）" min-width="92" />
@@ -162,7 +171,7 @@
           <el-table-column type="index" label="序号" min-width="46" align="center" />
           <el-table-column prop="orderNo" label="订单号" min-width="86" />
           <el-table-column prop="materialCode" label="料号" min-width="126" />
-          <el-table-column label="规格（厚度*宽度*长度）" min-width="99" show-overflow-tooltip>
+          <el-table-column label="规格（厚度μm*宽度mm*长度m）" min-width="99" show-overflow-tooltip>
             <template slot-scope="scope">{{ formatSpecWithUnit(scope.row) }}</template>
           </el-table-column>
           <el-table-column prop="rolls" label="退货数量（R）" min-width="44" align="right" />
@@ -176,6 +185,7 @@
         <div class="return-print-total">
           退货总面积：{{ formatNumber(printCurrent.totalArea) }}㎡
           &nbsp;&nbsp;&nbsp;退货总金额：{{ formatAmount(printCurrent.totalAmount) }}
+          &nbsp;&nbsp;&nbsp;质量成本：{{ formatAmount(printCurrent.qualityCost) }}
           &nbsp;&nbsp;&nbsp;对账金额：{{ formatAmount(printCurrent.statementAmount) }}
         </div>
         <div class="return-print-signature">
@@ -258,16 +268,46 @@
           </el-row>
           <el-row :gutter="12">
             <el-col :span="8">
-              <el-form-item label="状态">
+              <el-form-item label="单据状态">
                 <el-select v-model="form.status" style="width:100%">
                   <el-option label="草稿" value="draft" />
                   <el-option label="已确认" value="confirmed" />
                 </el-select>
               </el-form-item>
             </el-col>
-            <el-col :span="16">
+            <el-col :span="8">
+              <el-form-item label="对账月份">
+                <el-date-picker
+                  v-model="form.statementMonth"
+                  type="month"
+                  value-format="yyyy-MM"
+                  placeholder="对账归属月份"
+                  style="width:100%"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="质量成本">
+                <el-input-number
+                  v-model="form.qualityCost"
+                  :precision="4"
+                  :step="100"
+                  controls-position="right"
+                  placeholder="质量成本金额"
+                  style="width:100%"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="12">
+            <el-col :span="8">
               <el-form-item label="退货原因">
-                <el-input v-model="form.reason" placeholder="如：品质异常/客户退回/发货差异" />
+                <el-input v-model="form.reason" placeholder="如：品质异常/发货差异" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="16">
+              <el-form-item label="备注说明">
+                <el-input v-model="form.remark" placeholder="其他补充信息" />
               </el-form-item>
             </el-col>
           </el-row>
@@ -279,7 +319,8 @@
             <div class="inline-summary">
               <span class="summary-chip">明细 {{ form.items.length }} 行</span>
               <span class="summary-chip">预计面积 {{ getDraftTotalArea() }} ㎡</span>
-              <span class="summary-chip summary-chip-amount">预计金额 {{ getDraftTotalAmount() }}</span>
+              <span class="summary-chip summary-chip-amount">货值 {{ getDraftTotalAmount() }}</span>
+              <span class="summary-chip summary-chip-amount" style="background:#fee2e2; border-color:#fecaca; color:#dc2626;">对账预计 -{{ formatAmount(Number(getDraftTotalAmount()) + Number(form.qualityCost || 0)) }}</span>
             </div>
           </div>
           <div class="toolbar toolbar-panel">
@@ -310,13 +351,14 @@
           </div>
 
           <el-table class="returns-table returns-edit-table" :data="form.items" border stripe style="width:100%">
-            <el-table-column label="料号" min-width="170">
+            <el-table-column label="料号" min-width="140">
               <template slot-scope="scope">
                 <el-autocomplete
                   v-model="scope.row.materialCode"
                   size="mini"
+                  class="compact-input"
                   :fetch-suggestions="queryMaterialSuggestions"
-                  placeholder="请输入料号，如 yunfei001"
+                  placeholder="料号"
                   @select="(item) => handleMaterialCodeSelect(scope.row, item)"
                   @input="() => handleMaterialCodeInput(scope.row)"
                 >
@@ -329,70 +371,67 @@
                 </el-autocomplete>
               </template>
             </el-table-column>
-            <el-table-column label="规格（厚度*宽度*长度）" min-width="240" show-overflow-tooltip>
+            <el-table-column label="规格(μm*mm*m)" min-width="175" show-overflow-tooltip>
               <template slot-scope="scope">
-                <div class="spec-cell-scroll">
-                  <div class="spec-edit-row">
+                <div class="spec-edit-group">
                     <el-input
                       :value="scope.row.thickness === null || scope.row.thickness === undefined ? '' : String(scope.row.thickness)"
                       size="mini"
-                      class="spec-input"
-                      placeholder="厚度"
+                      class="spec-input-tiny"
+                      placeholder="厚"
                       :disabled="isFreightItem(scope.row)"
                       @input="val => { scope.row.thickness = val }"
                     />
-                    <span class="spec-unit">μm *</span>
+                    <span class="spec-dot">×</span>
                     <el-input
                       :value="scope.row.width === null || scope.row.width === undefined ? '' : String(scope.row.width)"
                       size="mini"
-                      class="spec-input"
-                      placeholder="宽度"
+                      class="spec-input-tiny"
+                      placeholder="宽"
                       :disabled="isFreightItem(scope.row)"
                       @input="val => { scope.row.width = val }"
                     />
-                    <span class="spec-unit">mm *</span>
+                    <span class="spec-dot">×</span>
                     <el-input
                       :value="scope.row.length === null || scope.row.length === undefined ? '' : String(scope.row.length)"
                       size="mini"
-                      class="spec-input"
-                      placeholder="长度"
+                      class="spec-input-tiny"
+                      placeholder="长"
                       :disabled="isFreightItem(scope.row)"
                       @input="val => { scope.row.length = val }"
                     />
-                    <span class="spec-unit">m</span>
-                  </div>
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="退货数量（R）" min-width="82">
-              <template slot-scope="scope"><el-input v-model="scope.row.rolls" size="mini" @input="validateRowRolls(scope.row)" /></template>
+            <el-table-column label="退货(R)" width="75">
+              <template slot-scope="scope"><el-input v-model="scope.row.rolls" size="mini" class="compact-input center-input" @input="validateRowRolls(scope.row)" /></template>
             </el-table-column>
-            <el-table-column label="已退卷数（R）" min-width="86">
-              <template slot-scope="scope">{{ scope.row.returnedRolls || 0 }}</template>
+            <el-table-column label="已退(R)" width="65" align="center">
+              <template slot-scope="scope"><span class="tiny-num">{{ scope.row.returnedRolls || 0 }}</span></template>
             </el-table-column>
-            <el-table-column label="可退卷数（R）" min-width="86">
-              <template slot-scope="scope">{{ scope.row.availableReturnRolls == null ? '-' : scope.row.availableReturnRolls }}</template>
+            <el-table-column label="可退(R)" width="65" align="center">
+              <template slot-scope="scope"><span class="tiny-num">{{ scope.row.availableReturnRolls == null ? '-' : scope.row.availableReturnRolls }}</span></template>
             </el-table-column>
-            <el-table-column label="退货数量/m²" min-width="90">
-              <template slot-scope="scope">{{ calcSqm(scope.row) }}</template>
+            <el-table-column label="面积" width="80" align="right">
+              <template slot-scope="scope"><span class="tiny-num">{{ calcSqm(scope.row) }}</span></template>
             </el-table-column>
-            <el-table-column label="计价单位" min-width="90">
+            <el-table-column label="单位" width="65">
               <template slot-scope="scope">
-                <el-select v-model="scope.row.priceUnit" size="mini" style="width:100%">
+                <el-select v-model="scope.row.priceUnit" size="mini" class="compact-select">
                   <el-option label="㎡" value="㎡" />
                   <el-option label="卷" value="卷" />
                   <el-option label="m" value="m" />
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column label="单价" min-width="110">
-              <template slot-scope="scope"><el-input v-model="scope.row.unitPrice" size="mini" /></template>
+            <el-table-column label="单价" width="90">
+              <template slot-scope="scope"><el-input v-model="scope.row.unitPrice" size="mini" class="compact-input right-input" /></template>
             </el-table-column>
-            <el-table-column label="金额/元" min-width="88">
-              <template slot-scope="scope">{{ calcAmount(scope.row) }}</template>
+            <el-table-column label="金额" width="100" align="right">
+              <template slot-scope="scope"><span class="tiny-num font-bold">{{ calcAmount(scope.row) }}</span></template>
             </el-table-column>
-            <el-table-column label="备注" min-width="90">
-              <template slot-scope="scope"><el-input v-model="scope.row.remark" size="mini" /></template>
+            <el-table-column label="备注" min-width="80">
+              <template slot-scope="scope"><el-input v-model="scope.row.remark" size="mini" class="compact-input" /></template>
             </el-table-column>
             <el-table-column label="操作" width="58" align="center">
               <template slot-scope="scope">
@@ -419,7 +458,7 @@
       <el-table ref="selectItemsTable" class="returns-table" :data="selectableOrderItems" stripe border style="width:100%" @selection-change="handleSelectableItemsChange">
         <el-table-column type="selection" width="55" :selectable="isSelectableOrderItem" />
         <el-table-column prop="materialCode" label="料号" min-width="140" />
-        <el-table-column label="规格（厚度*宽度*长度）" min-width="150" show-overflow-tooltip>
+        <el-table-column label="规格（厚度μm*宽度mm*长度m）" min-width="150" show-overflow-tooltip>
           <template slot-scope="scope">{{ formatSpecWithUnit(scope.row) }}</template>
         </el-table-column>
         <el-table-column prop="rolls" label="订单卷数" width="90" />
@@ -519,6 +558,8 @@ export default {
         returnDate: '',
         status: 'confirmed',
         reason: '',
+        qualityCost: 0,
+        statementMonth: '',
         remark: '',
         items: []
       }
@@ -666,7 +707,7 @@ export default {
       const t = row.thickness === null || row.thickness === undefined || row.thickness === '' ? '0' : String(row.thickness).trim()
       const w = row.width === null || row.width === undefined || row.width === '' ? '0' : String(row.width).trim()
       const l = row.length === null || row.length === undefined || row.length === '' ? '0' : String(row.length).trim()
-      return `${t}μm*${w}mm*${l}m`
+      return `${t}*${w}*${l}`
     },
     isFreightMaterialCode(materialCode) {
       return String(materialCode || '').trim().toLowerCase() === 'yunfei001'
@@ -695,6 +736,8 @@ export default {
       this.form = this.emptyForm()
       const d = new Date()
       this.form.returnDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      // 默认对账月份为当前月
+      this.form.statementMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       await this.loadReturnNo()
       this.editVisible = true
     },
@@ -1350,13 +1393,13 @@ export default {
 </script>
 
 <style scoped>
-.sales-returns { padding: 20px; }
+.sales-returns { padding: 20px 20px 40px; }
 .returns-header { display:flex; justify-content:space-between; align-items:center; }
 .card-title { font-size:16px; font-weight:600; }
 .search-area { margin-bottom: 16px; padding: 14px 16px; background:#f8fafc; border:1px solid #ebeef5; border-radius:10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.7); }
 .search-area .el-row { display:flex; flex-wrap:wrap; align-items:center; }
 .search-area .el-button + .el-button { margin-left: 8px; }
-.returns-table { border: 1px solid #ebeef5; border-radius: 8px; overflow: hidden; }
+.returns-table { border: 1px solid #ebeef5; border-radius: 8px; }
 .returns-table /deep/ th.el-table__cell { background: #f5f7fa; color: #606266; font-weight: 600; }
 .returns-table /deep/ .el-table__row td.el-table__cell { padding-top: 10px; padding-bottom: 10px; }
 .returns-table /deep/ th.el-table__cell .cell,
@@ -1382,39 +1425,44 @@ export default {
 .section-title { margin-bottom: 14px; font-size: 14px; font-weight: 600; color:#303133; }
 .section-title-inline { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 .inline-summary { display:flex; gap:8px; flex-wrap:wrap; }
-.summary-chip { display:inline-flex; align-items:center; height:28px; padding:0 12px; background:#f4f8ff; border:1px solid #d9ecff; border-radius:14px; color:#409eff; font-size:12px; }
-.summary-chip-amount { background:#fff7ed; border-color:#fed7aa; color:#dd6b20; }
-.detail-summary-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; margin-bottom:16px; }
-.summary-card { padding:14px 16px; background:#f8fafc; border:1px solid #ebeef5; border-radius:10px; }
-.summary-label { margin-bottom:6px; color:#909399; font-size:12px; }
-.summary-value { color:#303133; font-size:15px; font-weight:600; }
-.negative-card .summary-value { color:#f56c6c; }
+.summary-chip { display:inline-flex; align-items:center; height:24px; padding:0 10px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:4px; color:#475569; font-size:12px; font-weight: 500; }
+.summary-chip-amount { background:#ecfdf5; border-color:#d1fae5; color:#059669; }
+.detail-summary-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:12px; margin-bottom:16px; }
+.summary-card { padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; }
+.summary-label { margin-bottom:4px; color:#64748b; font-size:11px; text-transform: uppercase; letter-spacing: 0.025em; }
+.summary-value { color:#1e293b; font-size:14px; font-weight:700; font-family: "SF Mono", "Monaco", "Consolas", monospace; }
+.negative-val { color:#e11d48; }
+.statement-card { background: #f0fdf4; border-color: #dcfce7; }
+.statement-card .summary-value { color: #166534; }
+.statement-card .summary-label { color: #15803d; }
 .returns-edit-table /deep/ .el-input__inner,
 .returns-edit-table /deep/ .el-select .el-input__inner,
 .returns-edit-table /deep/ .el-input-number { border-radius: 6px; }
-.spec-cell-scroll {
-  width: 250px;
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: 2px;
-}
-.spec-cell-scroll::-webkit-scrollbar { height: 6px; }
-.spec-edit-row { display:inline-flex; align-items:center; gap:4px; min-width:250px; white-space:nowrap; }
-.spec-input { width: 58px; min-width: 58px; }
+.compact-input /deep/ .el-input__inner { padding: 0 8px; height: 28px; line-height: 28px; border-radius: 4px; font-size: 13px; }
+.compact-select /deep/ .el-input__inner { padding: 0 4px; height: 28px; line-height: 28px; border-radius: 4px; font-size: 12px; }
+.center-input /deep/ .el-input__inner { text-align: center; }
+.right-input /deep/ .el-input__inner { text-align: right; }
+.tiny-num { font-family: "SF Mono", "Monaco", "Consolas", monospace; font-size: 13px; color: #475569; }
+.font-bold { font-weight: 600; color: #1e293b; }
+.spec-edit-group { display: flex; align-items: center; background: #fff; border: 1px solid #dcdfe6; border-radius: 4px; padding: 0 4px; transition: border-color 0.2s; }
+.spec-edit-group:focus-within { border-color: #409eff; }
+.spec-input-tiny { width: 45px !important; }
+.spec-input-tiny /deep/ .el-input__inner { border: none !important; padding: 0 !important; height: 26px !important; line-height: 26px !important; text-align: center; background: transparent !important; font-size: 13px; }
+.spec-dot { color: #94a3b8; margin: 0 2px; font-size: 12px; pointer-events: none; }
 .material-suggestion-item { display:flex; justify-content:space-between; gap:10px; }
 .suggestion-code { color:#303133; font-weight:600; }
 .suggestion-name { color:#909399; }
-.returns-edit-table /deep/ .spec-input .el-input__inner {
-  text-align: center;
-  padding: 0 4px;
-}
-.spec-unit { color:#909399; font-size:11px; white-space:nowrap; }
+
 .returns-edit-table /deep/ th.el-table__cell .cell,
 .returns-edit-table /deep/ td.el-table__cell .cell,
 .returns-detail-dialog .returns-table /deep/ th.el-table__cell .cell,
 .returns-detail-dialog .returns-table /deep/ td.el-table__cell .cell,
 .return-print-table /deep/ th.el-table__cell .cell,
+.return-print-table /deep/ td.el-table__cell .cell {
+  white-space: normal !important;
+  word-break: break-word !important;
+  line-height: 1.25;
+}
 .return-print-table /deep/ td.el-table__cell .cell {
   white-space: normal !important;
   word-break: break-word !important;

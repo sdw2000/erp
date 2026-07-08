@@ -1,5 +1,14 @@
 const { getToken, getUserInfo, clearToken } = require('../../utils/auth')
-const { createInboundRequest, getInboundList, getTapeStockList, approveInbound, cancelInbound, getScanInboundDocument, submitInboundScan } = require('../../api/stock')
+const {
+  createInboundRequest,
+  getInboundList,
+  getTapeStockList,
+  getStockByQrCode,
+  approveInbound,
+  cancelInbound,
+  getScanInboundDocument,
+  submitInboundScan
+} = require('../../api/stock')
 
 Page({
   data: {
@@ -126,7 +135,7 @@ Page({
     const userInfo = getUserInfo() || {}
     const name = userInfo.name || userInfo.username || ''
     const roles = Array.isArray(userInfo.roles) ? userInfo.roles : []
-    const canWarehouse = roles.includes('warehouse') || roles.includes('admin')
+    const canWarehouse = roles.includes('warehouse') || roles.includes('admin') || roles.includes('packing') || roles.includes('packaging')
     if (name && !this.data.applicant) {
       this.setData({ applicant: name })
     }
@@ -245,23 +254,27 @@ Page({
     }
     this.setData({ queryLoading: true })
     try {
-      const res = await getTapeStockList({ page: 1, size: 1, qrCode })
-      const records = (res && res.data && res.data.records) || []
-      if (!records.length) {
-        wx.showToast({ title: '未找到对应库存', icon: 'none' })
+      const res = await getStockByQrCode(qrCode)
+      const stock = res && res.data
+      if (!stock) {
+        wx.showToast({ title: '未找到对应库存或任务', icon: 'none' })
         return
       }
-      const stock = records[0]
+      
+      const bizType = stock.bizType
+      const isTask = bizType === 'PRODUCTION_TASK'
+
       this.setData({
         materialCode: stock.materialCode || this.data.materialCode,
         productName: stock.productName || this.data.productName,
-        batchNo: stock.batchNo || this.data.batchNo,
-        customerBatchNo: stock.batchNo || this.data.customerBatchNo,
+        batchNo: stock.batchNo || stock.taskNo || this.data.batchNo,
+        customerBatchNo: stock.batchNo || stock.taskNo || this.data.customerBatchNo,
         thickness: stock.thickness || this.data.thickness,
         width: stock.width || this.data.width,
-        length: stock.length || this.data.length
+        length: stock.length || stock.plannedArea || stock.targetArea || this.data.length,
+        remark: isTask ? `生产任务:${stock.taskNo} (自动识别)` : this.data.remark
       })
-      wx.showToast({ title: '已带出库存信息', icon: 'success' })
+      wx.showToast({ title: isTask ? '已带出生产任务信息' : '已带出库存信息', icon: 'success' })
     } catch (e) {
       wx.showToast({ title: (e && (e.msg || e.message)) || '二维码查询失败', icon: 'none' })
     } finally {

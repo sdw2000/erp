@@ -54,7 +54,7 @@
           <input ref="staffFileInput" type="file" accept=".xlsx,.xls" style="display:none" @change="onStaffFileChange">
 
           <!-- 人员表格 -->
-          <el-table v-loading="staffLoading" :data="staffList" border stripe style="margin-top: 15px" @selection-change="handleStaffSelectionChange">
+           <el-table ref="staffTable" v-loading="staffLoading" :data="staffList" border stripe style="margin-top: 15px" @selection-change="handleStaffSelectionChange">
             <el-table-column type="selection" width="50" />
             <el-table-column type="index" label="序号" width="60" align="center" />
             <el-table-column prop="staffCode" label="工号" width="100" />
@@ -143,7 +143,7 @@
           </div>
 
           <!-- 班组表格 -->
-          <el-table v-loading="teamLoading" :data="teamList" border stripe>
+           <el-table ref="teamTable" v-loading="teamLoading" :data="teamList" border stripe>
             <el-table-column prop="teamCode" label="班组编号" width="120" />
             <el-table-column prop="teamName" label="班组名称" width="150" />
             <el-table-column prop="workshopName" label="所属车间" width="120" />
@@ -729,9 +729,12 @@ import {
   getOvertimeList, addOvertime, updateOvertime, approveOvertime as approveOvertimeApi, deleteOvertime as deleteOvertimeApi
 } from '@/api/staff'
 import { getWorkshopList, getEquipmentTypeList } from '@/api/equipment'
+import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
 export default {
   name: 'ProductionStaff',
+  mixins: [elTableAutoLayout],
+  tableLayoutRefs: ['staffTable', 'teamTable'],
   data() {
     return {
       activeTab: 'staff',
@@ -1006,6 +1009,7 @@ export default {
         this.$message.error('加载人员列表失败')
       } finally {
         this.staffLoading = false
+        this.scheduleTableLayout()
       }
     },
 
@@ -1326,6 +1330,7 @@ export default {
         this.$message.error('加载班组列表失败')
       } finally {
         this.teamLoading = false
+        this.scheduleTableLayout()
       }
     },
 

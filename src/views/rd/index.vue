@@ -2,7 +2,8 @@
   <div class="rd-container">
     <el-card>
       <div slot="header" class="clearfix">
-        <span>产品规格管理</span>        <div style="float: right">
+        <span>产品规格管理</span>
+        <div style="float: right">
           <el-button v-if="$canEdit()" type="primary" plain icon="el-icon-collection-tag" size="small" @click="openColorDictDialog">颜色字典维护</el-button>
           <el-button v-if="$canImportExport()" type="success" icon="el-icon-download" size="small" @click="handleDownloadTemplate">下载模板</el-button>
           <el-button v-if="$canImportExport()" type="warning" icon="el-icon-upload2" size="small" @click="handleImport">导入</el-button>
@@ -41,6 +42,13 @@
         <el-table-column type="index" label="序号" width="55" align="center" :index="indexMethod" />
         <el-table-column prop="productName" label="产品名称" width="250" show-overflow-tooltip />
         <el-table-column prop="materialCode" label="胶带料号" width="200" show-overflow-tooltip />
+        <el-table-column prop="targetWarehouse" label="目标仓库" width="100" align="center">
+          <template slot-scope="scope">
+            <el-tag :type="getWarehouseTagType(scope.row.targetWarehouse)" size="small">
+              {{ scope.row.targetWarehouse || 'TAPE' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="colorCode" label="颜色" width="70" align="center">
           <template slot-scope="scope">
             <el-tag size="small">{{ scope.row.colorCode }}</el-tag>
@@ -83,8 +91,9 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column v-if="$canEdit()" label="操作" width="150" fixed="right" align="center">
+        <el-table-column v-if="$canEdit()" label="操作" width="220" align="center">
           <template slot-scope="scope">
+            <el-button type="text" size="small" icon="el-icon-setting" @click="handleManageQcItems(scope.row)">质检标准</el-button>
             <el-button type="text" size="small" icon="el-icon-edit" @click="handleEdit(scope.row)">编辑</el-button>
             <el-button type="text" size="small" icon="el-icon-delete" style="color:#f56c6c" @click="handleDelete(scope.row)">删除</el-button>
           </template>
@@ -286,6 +295,18 @@
         </el-row>
 
         <!-- 备注 -->
+        <el-row :gutter="20">
+          <el-col :span="8">
+            <el-form-item label="目标仓库" prop="targetWarehouse">
+              <el-select v-model="form.targetWarehouse" style="width:100%" placeholder="请选择目标仓库">
+                <el-option label="胶带成品仓 (TAPE)" value="TAPE" />
+                <el-option label="薄膜仓 (FILM)" value="FILM" />
+                <el-option label="化工仓 (CHEMICAL)" value="CHEMICAL" />
+                <el-option label="包材辅料仓 (PACKAGE)" value="PACKAGE" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-row>
           <el-col :span="24">
             <el-form-item label="备注">
@@ -316,6 +337,133 @@
       <div slot="footer">
         <el-button type="primary" @click="importResultVisible = false">确定</el-button>
       </div>
+    </el-dialog>
+
+    <!-- 指标管理对话框 -->
+    <el-dialog
+      :title="`质检标准管理 - ${currentManagingMaterial}`"
+      :visible.sync="qcItemManagerVisible"
+      width="1000px"
+      append-to-body
+      custom-class="qc-manager-dialog"
+    >
+      <div class="qc-manager-single-header">
+        <el-radio-group v-model="currentQcType" size="mini" class="qc-type-selector" @change="handleQcTypeChange">
+          <el-radio-button label="incoming" class="type-incoming">内控</el-radio-button>
+          <el-radio-button label="process" class="type-process">过程</el-radio-button>
+          <el-radio-button label="outbound" class="type-outbound">出货</el-radio-button>
+        </el-radio-group>
+
+        <el-select
+          v-if="currentQcType === 'outbound'"
+          v-model="currentCustomerCode"
+          size="mini"
+          filterable
+          clearable
+          placeholder="选择客户 (通用可不选)"
+          style="width: 180px"
+          @change="handleQcTypeChange"
+        >
+          <el-option
+            v-for="c in customerOptions"
+            :key="c.customerCode"
+            :label="c.customerName ? `${c.customerCode} | ${c.customerName}` : c.customerCode"
+            :value="c.customerCode"
+          />
+        </el-select>
+
+        <el-divider direction="vertical" />
+        
+        <el-button-group>
+          <el-button type="primary" size="mini" icon="el-icon-plus" @click="handleAddQcItem">指标</el-button>
+          <el-button type="success" size="mini" icon="el-icon-refresh" @click="handleSyncFromSpec">同步</el-button>
+        </el-button-group>
+
+        <div class="qc-header-hint">
+          <i class="el-icon-info" style="color: #909399" />
+          决定检测表内容
+        </div>
+      </div>
+
+      <el-table :data="qcItems" border size="small" stripe class="qc-table" highlight-current-row>
+        <el-table-column label="排序" width="70" align="center">
+          <template slot-scope="{ row }">
+            <el-input-number v-model="row.orderNo" :controls="false" size="mini" style="width: 100%" />
+          </template>
+        </el-table-column>
+        <el-table-column label="检测项名称" min-width="180">
+          <template slot-scope="{ row }">
+            <el-select
+              v-model="row.itemName"
+              size="mini"
+              filterable
+              allow-create
+              default-first-option
+              placeholder="请选择或输入"
+              style="width: 100%"
+              @change="(val) => handleIndicatorChange(val, row)"
+            >
+              <el-option
+                v-for="dict in indicatorDict"
+                v-if="!qcItems.some(item => item.itemName === dict.name && item.itemName !== row.itemName)"
+                :key="dict.id"
+                :label="dict.name"
+                :value="dict.name"
+              />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="单位" width="90" align="center">
+          <template slot-scope="{ row }">
+            <el-input v-model="row.itemUnit" size="mini" placeholder="μm" style="text-align: center" />
+          </template>
+        </el-table-column>
+        <el-table-column label="判定模式" width="130" align="center">
+          <template slot-scope="{ row }">
+            <el-select v-model="row.judgeMode" size="mini">
+              <el-option label="数值范围" value="range" />
+              <el-option label="大于等于" value="gte" />
+              <el-option label="小于等于" value="lte" />
+              <el-option label="文本匹配" value="value" />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="标准值配置" min-width="220">
+          <template slot-scope="{ row }">
+            <div v-if="row.judgeMode === 'range'" class="std-value-box">
+              <el-input v-model="row.minValue" size="mini" placeholder="最小值" />
+              <span class="std-value-between">~</span>
+              <el-input v-model="row.maxValue" size="mini" placeholder="最大值" />
+            </div>
+            <div v-else-if="row.judgeMode === 'gte'" class="std-value-box">
+              <span style="font-weight: bold; color: #409EFF">≥</span>
+              <el-input v-model="row.minValue" size="mini" placeholder="最小值" />
+            </div>
+            <div v-else-if="row.judgeMode === 'lte'" class="std-value-box">
+              <span style="font-weight: bold; color: #409EFF">≤</span>
+              <el-input v-model="row.maxValue" size="mini" placeholder="最大值" />
+            </div>
+            <div v-else>
+              <el-input v-model="row.stdValue" size="mini" placeholder="标准文本(如: 合格)" />
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="必填" width="70" align="center">
+          <template slot-scope="{ row }">
+            <el-checkbox v-model="row.isRequired" :true-label="1" :false-label="0" />
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="70" align="center">
+          <template slot-scope="{ row, $index }">
+            <el-button type="text" style="color:#f56c6c" icon="el-icon-delete" @click="qcItems.splice($index, 1)" />
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <span slot="footer" class="dialog-footer">
+        <el-button size="small" @click="qcItemManagerVisible = false">取消</el-button>
+        <el-button type="primary" size="small" :loading="qcItemSaving" @click="saveQcItems">保存配置</el-button>
+      </span>
     </el-dialog>
 
     <!-- 颜色字典维护 -->
@@ -412,6 +560,8 @@ import {
   exportSpec, importSpec, downloadTemplate,
   getColorDictList, createColorDict, updateColorDict, deleteColorDict
 } from '@/api/tapeSpec'
+import { getCustomerList } from '@/api/customer'
+import request from '@/utils/request'
 import elTableAutoLayout from '@/mixins/elTableAutoLayout'
 
 export default {
@@ -429,6 +579,16 @@ export default {
       list: [],
       loading: false,
       pagination: { page: 1, size: 20, total: 0 },
+
+      // 质检指标管理
+      qcItemManagerVisible: false,
+      qcItemSaving: false,
+      currentManagingMaterial: '',
+      currentQcType: 'outbound',
+      currentCustomerCode: '', // 当前选中的客户代码
+      qcItems: [],
+      indicatorDict: [], // 指标字典
+      customerOptions: [], // 客户列表
 
       // 字典选项
       colorOptions: [],
@@ -525,44 +685,52 @@ export default {
         extraQcItem4Name: '',
         extraQcItem4Unit: '',
         extraQcItem4Standard: '',
+        targetWarehouse: 'TAPE',
         remark: '',
         status: 1
       }
     },
     async loadDicts() {
-      try {
-        const [colorRes, baseRes, glueRes] = await Promise.all([
-          getColorDict(),
-          getBaseMaterialDict(),
-          getGlueMaterialDict()
-        ])
-        if (this.isSuccess(colorRes)) {
-          const rawList = Array.isArray(colorRes.data) ? colorRes.data : []
+      // 分解 Promise.all，防止其中一个请求失败导致所有字典加载失败
+      // 颜色字典
+      getColorDict().then(res => {
+        if (this.isSuccess(res)) {
+          const rawList = Array.isArray(res.data) ? res.data : []
           this.colorOptions = rawList
             .map(item => {
               const code = String(item.code || '').trim().toUpperCase()
               const name = String(item.name || '').trim()
               const isPlaceholder = !!code && !!name && code === name.toUpperCase()
-              return {
-                ...item,
-                code,
-                name,
-                isPlaceholder
-              }
+              return { ...item, code, name, isPlaceholder }
             })
             .filter(item => item.code)
             .sort((a, b) => {
-              if (a.isPlaceholder !== b.isPlaceholder) {
-                return a.isPlaceholder ? 1 : -1
-              }
+              if (a.isPlaceholder !== b.isPlaceholder) return a.isPlaceholder ? 1 : -1
               return String(a.code).localeCompare(String(b.code), 'zh-CN')
             })
         }
-        if (this.isSuccess(baseRes)) this.baseMaterialOptions = baseRes.data || []
-        if (this.isSuccess(glueRes)) this.glueMaterialOptions = glueRes.data || []
-      } catch (e) {
-        console.error('加载字典失败', e)
-      }
+      }).catch(e => console.error('加载颜色字典失败', e))
+
+      // 基材材质字典
+      getBaseMaterialDict().then(res => {
+        if (this.isSuccess(res)) {
+          this.baseMaterialOptions = Array.isArray(res.data) ? res.data : []
+        }
+      }).catch(e => console.error('加载基材字典失败', e))
+
+      // 胶水材质字典
+      getGlueMaterialDict().then(res => {
+        if (this.isSuccess(res)) {
+          this.glueMaterialOptions = Array.isArray(res.data) ? res.data : []
+        }
+      }).catch(e => console.error('加载胶水字典失败', e))
+
+      // 客户列表 (仅用于质检标准管理，失败不影响基础字典)
+      getCustomerList({ page: 1, size: 1000 }).then(res => {
+        if (this.isSuccess(res)) {
+          this.customerOptions = (res.data && res.data.records) || []
+        }
+      }).catch(e => console.error('加载客户列表失败', e))
     },
     getColorOptionLabel(item, withCode = true) {
       const code = String(item && item.code ? item.code : '').trim().toUpperCase()
@@ -671,6 +839,138 @@ export default {
         }
       }).catch(() => {})
     },
+
+    // --- 质检指标管理开始 ---
+    async handleManageQcItems(row) {
+      if (!row || !row.materialCode) return
+      this.currentManagingMaterial = row.materialCode
+      this.currentQcType = 'outbound' // 默认打开出货标准
+      this.currentCustomerCode = '' // 重置客户选择
+      this.qcItems = []
+      this.qcItemManagerVisible = true
+      
+      this.fetchQcItems()
+    },
+    async fetchQcItems() {
+      try {
+        const [dictRes, itemsRes] = await Promise.all([
+          request.get('/api/quality/indicator-dict/list'),
+          request.get('/api/quality/tape-qc-item/by-material', { 
+            params: { 
+              materialCode: this.currentManagingMaterial,
+              qcType: this.currentQcType,
+              customerCode: this.currentQcType === 'outbound' ? this.currentCustomerCode : null
+            } 
+          })
+        ])
+        
+        if (this.isSuccess(dictRes)) {
+          this.indicatorDict = dictRes.data || []
+        }
+        if (this.isSuccess(itemsRes)) {
+          const items = itemsRes.data || []
+          this.qcItems = items.map(it => {
+            if (!it.itemUnit) {
+              const dict = this.indicatorDict.find(d => d.name === it.itemName)
+              if (dict && dict.defaultUnit) {
+                it.itemUnit = dict.defaultUnit
+              }
+            }
+            return it
+          })
+        }
+      } catch (e) {
+        this.$message.error('加载指标信息失败')
+      }
+    },
+    handleQcTypeChange() {
+      this.fetchQcItems()
+    },
+    // 选择指标后自动填充单位
+    handleIndicatorChange(name, row) {
+      const item = this.indicatorDict.find(d => d.name === name)
+      if (item) {
+        row.itemUnit = item.defaultUnit || ''
+      }
+    },
+    handleAddQcItem() {
+      this.qcItems.push({
+        materialCode: this.currentManagingMaterial,
+        qcType: this.currentQcType,
+        customerCode: this.currentQcType === 'outbound' ? this.currentCustomerCode : null,
+        itemName: '',
+        itemUnit: '',
+        judgeMode: 'range',
+        minValue: null,
+        maxValue: null,
+        stdValue: '',
+        orderNo: this.qcItems.length + 1,
+        isRequired: 1
+      })
+    },
+    async handleSyncFromSpec() {
+      if (this.qcItems.length > 0) {
+        try {
+          await this.$confirm('同步将清空当前已配置的指标并从规格表重新导入，是否继续？', '提示', { type: 'warning' })
+        } catch (e) { return }
+      }
+      
+      try {
+        const res = await request.post('/api/quality/tape-qc-item/sync-from-spec', null, {
+          params: { 
+            materialCode: this.currentManagingMaterial,
+            qcType: this.currentQcType
+          }
+        })
+        if (this.isSuccess(res)) {
+          this.$message.success('同步成功')
+          this.qcItems = res.data || []
+        } else {
+          this.$message.error(res.msg || '同步失败')
+        }
+      } catch (e) {
+        this.$message.error('同步失败')
+      }
+    },
+    async saveQcItems() {
+      if (!this.currentManagingMaterial) return
+      
+      // 简单校验
+      for (const item of this.qcItems) {
+        if (!item.itemName) {
+          this.$message.warning('检测项名称不能为空')
+          return
+        }
+      }
+      
+      this.qcItemSaving = true
+      try {
+        const customerCode = this.currentQcType === 'outbound' ? this.currentCustomerCode : null
+        const itemsToSave = this.qcItems.map(it => ({
+          ...it,
+          customerCode: customerCode
+        }))
+        const res = await request.post('/api/quality/tape-qc-item/save-batch', itemsToSave, {
+          params: { 
+            materialCode: this.currentManagingMaterial,
+            qcType: this.currentQcType,
+            customerCode: customerCode
+          }
+        })
+        if (this.isSuccess(res)) {
+          this.$message.success('保存成功')
+          // 不再自动关闭弹窗，方便维护多个标准
+          this.$message.info('标准已保存，您可以切换其它页签继续维护')
+        } else {
+          this.$message.error(res.msg || '保存失败')
+        }
+      } catch (e) {
+        this.$message.error('保存失败')
+      } finally {
+        this.qcItemSaving = false
+      }
+    },
+    // --- 质检指标管理结束 ---
     onColorChange(code) {
       const item = this.colorOptions.find(c => c.code === code)
       if (item) this.form.colorName = item.name
@@ -920,6 +1220,16 @@ export default {
           this.$message.error('删除失败')
         }
       }).catch(() => {})
+    },
+    getWarehouseTagType(warehouse) {
+      if (!warehouse) return 'primary' // 成品默认胶带仓
+      switch (warehouse) {
+        case 'TAPE': return 'primary'
+        case 'FILM': return 'success'
+        case 'CHEMICAL': return 'warning'
+        case 'PACKAGE': return 'info'
+        default: return 'info'
+      }
     }
   }
 }
@@ -941,6 +1251,70 @@ export default {
   .el-divider {
     margin: 15px 0;
   }
+}
+
+/* 紧凑型质检标准管理头部 */
+.qc-manager-single-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background-color: #f8f9fb;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  border: 1px solid #ebeef5;
+}
+
+.qc-type-selector {
+  ::v-deep .el-radio-button__inner {
+    padding: 7px 15px;
+  }
+}
+
+/* 不同类型颜色区分 */
+::v-deep .type-incoming.is-active .el-radio-button__inner {
+  background-color: #67c23a !important;
+  border-color: #67c23a !important;
+  box-shadow: -1px 0 0 0 #67c23a !important;
+}
+::v-deep .type-process.is-active .el-radio-button__inner {
+  background-color: #e6a23c !important;
+  border-color: #e6a23c !important;
+  box-shadow: -1px 0 0 0 #e6a23c !important;
+}
+::v-deep .type-outbound.is-active .el-radio-button__inner {
+  background-color: #409eff !important;
+  border-color: #409eff !important;
+}
+
+.qc-header-hint {
+  margin-left: auto;
+  color: #909399;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.qc-table {
+  ::v-deep .el-table__header th {
+    background-color: #f5f7fa !important;
+    color: #606266;
+    font-weight: 600;
+  }
+}
+
+.std-value-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.std-value-between {
+  color: #909399;
+  font-size: 12px;
 }
 </style>
 ```

@@ -1,12 +1,12 @@
 import request from '@/utils/request'
 
 /**
- * 胶带库存管理API
+ * čśĺ¸Śĺşĺ­çŽĄçAPI
  */
 
-// ============= 库存管理 =============
+// ============= ĺşĺ­çŽĄç =============
 
-// 分页查询库存
+// ĺéĄľćĽčŻ˘ĺşĺ­
 export function getStockList(params) {
   return request({
     url: '/api/tape-stock/list',
@@ -15,7 +15,7 @@ export function getStockList(params) {
   })
 }
 
-// 复卷标签：搜索母卷号
+// ĺ¤ĺˇć ç­žďźćç´˘ćŻĺˇĺˇ
 export function searchMotherRolls(params) {
   return request({
     url: '/api/tape-stock/mother-roll/search',
@@ -24,7 +24,7 @@ export function searchMotherRolls(params) {
   })
 }
 
-// 复卷标签：解析母卷基础信息
+// ĺ¤ĺˇć ç­žďźč§ŁććŻĺˇĺşçĄäżĄćŻ
 export function resolveMotherRollInfo(code) {
   return request({
     url: `/api/tape-stock/mother-roll/resolve/${encodeURIComponent(code)}`,
@@ -32,7 +32,7 @@ export function resolveMotherRollInfo(code) {
   })
 }
 
-// 按料号汇总库存
+// ććĺˇćąćťĺşĺ­
 export function getStockSummary() {
   return request({
     url: '/api/tape-stock/summary',
@@ -40,7 +40,7 @@ export function getStockSummary() {
   })
 }
 
-// 按料号汇总库存（分页）
+// ććĺˇćąćťĺşĺ­ďźĺéĄľďź
 export function getStockSummaryPage(params) {
   return request({
     url: '/api/tape-stock/summary/page',
@@ -49,7 +49,7 @@ export function getStockSummaryPage(params) {
   })
 }
 
-// 根据料号查询所有批次（FIFO排序）
+// ć šćŽćĺˇćĽčŻ˘ćććšćŹĄďźFIFOćĺşďź
 export function getStockByMaterial(materialCode) {
   return request({
     url: `/api/tape-stock/by-material/${materialCode}`,
@@ -57,7 +57,7 @@ export function getStockByMaterial(materialCode) {
   })
 }
 
-// 根据料号查询库存明细（分页）
+// ć šćŽćĺˇćĽčŻ˘ĺşĺ­ćçťďźĺéĄľďź
 export function getStockByMaterialPage(params) {
   return request({
     url: '/api/tape-stock/by-material/page',
@@ -66,7 +66,7 @@ export function getStockByMaterialPage(params) {
   })
 }
 
-// 根据ID查询库存详情
+// ć šćŽIDćĽčŻ˘ĺşĺ­čŻŚć
 export function getStockById(id) {
   return request({
     url: `/api/tape-stock/${id}`,
@@ -74,7 +74,16 @@ export function getStockById(id) {
   })
 }
 
-// 库存盘点
+// æ´æ°åºå­å­æ®µï¼åºä½ãæ°å­å·ï¼- ä»ç®¡çå
+export function updateTapeStockField(id, data) {
+  return request({
+    url: `/api/tape-stock/${id}/update-field`,
+    method: 'post',
+    params: data
+  })
+}
+
+// ĺşĺ­ççš
 export function stocktakeTapeStock(id, data) {
   return request({
     url: `/api/tape-stock/${id}/stocktake`,
@@ -83,7 +92,7 @@ export function stocktakeTapeStock(id, data) {
   })
 }
 
-// 导入Excel库存数据
+// ĺŻźĺĽExcelĺşĺ­ć°ćŽ
 export function importStock(file) {
   const formData = new FormData()
   formData.append('file', file)
@@ -98,7 +107,7 @@ export function importStock(file) {
   })
 }
 
-// 异步导入Excel库存数据（推荐：大文件/大量数据）
+// ĺźć­ĽĺŻźĺĽExcelĺşĺ­ć°ćŽďźć¨čďźĺ¤§ćäťś/ĺ¤§éć°ćŽďź
 export function importStockAsync(file) {
   const formData = new FormData()
   formData.append('file', file)
@@ -113,7 +122,7 @@ export function importStockAsync(file) {
   })
 }
 
-// 查询异步导入任务状态
+// ćĽčŻ˘ĺźć­ĽĺŻźĺĽäťťĺĄçść
 export function getImportTaskStatus(taskId) {
   return request({
     url: `/api/tape-stock/import/task/${taskId}`,
@@ -122,7 +131,7 @@ export function getImportTaskStatus(taskId) {
   })
 }
 
-// 下载异步导入失败明细文件
+// ä¸č˝˝ĺźć­ĽĺŻźĺĽĺ¤ąč´Ľćçťćäťś
 export function downloadImportFailedFile(taskId) {
   return request({
     url: `/api/tape-stock/import/task/${taskId}/failed.xlsx`,
@@ -131,7 +140,7 @@ export function downloadImportFailedFile(taskId) {
   })
 }
 
-// 导出库存数据（带token下载）
+// ĺŻźĺşĺşĺ­ć°ćŽďźĺ¸Śtokenä¸č˝˝ďź
 export function exportStock(params = {}) {
   return request({
     url: '/api/tape-stock/export',
@@ -141,7 +150,7 @@ export function exportStock(params = {}) {
   })
 }
 
-// 下载导入模板（带token下载）
+// ä¸č˝˝ĺŻźĺĽć¨Ąćżďźĺ¸Śtokenä¸č˝˝ďź
 export function downloadTemplate() {
   return request({
     url: '/api/tape-stock/template',
@@ -150,9 +159,9 @@ export function downloadTemplate() {
   })
 }
 
-// ============= 入库申请 =============
+// ============= ĺĽĺşçłčŻˇ =============
 
-// 分页查询入库申请
+// ĺéĄľćĽčŻ˘ĺĽĺşçłčŻˇ
 export function getInboundList(params) {
   return request({
     url: '/api/tape-stock/inbound/list',
@@ -161,7 +170,7 @@ export function getInboundList(params) {
   })
 }
 
-// 创建入库申请
+// ĺĺťşĺĽĺşçłčŻˇ
 export function createInboundRequest(data) {
   return request({
     url: '/api/tape-stock/inbound',
@@ -170,7 +179,7 @@ export function createInboundRequest(data) {
   })
 }
 
-// 审批入库申请
+// ĺŽĄćšĺĽĺşçłčŻˇ
 export function approveInbound(id, approved, auditor, auditRemark, scannedRollCode, scannedLocation) {
   return request({
     url: `/api/tape-stock/inbound/${id}/approve`,
@@ -179,7 +188,7 @@ export function approveInbound(id, approved, auditor, auditRemark, scannedRollCo
   })
 }
 
-// 按母卷号批量审批入库（同一卡板）
+// ććŻĺˇĺˇćšéĺŽĄćšĺĽĺşďźĺä¸ĺĄćżďź
 export function approveInboundByRollCodes(data) {
   return request({
     url: '/api/tape-stock/inbound/approve-by-roll-codes',
@@ -188,7 +197,7 @@ export function approveInboundByRollCodes(data) {
   })
 }
 
-// 取消入库申请
+// ĺćśĺĽĺşçłčŻˇ
 export function cancelInbound(id) {
   return request({
     url: `/api/tape-stock/inbound/${id}/cancel`,
@@ -196,7 +205,7 @@ export function cancelInbound(id) {
   })
 }
 
-// 采购收货标签打印前置（生成二维码与标签数据）
+// éč´­ćśč´§ć ç­žćĺ°ĺç˝Žďźçćäşçť´ç ä¸ć ç­žć°ćŽďź
 export function preparePurchaseInboundLabel(id, data) {
   return request({
     url: `/api/tape-stock/inbound/${id}/purchase-label/prepare`,
@@ -205,7 +214,7 @@ export function preparePurchaseInboundLabel(id, data) {
   })
 }
 
-// 待审批入库数量
+// ĺžĺŽĄćšĺĽĺşć°é
 export function countPendingInbound() {
   return request({
     url: '/api/tape-stock/inbound/pending-count',
@@ -213,7 +222,7 @@ export function countPendingInbound() {
   })
 }
 
-// 历史分切成品库存聚合
+// ĺĺ˛ĺĺćĺĺşĺ­čĺ
 export function mergeHistoricalSlittingInboundStock() {
   return request({
     url: '/api/tape-stock/inbound/merge-historical-slitting',
@@ -221,9 +230,9 @@ export function mergeHistoricalSlittingInboundStock() {
   })
 }
 
-// ============= 出库申请 =============
+// ============= ĺşĺşçłčŻˇ =============
 
-// 分页查询出库申请
+// ĺéĄľćĽčŻ˘ĺşĺşçłčŻˇ
 export function getOutboundList(params) {
   return request({
     url: '/api/tape-stock/outbound/list',
@@ -232,7 +241,7 @@ export function getOutboundList(params) {
   })
 }
 
-// 统一分页查询出库列表（胶带产品 + 原材料）
+// çťä¸ĺéĄľćĽčŻ˘ĺşĺşĺčĄ¨ďźčśĺ¸Śäş§ĺ + ĺććďź
 export function getUnifiedOutboundList(params) {
   return request({
     url: '/api/tape-stock/outbound/unified-list',
@@ -241,7 +250,7 @@ export function getUnifiedOutboundList(params) {
   })
 }
 
-// 创建出库申请（手动选择批次）
+// ĺĺťşĺşĺşçłčŻˇďźćĺ¨éćŠćšćŹĄďź
 export function createOutboundRequest(data) {
   return request({
     url: '/api/tape-stock/outbound',
@@ -250,7 +259,7 @@ export function createOutboundRequest(data) {
   })
 }
 
-// 修改出库申请（仅待审批）
+// äżŽćšĺşĺşçłčŻˇďźäťĺžĺŽĄćšďź
 export function updateOutboundRequest(id, data) {
   return request({
     url: `/api/tape-stock/outbound/${id}`,
@@ -259,7 +268,7 @@ export function updateOutboundRequest(id, data) {
   })
 }
 
-// 创建出库申请（FIFO自动分配）
+// ĺĺťşĺşĺşçłčŻˇďźFIFOčŞĺ¨ĺéďź
 export function createOutboundRequestFIFO(params) {
   return request({
     url: '/api/tape-stock/outbound/fifo',
@@ -268,7 +277,7 @@ export function createOutboundRequestFIFO(params) {
   })
 }
 
-// 审批出库申请
+// ĺŽĄćšĺşĺşçłčŻˇ
 export function approveOutbound(id, approved, auditor, auditRemark, scannedRollCode) {
   return request({
     url: `/api/tape-stock/outbound/${id}/approve`,
@@ -277,7 +286,7 @@ export function approveOutbound(id, approved, auditor, auditRemark, scannedRollC
   })
 }
 
-// 批量扫码审批出库
+// ćšéćŤç ĺŽĄćšĺşĺş
 export function approveOutboundByRollCodes(data) {
   return request({
     url: '/api/tape-stock/outbound/approve-by-roll-codes',
@@ -286,7 +295,7 @@ export function approveOutboundByRollCodes(data) {
   })
 }
 
-// 取消出库申请
+// ĺćśĺşĺşçłčŻˇ
 export function cancelOutbound(id) {
   return request({
     url: `/api/tape-stock/outbound/${id}/cancel`,
@@ -294,7 +303,7 @@ export function cancelOutbound(id) {
   })
 }
 
-// 待审批出库数量
+// ĺžĺŽĄćšĺşĺşć°é
 export function countPendingOutbound() {
   return request({
     url: '/api/tape-stock/outbound/pending-count',
@@ -302,9 +311,9 @@ export function countPendingOutbound() {
   })
 }
 
-// ============= 库存流水 =============
+// ============= ĺşĺ­ćľć°´ =============
 
-// 分页查询库存流水
+// ĺéĄľćĽčŻ˘ĺşĺ­ćľć°´
 export function getStockLogList(params) {
   return request({
     url: '/api/tape-stock/log/list',
@@ -313,7 +322,7 @@ export function getStockLogList(params) {
   })
 }
 
-// 分页查询出库流水汇总（按关联单号+料号+批次聚合）
+// ĺéĄľćĽčŻ˘ĺşĺşćľć°´ćąćťďźćĺłčĺĺˇ+ćĺˇ+ćšćŹĄčĺďź
 export function getOutboundSummaryLogList(params) {
   return request({
     url: '/api/tape-stock/log/outbound-summary/list',
@@ -322,8 +331,26 @@ export function getOutboundSummaryLogList(params) {
   })
 }
 
-// 导出库存流水URL
+// ĺŻźĺşĺşĺ­ćľć°´URL
 export function getExportLogUrl(params = {}) {
   const query = new URLSearchParams(params).toString()
   return `/api/tape-stock/log/export${query ? '?' + query : ''}`
+}
+
+// ˛éŃŻĹĚľăźÇÂź
+export function getStocktakeRecordList(params) {
+  return request({
+    url: '/api/stocktake-record/list',
+    method: 'get',
+    params
+  })
+}
+
+// ĹúÁżČˇČĎ/šŘąŐĹĚľăľĽ
+export function confirmStocktakeBatch(stocktakeNo) {
+  return request({
+    url: '/api/stocktake-record/batch-confirm',
+    method: 'post',
+    params: { stocktakeNo }
+  })
 }

@@ -147,8 +147,78 @@
           </el-table>
         </el-tab-pane>
 
+        <el-tab-pane label="生产成本核算MVP" name="production-mvp">
+          <el-form :inline="true" size="small" class="mb12">
+            <el-form-item label="关键字">
+              <el-input v-model="mvpQuery.keyword" placeholder="订单号/订单明细ID/物料/工序" clearable style="width:260px" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" icon="el-icon-search" @click="mvpQuery.pageNum = 1; loadProductionMvp()">查询</el-button>
+            </el-form-item>
+          </el-form>
+
+          <el-row :gutter="12" class="mb12">
+            <el-col :span="6"><el-alert :closable="false" title="领料合计(㎡)" :description="formatMoney(mvpSummary.totalIssueQty, 3)" type="info" /></el-col>
+            <el-col :span="6"><el-alert :closable="false" title="退料合计(㎡)" :description="formatMoney(mvpSummary.totalReturnQty, 3)" type="success" /></el-col>
+            <el-col :span="6"><el-alert :closable="false" title="净耗用合计(㎡)" :description="formatMoney(mvpSummary.totalNetIssueQty, 3)" type="warning" /></el-col>
+            <el-col :span="6"><el-alert :closable="false" title="报工产出合计(㎡)" :description="formatMoney(mvpSummary.totalReportedOutputQty, 3)" type="info" /></el-col>
+          </el-row>
+
+          <el-table v-loading="mvpLoading" :data="mvpList" border stripe>
+            <el-table-column prop="orderNo" label="订单号" min-width="130" />
+            <el-table-column prop="orderDetailId" label="订单明细ID" width="120" />
+            <el-table-column prop="materialCode" label="料号" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="orderSpec" label="规格(厚度*宽度*长度)" min-width="170" show-overflow-tooltip />
+            <el-table-column prop="orderQty" label="卷数" width="90" align="right"><template slot-scope="scope">{{ formatMoney(scope.row.orderQty, 0) }}</template></el-table-column>
+            <el-table-column prop="processType" label="工序" width="110" />
+            <el-table-column prop="materialCodes" label="领退料料号" min-width="180" show-overflow-tooltip />
+            <el-table-column prop="issueQty" label="领料(㎡)" width="110" align="right"><template slot-scope="scope">{{ formatMoney(scope.row.issueQty, 3) }}</template></el-table-column>
+            <el-table-column prop="returnQty" label="退料(㎡)" width="110" align="right"><template slot-scope="scope">{{ formatMoney(scope.row.returnQty, 3) }}</template></el-table-column>
+            <el-table-column prop="netIssueQty" label="净耗用(㎡)" width="120" align="right"><template slot-scope="scope">{{ formatMoney(scope.row.netIssueQty, 3) }}</template></el-table-column>
+            <el-table-column prop="lossQty" label="损耗(㎡)" width="110" align="right"><template slot-scope="scope">{{ formatMoney(scope.row.lossQty, 3) }}</template></el-table-column>
+            <el-table-column prop="reportedOutputQty" label="报工产出(㎡)" width="120" align="right"><template slot-scope="scope">{{ formatMoney(scope.row.reportedOutputQty, 3) }}</template></el-table-column>
+            <el-table-column label="操作" width="90" align="center">
+              <template slot-scope="scope">
+                <el-button type="text" size="small" @click="openMvpDetail(scope.row)">明细</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+
+          <div class="mt12" style="text-align:right">
+            <el-pagination
+              background
+              layout="total, prev, pager, next"
+              :current-page="mvpQuery.pageNum"
+              :page-size="mvpQuery.pageSize"
+              :total="mvpTotal"
+              @current-change="handleMvpPageChange"
+            />
+          </div>
+        </el-tab-pane>
+
       </el-tabs>
     </el-card>
+
+    <el-dialog :title="'事件明细 - ' + mvpDetailTitle" :visible.sync="mvpDetailVisible" width="920px">
+      <el-row :gutter="12" class="mb12">
+        <el-col :span="6"><el-alert :closable="false" title="领料(㎡)" :description="formatMoney(mvpDetailSummary.totalIssueQty, 3)" type="info" /></el-col>
+        <el-col :span="6"><el-alert :closable="false" title="退料(㎡)" :description="formatMoney(mvpDetailSummary.totalReturnQty, 3)" type="success" /></el-col>
+        <el-col :span="6"><el-alert :closable="false" title="净耗用(㎡)" :description="formatMoney(mvpDetailSummary.totalNetIssueQty, 3)" type="warning" /></el-col>
+        <el-col :span="6"><el-alert :closable="false" title="报工产出(㎡)" :description="formatMoney(mvpDetailSummary.totalReportedOutputQty, 3)" type="info" /></el-col>
+      </el-row>
+      <el-table v-loading="mvpDetailLoading" :data="mvpDetailRows" border stripe max-height="460">
+        <el-table-column prop="eventTime" label="时间" width="170" />
+        <el-table-column prop="sourceType" label="来源" width="120" />
+        <el-table-column prop="processType" label="工序" width="100" />
+        <el-table-column prop="issueType" label="类型" width="90" />
+        <el-table-column prop="materialCode" label="物料" min-width="140" />
+        <el-table-column prop="issueQty" label="领料(㎡)" width="100" align="right"><template slot-scope="scope">{{ formatMoney(scope.row.issueQty, 3) }}</template></el-table-column>
+        <el-table-column prop="returnQty" label="退料(㎡)" width="100" align="right"><template slot-scope="scope">{{ formatMoney(scope.row.returnQty, 3) }}</template></el-table-column>
+        <el-table-column prop="lossQty" label="损耗(㎡)" width="100" align="right"><template slot-scope="scope">{{ formatMoney(scope.row.lossQty, 3) }}</template></el-table-column>
+        <el-table-column prop="reportedOutputQty" label="报工产出(㎡)" width="110" align="right"><template slot-scope="scope">{{ formatMoney(scope.row.reportedOutputQty, 3) }}</template></el-table-column>
+        <el-table-column prop="operatorName" label="操作人" width="90" />
+      </el-table>
+    </el-dialog>
 
     <el-dialog title="新增理论单价配置" :visible.sync="materialDialogVisible" width="520px">
       <el-form :model="materialForm" label-width="100px" size="small">
@@ -184,7 +254,9 @@ import {
   getFormulaCostFactor,
   saveFormulaCostFactor,
   getMaterialCostConfigPage,
-  saveMaterialCostConfig
+  saveMaterialCostConfig,
+  getProductionCostMvpPage,
+  getProductionCostMvpDetail
 } from '@/api/finance'
 
 export default {
@@ -223,6 +295,20 @@ export default {
         pageNum: 1,
         pageSize: 20
       },
+      mvpQuery: {
+        keyword: '',
+        pageNum: 1,
+        pageSize: 20
+      },
+      mvpList: [],
+      mvpTotal: 0,
+      mvpSummary: {},
+      mvpLoading: false,
+      mvpDetailVisible: false,
+      mvpDetailTitle: '',
+      mvpDetailLoading: false,
+      mvpDetailRows: [],
+      mvpDetailSummary: {},
       materialList: [],
       materialDialogVisible: false,
       materialForm: {
@@ -238,6 +324,7 @@ export default {
     this.loadAll()
     this.loadFormulaAll()
     this.loadMaterialConfig()
+    this.loadProductionMvp()
   },
   methods: {
     currentMonth() {
@@ -255,7 +342,8 @@ export default {
     async handleSearch() {
       this.query.pageNum = 1
       this.formulaQuery.pageNum = 1
-      await Promise.all([this.loadAll(), this.loadFormulaAll(), this.loadMaterialConfig()])
+      this.mvpQuery.pageNum = 1
+      await Promise.all([this.loadAll(), this.loadFormulaAll(), this.loadMaterialConfig(), this.loadProductionMvp()])
     },
     async loadAll() {
       await Promise.all([this.loadList(), this.loadSummary()])
@@ -363,6 +451,53 @@ export default {
       this.materialDialogVisible = false
       this.loadMaterialConfig()
       this.loadAll()
+    },
+    async loadProductionMvp() {
+      this.mvpLoading = true
+      try {
+        const res = await getProductionCostMvpPage({
+          month: this.query.month,
+          pageNum: this.mvpQuery.pageNum,
+          pageSize: this.mvpQuery.pageSize,
+          keyword: this.mvpQuery.keyword
+        })
+        if (res && (res.code === 200 || res.code === 20000)) {
+          const data = res.data || {}
+          this.mvpList = data.records || []
+          this.mvpTotal = Number(data.total || 0)
+          this.mvpSummary = data.summary || {}
+        }
+      } finally {
+        this.mvpLoading = false
+      }
+    },
+    handleMvpPageChange(page) {
+      this.mvpQuery.pageNum = page
+      this.loadProductionMvp()
+    },
+    async openMvpDetail(row) {
+      if (!row || !row.orderDetailId) {
+        return this.$message.warning('缺少订单明细ID，无法查看')
+      }
+      this.mvpDetailVisible = true
+      this.mvpDetailTitle = `订单明细 ${row.orderDetailId} / ${row.processType || 'UNKNOWN'}`
+      this.mvpDetailRows = []
+      this.mvpDetailSummary = {}
+      this.mvpDetailLoading = true
+      try {
+        const res = await getProductionCostMvpDetail({
+          month: this.query.month,
+          orderDetailId: row.orderDetailId,
+          processType: row.processType
+        })
+        if (res && (res.code === 200 || res.code === 20000)) {
+          const data = res.data || {}
+          this.mvpDetailRows = data.events || []
+          this.mvpDetailSummary = data.summary || {}
+        }
+      } finally {
+        this.mvpDetailLoading = false
+      }
     }
   }
 }

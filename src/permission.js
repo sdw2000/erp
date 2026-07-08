@@ -18,7 +18,12 @@ function isCoatingRestrictedUser(roles) {
 
 function canCoatingRestrictedAccess(path) {
   if (!path) return false
-  return path === '/production-management' || path === '/production-management/coating-home' || path === '/production-management/coating'
+  const allowed = [
+    '/dashboard',
+    '/basic-data',
+    '/production-management'
+  ]
+  return allowed.some(prefix => path === prefix || path.startsWith(prefix + '/'))
 }
 
 router.beforeEach(async(to, from, next) => {

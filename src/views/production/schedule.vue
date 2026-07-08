@@ -56,6 +56,7 @@
             :data="pendingOrders"
             border
             stripe
+            max-height="650"
             :row-key="row => row.order_item_id"
             @selection-change="handleSelectionChange"
           >
@@ -245,7 +246,7 @@
           </div>
 
           <!-- 排程列表表格 -->
-          <el-table v-loading="loading" :data="scheduleList" border stripe>
+          <el-table v-loading="loading" :data="scheduleList" border stripe max-height="650">
             <el-table-column prop="scheduleNo" label="排程单号" width="160" />
             <el-table-column prop="scheduleDate" label="排程日期" width="110" />
             <el-table-column prop="scheduleType" label="排程类型" width="100">
@@ -2197,7 +2198,8 @@ export default {
 
 .gantt-timeline {
   display: flex;
-  flex: 1;
+  flex: none;
+  min-width: 1020px;
 }
 
 .gantt-hour {
@@ -2240,7 +2242,8 @@ export default {
 }
 
 .gantt-timeline-row {
-  flex: 1;
+  flex: none;
+  width: 1020px;
   position: relative;
   height: 50px;
   background: repeating-linear-gradient(

@@ -22,9 +22,9 @@ export function parseTime(time, cFormat) {
         // support "1548221490638"
         time = parseInt(time)
       } else {
-        // support safari
-        // https://stackoverflow.com/questions/4310953/invalid-date-in-safari
-        time = time.replace(new RegExp(/-/gm), '/')
+        // support safari and ISO formats with 'T'
+        // replace '-' with '/' only if it's not an ISO string with T, or handle it properly
+        time = time.replace(new RegExp(/-/gm), '/').replace('T', ' ')
       }
     }
 
@@ -32,6 +32,9 @@ export function parseTime(time, cFormat) {
       time = time * 1000
     }
     date = new Date(time)
+  }
+  if (isNaN(date.getTime())) {
+    return '-'
   }
   const formatObj = {
     y: date.getFullYear(),

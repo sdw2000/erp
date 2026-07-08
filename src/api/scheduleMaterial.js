@@ -146,14 +146,17 @@ export function getLockHistoryPage(params) {
 
 /**
  * 生产退料（库存归还）
- * @param {array} lockIds 锁定记录IDs
+ * @param {array|object} payload 旧版传lockIds数组；新版可传{ lockIds, returnItems }
  * @returns {Promise}
  */
-export function returnMaterials(lockIds) {
+export function returnMaterials(payload) {
+  const data = Array.isArray(payload)
+    ? { lockIds: payload }
+    : (payload || {})
   return request({
     url: '/production/schedule-material/return',
     method: 'post',
-    data: { lockIds }
+    data
   })
 }
 
